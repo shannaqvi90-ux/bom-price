@@ -43,8 +43,8 @@ export default function NewRequisitionPage() {
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      customer: null,
-      item: null,
+      customer: null as unknown as { id: number },
+      item: null as unknown as { id: number },
       expectedQty: undefined as unknown as number,
       currencyCode: "AED",
     },

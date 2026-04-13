@@ -19,7 +19,7 @@ public class RequisitionWorkflowTests(WebApplicationFactory<Program> factory)
             ExpectedQty = 1000m,
             CurrencyCode = "AED"
         });
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]

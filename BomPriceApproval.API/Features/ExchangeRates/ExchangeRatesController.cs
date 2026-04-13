@@ -39,7 +39,8 @@ public class ExchangeRatesController(AppDbContext db) : ControllerBase
         };
         db.ExchangeRates.Add(rate);
         await db.SaveChangesAsync();
-        return CreatedAtAction(nameof(GetAll), new { id = rate.Id }, rate);
+        return CreatedAtAction(nameof(GetAll), new { id = rate.Id },
+            new ExchangeRateResponse(rate.Id, rate.CurrencyCode, rate.CurrencyName, rate.RateToAed, rate.EffectiveDate, rate.IsActive, ""));
     }
 
     [HttpPut("{id}")]

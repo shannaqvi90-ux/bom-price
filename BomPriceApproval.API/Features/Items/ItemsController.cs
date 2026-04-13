@@ -43,10 +43,13 @@ public class ItemsController(AppDbContext db) : ControllerBase
     [Authorize(Roles = "SalesPerson,Admin")]
     public async Task<IActionResult> Create(CreateItemRequest req)
     {
+        if (CurrentBranchId is null)
+            return BadRequest(new { message = "A branch-assigned user is required to create items." });
+
         var item = new Item
         {
             Code = req.Code, Description = req.Description, Type = req.Type,
-            BranchId = CurrentBranchId!.Value
+            BranchId = CurrentBranchId.Value
         };
         db.Items.Add(item);
         await db.SaveChangesAsync();

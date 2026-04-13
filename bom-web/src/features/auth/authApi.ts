@@ -1,0 +1,38 @@
+import { useMutation } from "@tanstack/react-query";
+import { api } from "@/api/axios";
+import { useAuthStore } from "@/store/authStore";
+import type { LoginRequest, LoginResponse } from "@/types/api";
+
+async function loginRequest(req: LoginRequest): Promise<LoginResponse> {
+  const resp = await api.post<LoginResponse>("/auth/login", req);
+  return resp.data;
+}
+
+export function useLogin() {
+  const setSession = useAuthStore((s) => s.setSession);
+  return useMutation({
+    mutationFn: loginRequest,
+    onSuccess: (data) => setSession(data),
+  });
+}
+
+async function logoutRequest(refreshToken: string): Promise<void> {
+  await api.post("/auth/logout", { refreshToken });
+}
+
+export function useLogout() {
+  const logout = useAuthStore((s) => s.logout);
+  const refreshToken = useAuthStore((s) => s.refreshToken);
+  return useMutation({
+    mutationFn: async () => {
+      if (refreshToken) {
+        try {
+          await logoutRequest(refreshToken);
+        } catch {
+          // best-effort; local logout still proceeds
+        }
+      }
+    },
+    onSettled: () => logout(),
+  });
+}

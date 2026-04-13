@@ -40,7 +40,10 @@ public class AuthController(AppDbContext db, TokenService tokenService, IConfigu
     {
         var token = await db.RefreshTokens
             .Include(t => t.User)
-            .FirstOrDefaultAsync(t => t.Token == req.RefreshToken && !t.IsRevoked && t.ExpiresAt > DateTime.UtcNow);
+            .FirstOrDefaultAsync(t => t.Token == req.RefreshToken
+                && !t.IsRevoked
+                && t.ExpiresAt > DateTime.UtcNow
+                && t.User.IsActive);
 
         if (token is null) return Unauthorized(new { message = "Invalid refresh token" });
 

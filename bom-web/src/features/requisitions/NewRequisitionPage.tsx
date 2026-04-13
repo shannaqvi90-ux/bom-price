@@ -51,6 +51,7 @@ export default function NewRequisitionPage() {
   });
 
   const isLoadingLookups = customersQ.isLoading || itemsQ.isLoading || ratesQ.isLoading;
+  const isErrorLookups = customersQ.isError || itemsQ.isError || ratesQ.isError;
 
   const currencies = ["AED", ...(ratesQ.data?.map((r) => r.currencyCode) ?? [])];
   const uniqueCurrencies = Array.from(new Set(currencies));
@@ -82,6 +83,8 @@ export default function NewRequisitionPage() {
         <CardContent>
           {isLoadingLookups ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : isErrorLookups ? (
+            <p className="text-sm text-destructive">Failed to load form data. Please refresh.</p>
           ) : (
             <form onSubmit={onSubmit} className="space-y-4" noValidate>
               <div className="space-y-2">

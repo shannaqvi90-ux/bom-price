@@ -29,7 +29,7 @@ const NAV_ITEMS: NavItem[] = [
     to: "/requisitions",
     label: "Requisitions",
     icon: FileText,
-    roles: ["SalesPerson", "BomCreator", "Accountant", "ManagingDirector"],
+    roles: ["Admin", "SalesPerson", "BomCreator", "Accountant", "ManagingDirector"],
   },
   { to: "/notifications", label: "Notifications", icon: Bell },
   { to: "/admin/users", label: "Users", icon: Users, roles: ["Admin"] },

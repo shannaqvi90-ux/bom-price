@@ -23,7 +23,7 @@ const router = createBrowserRouter([
         path: "requisitions",
         element: (
           <ProtectedRoute
-            allow={["SalesPerson", "BomCreator", "Accountant", "ManagingDirector"]}
+            allow={["Admin", "SalesPerson", "BomCreator", "Accountant", "ManagingDirector"]}
           >
             <RequisitionListPage />
           </ProtectedRoute>
@@ -32,7 +32,7 @@ const router = createBrowserRouter([
       {
         path: "requisitions/new",
         element: (
-          <ProtectedRoute allow={["SalesPerson"]}>
+          <ProtectedRoute allow={["Admin", "SalesPerson"]}>
             <NewRequisitionPage />
           </ProtectedRoute>
         ),
@@ -41,7 +41,7 @@ const router = createBrowserRouter([
         path: "requisitions/:id",
         element: (
           <ProtectedRoute
-            allow={["SalesPerson", "BomCreator", "Accountant", "ManagingDirector"]}
+            allow={["Admin", "SalesPerson", "BomCreator", "Accountant", "ManagingDirector"]}
           >
             <RequisitionDetailPage />
           </ProtectedRoute>

@@ -28,7 +28,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         mb.Entity<QuotationRequest>()
             .Property(q => q.RefNo)
-            .HasComputedColumnSql("'REQ-' || LPAD(id::text, 4, '0')", stored: true);
+            .HasComputedColumnSql("'REQ-' || LPAD(\"Id\"::text, 4, '0')", stored: true);
 
         mb.Entity<BomCost>()
             .HasOne(c => c.BomHeader)

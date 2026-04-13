@@ -201,7 +201,7 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                 {
                     Id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    RefNo = table.Column<string>(type: "text", nullable: false, computedColumnSql: "'REQ-' || LPAD(id::text, 4, '0')", stored: true),
+                    RefNo = table.Column<string>(type: "text", nullable: false, computedColumnSql: "'REQ-' || LPAD(\"Id\"::text, 4, '0')", stored: true),
                     BranchId = table.Column<int>(type: "integer", nullable: false),
                     SalesPersonId = table.Column<int>(type: "integer", nullable: false),
                     CustomerId = table.Column<int>(type: "integer", nullable: false),

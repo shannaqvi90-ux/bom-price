@@ -456,7 +456,7 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                         .IsRequired()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("text")
-                        .HasComputedColumnSql("'REQ-' || LPAD(id::text, 4, '0')", true);
+                        .HasComputedColumnSql("'REQ-' || LPAD(\"Id\"::text, 4, '0')", true);
 
                     b.Property<int>("SalesPersonId")
                         .HasColumnType("integer");

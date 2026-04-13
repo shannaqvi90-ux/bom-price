@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BomPriceApproval.API.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260413030912_InitialCreate")]
+    [Migration("20260413033158_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -459,7 +459,7 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                         .IsRequired()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("text")
-                        .HasComputedColumnSql("'REQ-' || LPAD(id::text, 4, '0')", true);
+                        .HasComputedColumnSql("'REQ-' || LPAD(\"Id\"::text, 4, '0')", true);
 
                     b.Property<int>("SalesPersonId")
                         .HasColumnType("integer");

@@ -2,3 +2,7 @@
 */bin/
 */obj/
 .superpowers/
+*.user
+*.suo
+*.swp
+*.DS_Store

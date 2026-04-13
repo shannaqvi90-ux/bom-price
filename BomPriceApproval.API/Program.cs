@@ -78,6 +78,8 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
+
+    // Admin user (branch-less)
     if (!db.Users.Any(u => u.Email == "admin@test.com"))
     {
         db.Users.Add(new User
@@ -86,6 +88,85 @@ using (var scope = app.Services.CreateScope())
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@1234"),
             Role = UserRole.Admin, BranchId = null
         });
+        await db.SaveChangesAsync();
+    }
+
+    // Seed branch + role users + customers + items + exchange rate for smoke testing
+    if (!db.Branches.Any(b => b.Name == "Fujairah"))
+    {
+        var branch = new Branch { Name = "Fujairah" };
+        db.Branches.Add(branch);
+        await db.SaveChangesAsync();
+
+        var admin = db.Users.First(u => u.Email == "admin@test.com");
+
+        var salesPerson = new User
+        {
+            Name = "Ali Sales", Email = "ali@test.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Test@1234"),
+            Role = UserRole.SalesPerson, BranchId = branch.Id
+        };
+        var bomCreator = new User
+        {
+            Name = "Bob BOM", Email = "bob@test.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Test@1234"),
+            Role = UserRole.BomCreator, BranchId = branch.Id
+        };
+        var accountant = new User
+        {
+            Name = "Sara Accounts", Email = "sara@test.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Test@1234"),
+            Role = UserRole.Accountant, BranchId = branch.Id
+        };
+        var md = new User
+        {
+            Name = "Managing Director", Email = "md@test.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Test@1234"),
+            Role = UserRole.ManagingDirector, BranchId = null
+        };
+        db.Users.AddRange(salesPerson, bomCreator, accountant, md);
+        await db.SaveChangesAsync();
+
+        db.Customers.AddRange(
+            new Customer
+            {
+                Name = "ACME Trading LLC", Address = "Fujairah Free Zone",
+                Email = "orders@acme.test", PhoneNumber = "+97192000001",
+                BranchId = branch.Id, CreatedByUserId = salesPerson.Id
+            },
+            new Customer
+            {
+                Name = "Gulf Plastics Co", Address = "Industrial Area, Fujairah",
+                Email = "procurement@gulfplastics.test", PhoneNumber = "+97192000002",
+                BranchId = branch.Id, CreatedByUserId = salesPerson.Id
+            }
+        );
+
+        db.Items.AddRange(
+            new Item
+            {
+                Code = "HDPE-20", Description = "HDPE Pipe 20mm",
+                Type = ItemType.FinishedGood, BranchId = branch.Id, IsActive = true
+            },
+            new Item
+            {
+                Code = "HDPE-25", Description = "HDPE Pipe 25mm",
+                Type = ItemType.FinishedGood, BranchId = branch.Id, IsActive = true
+            },
+            new Item
+            {
+                Code = "RM-PE100", Description = "PE100 Resin (Raw Material)",
+                Type = ItemType.RawMaterial, BranchId = branch.Id, IsActive = true
+            }
+        );
+
+        db.Set<ExchangeRate>().Add(new ExchangeRate
+        {
+            CurrencyCode = "USD", CurrencyName = "US Dollar",
+            RateToAed = 3.6725m, SetByUserId = admin.Id,
+            EffectiveDate = DateTime.UtcNow, IsActive = true
+        });
+
         await db.SaveChangesAsync();
     }
 }

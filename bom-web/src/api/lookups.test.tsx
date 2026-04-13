@@ -58,5 +58,6 @@ describe("lookup hooks", () => {
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(api.get).toHaveBeenCalledWith("/exchange-rates/active");
+    expect(result.current.data).toEqual([{ id: 3, currencyCode: "USD", rateToAed: 3.67 }]);
   });
 });

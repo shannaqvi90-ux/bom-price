@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BomPriceApproval.API", "BomPriceApproval.API\BomPriceApproval.API.csproj", "{8A4BA490-67B3-43F8-A36A-D7D721A56EFD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BomPriceApproval.Tests", "BomPriceApproval.Tests\BomPriceApproval.Tests.csproj", "{CD50CC78-FDBC-4F24-A20C-A658789A7019}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8A4BA490-67B3-43F8-A36A-D7D721A56EFD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8A4BA490-67B3-43F8-A36A-D7D721A56EFD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8A4BA490-67B3-43F8-A36A-D7D721A56EFD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8A4BA490-67B3-43F8-A36A-D7D721A56EFD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CD50CC78-FDBC-4F24-A20C-A658789A7019}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CD50CC78-FDBC-4F24-A20C-A658789A7019}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CD50CC78-FDBC-4F24-A20C-A658789A7019}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CD50CC78-FDBC-4F24-A20C-A658789A7019}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

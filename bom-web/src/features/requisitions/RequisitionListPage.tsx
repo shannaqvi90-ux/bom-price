@@ -69,12 +69,8 @@ export default function RequisitionListPage() {
     if (!data) return [];
     return data.filter((r) => {
       if (filters.status && r.status !== filters.status) return false;
-      if (filters.from && new Date(r.createdAt) < new Date(filters.from)) return false;
-      if (filters.to) {
-        const to = new Date(filters.to);
-        to.setHours(23, 59, 59, 999);
-        if (new Date(r.createdAt) > to) return false;
-      }
+      if (filters.from && new Date(r.createdAt) < new Date(filters.from + "T00:00:00Z")) return false;
+      if (filters.to && new Date(r.createdAt) > new Date(filters.to + "T23:59:59.999Z")) return false;
       return true;
     });
   }, [data, filters]);

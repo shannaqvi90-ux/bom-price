@@ -3,7 +3,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown } from "lucide-react";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
@@ -55,7 +55,7 @@ export default function NewRequisitionPage() {
   const isErrorLookups = customersQ.isError || itemsQ.isError || ratesQ.isError;
 
   const currencies = ["AED", ...(ratesQ.data?.map((r) => r.currencyCode) ?? [])];
-  const uniqueCurrencies = Array.from(new Set(currencies));
+  const uniqueCurrencies = Array.from(new Set(currencies)).map((code) => ({ code }));
 
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
@@ -156,20 +156,21 @@ export default function NewRequisitionPage() {
                 <label htmlFor="currencyCode" className="text-sm font-medium">
                   Currency
                 </label>
-                <div className="relative">
-                  <select
-                    id="currencyCode"
-                    className="flex h-10 w-full appearance-none rounded-md border border-input bg-background px-3 py-2 pr-8 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    {...register("currencyCode")}
-                  >
-                    {uniqueCurrencies.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                </div>
+                <Controller
+                  control={control}
+                  name="currencyCode"
+                  render={({ field }) => (
+                    <SearchableSelect<{ code: string }>
+                      id="currencyCode"
+                      options={uniqueCurrencies}
+                      value={field.value ? { code: field.value } : null}
+                      onChange={(v) => field.onChange(v?.code ?? "")}
+                      getLabel={(c) => c.code}
+                      getValue={(c) => c.code}
+                      placeholder="Select currency…"
+                    />
+                  )}
+                />
                 {errors.currencyCode && (
                   <p className="text-xs text-destructive">{errors.currencyCode.message}</p>
                 )}

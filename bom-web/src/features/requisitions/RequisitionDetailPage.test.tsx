@@ -129,6 +129,6 @@ describe("RequisitionDetailPage", () => {
     await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
     expect(screen.getByText(/5\.25/)).toBeInTheDocument();
     expect(screen.getByText(/7\.5/)).toBeInTheDocument();
-    expect(screen.getByText(/30/)).toBeInTheDocument();
+    expect(screen.getByText(/30%/)).toBeInTheDocument();
   });
 });

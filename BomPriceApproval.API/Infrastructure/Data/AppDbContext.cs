@@ -1,0 +1,60 @@
+using BomPriceApproval.API.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace BomPriceApproval.API.Infrastructure.Data;
+
+public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+{
+    public DbSet<Branch> Branches => Set<Branch>();
+    public DbSet<User> Users => Set<User>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Item> Items => Set<Item>();
+    public DbSet<Process> Processes => Set<Process>();
+    public DbSet<ExchangeRate> ExchangeRates => Set<ExchangeRate>();
+    public DbSet<QuotationRequest> QuotationRequests => Set<QuotationRequest>();
+    public DbSet<BomHeader> BomHeaders => Set<BomHeader>();
+    public DbSet<BomLine> BomLines => Set<BomLine>();
+    public DbSet<BomCost> BomCosts => Set<BomCost>();
+    public DbSet<QuotationApproval> QuotationApprovals => Set<QuotationApproval>();
+    public DbSet<Notification> Notifications => Set<Notification>();
+
+    protected override void OnModelCreating(ModelBuilder mb)
+    {
+        mb.Entity<Branch>().HasData(
+            new Branch { Id = 1, Name = "Fujairah" },
+            new Branch { Id = 2, Name = "Al Ain" }
+        );
+
+        mb.Entity<QuotationRequest>()
+            .Property(q => q.RefNo)
+            .HasComputedColumnSql("'REQ-' || LPAD(id::text, 4, '0')", stored: true);
+
+        mb.Entity<BomCost>()
+            .HasOne(c => c.BomHeader)
+            .WithOne(h => h.Cost)
+            .HasForeignKey<BomCost>(c => c.BomHeaderId);
+
+        mb.Entity<QuotationApproval>()
+            .HasOne(a => a.QuotationRequest)
+            .WithOne(q => q.Approval)
+            .HasForeignKey<QuotationApproval>(a => a.QuotationRequestId);
+
+        // Decimal precision
+        mb.Entity<BomLine>().Property(b => b.QtyPerKg).HasPrecision(18, 6);
+        mb.Entity<BomLine>().Property(b => b.WastagePct).HasPrecision(18, 4);
+        mb.Entity<BomCost>().Property(b => b.RawMaterialCostTotal).HasPrecision(18, 4);
+        mb.Entity<BomCost>().Property(b => b.LandedCostValue).HasPrecision(18, 4);
+        mb.Entity<BomCost>().Property(b => b.FohAmount).HasPrecision(18, 4);
+        mb.Entity<BomCost>().Property(b => b.TotalCostPerKg).HasPrecision(18, 4);
+        mb.Entity<QuotationApproval>().Property(a => a.SalesPricePerKgAed).HasPrecision(18, 4);
+        mb.Entity<QuotationApproval>().Property(a => a.SalesPricePerKgForeign).HasPrecision(18, 4);
+        mb.Entity<QuotationApproval>().Property(a => a.ProfitMarginPct).HasPrecision(18, 4);
+        mb.Entity<QuotationApproval>().Property(a => a.MaterialCostPct).HasPrecision(18, 4);
+        mb.Entity<QuotationApproval>().Property(a => a.OtherCostPct).HasPrecision(18, 4);
+        mb.Entity<ExchangeRate>().Property(e => e.RateToAed).HasPrecision(18, 6);
+        mb.Entity<QuotationRequest>().Property(q => q.ExpectedQty).HasPrecision(18, 4);
+        mb.Entity<QuotationRequest>().Property(q => q.ExchangeRateSnapshot).HasPrecision(18, 6);
+        mb.Entity<BomHeader>().Property(b => b.TotalCostPerKg).HasPrecision(18, 4);
+    }
+}

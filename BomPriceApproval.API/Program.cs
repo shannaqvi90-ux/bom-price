@@ -1,6 +1,7 @@
 using System.Text;
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Domain.Enums;
+using BomPriceApproval.API.Features.Notifications;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -23,24 +24,19 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     {
         opt.TokenValidationParameters = new TokenValidationParameters
         {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
+            ValidateIssuer = true, ValidateAudience = true,
+            ValidateLifetime = true, ValidateIssuerSigningKey = true,
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
         };
-        // Support SignalR token from query string
         opt.Events = new JwtBearerEvents
         {
             OnMessageReceived = ctx =>
             {
-                var accessToken = ctx.Request.Query["access_token"];
-                if (!string.IsNullOrEmpty(accessToken) &&
-                    ctx.HttpContext.Request.Path.StartsWithSegments("/hubs"))
-                    ctx.Token = accessToken;
+                var token = ctx.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(token) && ctx.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                    ctx.Token = token;
                 return Task.CompletedTask;
             }
         };
@@ -50,16 +46,34 @@ builder.Services.AddAuthorization();
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Description = "Enter: Bearer {token}",
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey
+    });
+    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                    { Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme, Id = "Bearer" }
+            }, []
+        }
+    });
+});
 
 builder.Services.AddCors(opt =>
     opt.AddDefaultPolicy(p => p
-        .WithOrigins("http://localhost:5300")
+        .WithOrigins("http://localhost:5300", "http://localhost:8081")
         .AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
 
 var app = builder.Build();
 
-// Seed admin user for dev
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -68,13 +82,11 @@ using (var scope = app.Services.CreateScope())
     {
         db.Users.Add(new User
         {
-            Name = "Admin",
-            Email = "admin@test.com",
+            Name = "Admin", Email = "admin@test.com",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@1234"),
-            Role = UserRole.Admin,
-            BranchId = null
+            Role = UserRole.Admin, BranchId = null
         });
-        db.SaveChanges();
+        await db.SaveChangesAsync();
     }
 }
 
@@ -84,7 +96,7 @@ app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-app.MapHub<BomPriceApproval.API.Features.Notifications.NotificationHub>("/hubs/notifications");
+app.MapHub<NotificationHub>("/hubs/notifications");
 app.Run();
 
 public partial class Program { }

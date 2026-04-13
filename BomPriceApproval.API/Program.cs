@@ -14,6 +14,8 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
 
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<EmailService>();
+builder.Services.AddScoped<PdfService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt =>

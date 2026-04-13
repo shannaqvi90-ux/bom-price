@@ -86,7 +86,7 @@ export function SearchableSelect<T>({
         onKeyDown={onKeyDown}
       />
       {open && filtered.length > 0 && (
-        <ul className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border bg-popover text-sm shadow-md">
+        <ul className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border bg-background text-sm shadow-md">
           {filtered.map((o, i) => (
             <li
               key={getValue(o)}
@@ -105,7 +105,7 @@ export function SearchableSelect<T>({
         </ul>
       )}
       {open && filtered.length === 0 && (
-        <div className="absolute z-20 mt-1 w-full rounded-md border border-border bg-popover px-3 py-2 text-sm text-muted-foreground shadow-md">
+        <div className="absolute z-20 mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-muted-foreground shadow-md">
           No matches
         </div>
       )}

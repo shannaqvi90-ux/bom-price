@@ -91,32 +91,30 @@ using (var scope = app.Services.CreateScope())
         await db.SaveChangesAsync();
     }
 
-    // Seed branch + role users + customers + items + exchange rate for smoke testing
-    if (!db.Branches.Any(b => b.Name == "Fujairah"))
+    // Seed role users + customers + items + exchange rate for smoke testing
+    // Branches (Id=1 Fujairah, Id=2 Al Ain) are already seeded via HasData migration
+    if (!db.Users.Any(u => u.Email == "ali@test.com"))
     {
-        var branch = new Branch { Name = "Fujairah" };
-        db.Branches.Add(branch);
-        await db.SaveChangesAsync();
-
+        const int fujairahBranchId = 1;
         var admin = db.Users.First(u => u.Email == "admin@test.com");
 
         var salesPerson = new User
         {
             Name = "Ali Sales", Email = "ali@test.com",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("Test@1234"),
-            Role = UserRole.SalesPerson, BranchId = branch.Id
+            Role = UserRole.SalesPerson, BranchId = fujairahBranchId
         };
         var bomCreator = new User
         {
             Name = "Bob BOM", Email = "bob@test.com",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("Test@1234"),
-            Role = UserRole.BomCreator, BranchId = branch.Id
+            Role = UserRole.BomCreator, BranchId = fujairahBranchId
         };
         var accountant = new User
         {
             Name = "Sara Accounts", Email = "sara@test.com",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("Test@1234"),
-            Role = UserRole.Accountant, BranchId = branch.Id
+            Role = UserRole.Accountant, BranchId = fujairahBranchId
         };
         var md = new User
         {
@@ -132,13 +130,13 @@ using (var scope = app.Services.CreateScope())
             {
                 Name = "ACME Trading LLC", Address = "Fujairah Free Zone",
                 Email = "orders@acme.test", PhoneNumber = "+97192000001",
-                BranchId = branch.Id, CreatedByUserId = salesPerson.Id
+                BranchId = fujairahBranchId, CreatedByUserId = salesPerson.Id
             },
             new Customer
             {
                 Name = "Gulf Plastics Co", Address = "Industrial Area, Fujairah",
                 Email = "procurement@gulfplastics.test", PhoneNumber = "+97192000002",
-                BranchId = branch.Id, CreatedByUserId = salesPerson.Id
+                BranchId = fujairahBranchId, CreatedByUserId = salesPerson.Id
             }
         );
 
@@ -146,21 +144,21 @@ using (var scope = app.Services.CreateScope())
             new Item
             {
                 Code = "HDPE-20", Description = "HDPE Pipe 20mm",
-                Type = ItemType.FinishedGood, BranchId = branch.Id, IsActive = true
+                Type = ItemType.FinishedGood, BranchId = fujairahBranchId, IsActive = true
             },
             new Item
             {
                 Code = "HDPE-25", Description = "HDPE Pipe 25mm",
-                Type = ItemType.FinishedGood, BranchId = branch.Id, IsActive = true
+                Type = ItemType.FinishedGood, BranchId = fujairahBranchId, IsActive = true
             },
             new Item
             {
                 Code = "RM-PE100", Description = "PE100 Resin (Raw Material)",
-                Type = ItemType.RawMaterial, BranchId = branch.Id, IsActive = true
+                Type = ItemType.RawMaterial, BranchId = fujairahBranchId, IsActive = true
             }
         );
 
-        db.Set<ExchangeRate>().Add(new ExchangeRate
+        db.ExchangeRates.Add(new ExchangeRate
         {
             CurrencyCode = "USD", CurrencyName = "US Dollar",
             RateToAed = 3.6725m, SetByUserId = admin.Id,

@@ -72,6 +72,7 @@ bom-web/
         Card.tsx
     lib/
       cn.ts
+      jwt.ts
 ```
 
 Every file listed has exactly one responsibility. Stores are separated from API clients; layout components are separated from feature pages; tests live next to the file they cover.
@@ -230,6 +231,17 @@ export default defineConfig({
   server: {
     port: 5300,
     strictPort: true,
+    proxy: {
+      "/api": {
+        target: "http://localhost:7300",
+        changeOrigin: true,
+      },
+      "/hubs": {
+        target: "http://localhost:7300",
+        changeOrigin: true,
+        ws: true,
+      },
+    },
   },
   test: {
     globals: true,
@@ -375,6 +387,34 @@ import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+```
+
+- [ ] **Step 7b: Create `bom-web/src/lib/jwt.ts`**
+
+```ts
+interface JwtPayload {
+  exp?: number;
+  [key: string]: unknown;
+}
+
+export function decodeJwt(token: string): JwtPayload | null {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    const json = atob(padded);
+    return JSON.parse(json) as JwtPayload;
+  } catch {
+    return null;
+  }
+}
+
+export function isJwtExpired(token: string, skewSeconds = 5): boolean {
+  const payload = decodeJwt(token);
+  if (!payload || typeof payload.exp !== "number") return true;
+  return payload.exp <= Math.floor(Date.now() / 1000) + skewSeconds;
 }
 ```
 
@@ -527,6 +567,57 @@ describe("authStore", () => {
     expect(state.user?.userId).toBe(1);
   });
 
+  it("initAuth clears session when the access token is expired", () => {
+    // JWT with exp = 0 (1970) — always expired
+    const expiredJwt =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." +
+      // {"exp":0}
+      "eyJleHAiOjB9" +
+      ".sig";
+
+    useAuthStore.setState({
+      accessToken: expiredJwt,
+      refreshToken: "rt.1",
+      user: {
+        userId: 1,
+        name: "Admin",
+        role: "Admin",
+        branchId: null,
+      },
+    });
+
+    useAuthStore.getState().initAuth();
+
+    const state = useAuthStore.getState();
+    expect(state.accessToken).toBeNull();
+    expect(state.user).toBeNull();
+  });
+
+  it("initAuth keeps session when the access token is still valid", () => {
+    const future = Math.floor(Date.now() / 1000) + 600;
+    const payload = btoa(JSON.stringify({ exp: future }))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+    const validJwt = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${payload}.sig`;
+
+    useAuthStore.setState({
+      accessToken: validJwt,
+      refreshToken: "rt.1",
+      user: {
+        userId: 1,
+        name: "Admin",
+        role: "Admin",
+        branchId: null,
+      },
+    });
+
+    useAuthStore.getState().initAuth();
+
+    expect(useAuthStore.getState().accessToken).toBe(validJwt);
+    expect(useAuthStore.getState().user).not.toBeNull();
+  });
+
   it("logout clears everything", () => {
     useAuthStore.getState().setSession({
       accessToken: "at.1",
@@ -569,6 +660,7 @@ Expected: FAIL — `Cannot find module './authStore'`.
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { AuthUser, LoginResponse } from "@/types/api";
+import { isJwtExpired } from "@/lib/jwt";
 
 interface AuthState {
   user: AuthUser | null;
@@ -578,6 +670,7 @@ interface AuthState {
   updateTokens: (accessToken: string, refreshToken: string) => void;
   logout: () => void;
   isAuthenticated: () => boolean;
+  initAuth: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -602,6 +695,12 @@ export const useAuthStore = create<AuthState>()(
       logout: () =>
         set({ user: null, accessToken: null, refreshToken: null }),
       isAuthenticated: () => get().accessToken !== null && get().user !== null,
+      initAuth: () => {
+        const token = get().accessToken;
+        if (token && isJwtExpired(token)) {
+          set({ user: null, accessToken: null, refreshToken: null });
+        }
+      },
     }),
     {
       name: "bom-auth",
@@ -853,7 +952,10 @@ import axios, {
 import { useAuthStore } from "@/store/authStore";
 import type { LoginResponse } from "@/types/api";
 
-export const API_BASE_URL = "http://localhost:7300/api";
+// Relative base — Vite dev server proxies /api and /hubs to the ASP.NET Core
+// backend on port 7300 (see vite.config.ts). In production this should be
+// overridden via VITE_API_BASE_URL in a later plan.
+export const API_BASE_URL = "/api";
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -1524,16 +1626,31 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 const STORAGE_KEY = "bom-sidebar-collapsed";
+const NARROW_BREAKPOINT = 1024;
 
 export function Sidebar() {
   const user = useAuthStore((s) => s.user);
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
+
+  const [userCollapsed, setUserCollapsed] = useState<boolean>(() => {
     return localStorage.getItem(STORAGE_KEY) === "true";
   });
 
+  const [isNarrow, setIsNarrow] = useState<boolean>(
+    () => window.innerWidth < NARROW_BREAKPOINT,
+  );
+
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, String(collapsed));
-  }, [collapsed]);
+    const onResize = () => setIsNarrow(window.innerWidth < NARROW_BREAKPOINT);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, String(userCollapsed));
+  }, [userCollapsed]);
+
+  // Narrow viewport always collapses; on wide, honour the user preference.
+  const collapsed = isNarrow || userCollapsed;
 
   const visible = NAV_ITEMS.filter(
     (item) => !item.roles || (user && item.roles.includes(user.role)),
@@ -1575,9 +1692,11 @@ export function Sidebar() {
       </nav>
       <button
         type="button"
-        onClick={() => setCollapsed((c) => !c)}
-        className="flex h-10 items-center justify-center border-t border-border hover:bg-muted"
+        onClick={() => setUserCollapsed((c) => !c)}
+        disabled={isNarrow}
+        className="flex h-10 items-center justify-center border-t border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
         aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        title={isNarrow ? "Sidebar auto-collapses on narrow screens" : undefined}
       >
         {collapsed ? (
           <ChevronRight className="h-4 w-4" />
@@ -1927,8 +2046,10 @@ import App from "./App";
 import "./index.css";
 import { queryClient } from "@/api/queryClient";
 import { useThemeStore } from "@/store/themeStore";
+import { useAuthStore } from "@/store/authStore";
 
 useThemeStore.getState().apply();
+useAuthStore.getState().initAuth();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -1993,7 +2114,10 @@ Expected: Vite banner shows `Local: http://localhost:5300/`.
 
 Open `http://localhost:5300` in a browser. Expected: redirected to `/login`.
 
-Check the seeded admin credentials in `BomPriceApproval.API/Program.cs` (search for `admin@test.com`) and log in with them.
+Log in using the seeded admin account (see `BomPriceApproval.API/Program.cs`):
+
+- **Email:** `admin@test.com`
+- **Password:** `Admin@1234`
 
 Expected: redirect to `/dashboard`, Admin dashboard card visible inside the shell, sidebar shows Dashboard + Notifications + Users + Branches + Exchange Rates + Items, topbar shows "Signed in as Admin · Admin".
 
@@ -2015,9 +2139,15 @@ Click Log out in the topbar. Expected: redirect to `/login`. Attempt to visit `h
 
 - [ ] **Step 8: Verify role filtering**
 
-Log in as a non-Admin user. If no non-Admin user is seeded, use the API directly with Swagger to create one, or skip this step and record it as a follow-up.
+Only one user is seeded (`admin@test.com`, role Admin). To verify role-filtered sidebar nav, create a non-Admin user via Swagger at `http://localhost:7300/swagger`:
 
-Expected: Admin-only nav items (Users, Branches, Items) are hidden from the sidebar for non-Admin roles.
+1. Authorize with the admin access token (copy from DevTools → Application → Local Storage → `bom-auth` → `accessToken`, paste as `Bearer <token>`).
+2. `POST /api/admin/users` with a body like `{ "name": "Sam", "email": "sam@test.com", "password": "Sam@1234", "role": "SalesPerson", "branchId": 1 }`. If the admin user creation endpoint differs, record the actual route observed in Swagger.
+3. Log out of the web app, log back in as the new user.
+
+Expected: Admin-only nav items (Users, Branches, Items) are hidden from the sidebar. The SalesPerson sees Dashboard, Requisitions, Notifications only.
+
+If the admin user-creation endpoint is not yet implemented or the Branches table is empty, record this verification as deferred to Plan 2 (which covers SalesPerson flows end-to-end).
 
 - [ ] **Step 9: Verify refresh interceptor (optional)**
 
@@ -2045,6 +2175,18 @@ No commit needed. Update the plan checklist in your tracking system to mark Plan
 **Type consistency:** `AuthUser`, `LoginResponse`, `UserRole` used identically across authStore, axios refresh, authApi, ProtectedRoute, Sidebar, DashboardRouter, LoginPage.
 
 **Ambiguity check:** one gotcha was flagged inline in Task 9 (refresh must go through `api` not raw `axios` so test adapters apply). The plan addresses it with a rewrite and an explanation.
+
+**Documented deferrals (spec items intentionally skipped in Plan 1):**
+
+| Spec item | Section | Reason | Deferred to |
+|---|---|---|---|
+| Topbar current page title | §5 App Shell | Plan 1 has only one authed route, no title to show | Plan 2 (once `/requisitions` routes exist) |
+| Topbar "user avatar dropdown" (Radix dropdown menu) | §5 App Shell | Plan 1 has no dropdown primitive; Shadcn/Radix introduced in Plan 2 | Plan 2 |
+| `AnimatePresence` page transitions on `<Outlet>` | §5, §6 Animations | Nothing to animate between when there is only one route under the shell | Plan 2 |
+| `useNotifications` SignalR hook + toast stack | §4, §5 | Real-time notifications depend on full auth + API surface first | Plan 4 |
+| `<SkeletonCard>`, empty states, loading skeletons | §6 Loading/Empty | No data-fetching pages yet in Plan 1 | Plan 2 |
+
+Every other spec item applicable to foundation/auth is covered by Plan 1.
 
 ---
 

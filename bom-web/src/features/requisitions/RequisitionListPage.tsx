@@ -86,7 +86,7 @@ export default function RequisitionListPage() {
           Clear filters
         </Button>
       </div>
-    ) : role === "SalesPerson" ? (
+    ) : role === "SalesPerson" || role === "Admin" ? (
       <div className="space-y-2">
         <p>You haven't created any requisitions yet.</p>
         <Link to="/requisitions/new">
@@ -101,7 +101,7 @@ export default function RequisitionListPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Requisitions</h1>
-        {role === "SalesPerson" && (
+        {(role === "SalesPerson" || role === "Admin") && (
           <Button onClick={() => navigate("/requisitions/new")}>New Requisition</Button>
         )}
       </div>

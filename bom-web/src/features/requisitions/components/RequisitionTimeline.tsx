@@ -20,7 +20,7 @@ interface Step {
 }
 
 function buildSteps(
-  status: RequisitionStatus,
+  status: Exclude<RequisitionStatus, "Draft">,
   createdAt: string,
   updatedAt: string,
 ): Step[] {
@@ -100,7 +100,7 @@ const CIRCLE_STYLES: Record<StepState, string> = {
 };
 
 interface Props {
-  status: RequisitionStatus;
+  status: Exclude<RequisitionStatus, "Draft">;
   createdAt: string;
   updatedAt: string;
 }

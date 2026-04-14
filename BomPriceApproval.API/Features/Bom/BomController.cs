@@ -91,4 +91,30 @@ public class BomController(AppDbContext db, NotificationService notificationServ
 
         return NoContent();
     }
+
+    [HttpPut("{requisitionId}/lines")]
+    [Authorize(Roles = "BomCreator")]
+    public async Task<IActionResult> SaveLines(int requisitionId, SaveBomLinesRequest request)
+    {
+        var req = await db.QuotationRequests.FindAsync(requisitionId);
+        if (req is null) return NotFound();
+        if (req.Status != RequisitionStatus.BomInProgress)
+            return BadRequest(new { message = "BOM can only be saved when status is BomInProgress" });
+
+        var bom = await db.BomHeaders.Include(b => b.Lines)
+            .FirstOrDefaultAsync(b => b.QuotationRequestId == requisitionId);
+        if (bom is null) return NotFound();
+
+        db.BomLines.RemoveRange(bom.Lines);
+        bom.Lines = request.Lines.Select(l => new BomLine
+        {
+            ProcessId = l.ProcessId,
+            RawMaterialItemId = l.RawMaterialItemId,
+            QtyPerKg = l.QtyPerKg,
+            WastagePct = l.WastagePct
+        }).ToList();
+
+        await db.SaveChangesAsync();
+        return NoContent();
+    }
 }

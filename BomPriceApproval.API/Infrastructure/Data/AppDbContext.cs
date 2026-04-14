@@ -58,6 +58,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithOne(q => q.Approval)
             .HasForeignKey<QuotationApproval>(a => a.QuotationRequestId);
 
+        mb.Entity<BomLine>()
+            .HasOne(l => l.RawMaterial)
+            .WithMany()
+            .HasForeignKey(l => l.RawMaterialItemId);
+
         // Decimal precision
         mb.Entity<BomLine>().Property(b => b.QtyPerKg).HasPrecision(18, 6);
         mb.Entity<BomLine>().Property(b => b.WastagePct).HasPrecision(18, 4);
@@ -74,5 +79,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<QuotationRequest>().Property(q => q.ExpectedQty).HasPrecision(18, 4);
         mb.Entity<QuotationRequest>().Property(q => q.ExchangeRateSnapshot).HasPrecision(18, 6);
         mb.Entity<BomHeader>().Property(b => b.TotalCostPerKg).HasPrecision(18, 4);
+        mb.Entity<Item>().Property(i => i.LastPurchasePrice).HasPrecision(18, 4);
     }
 }

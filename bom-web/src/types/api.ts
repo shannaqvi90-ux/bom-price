@@ -185,6 +185,10 @@ export interface BomLine {
   rawMaterialDescription: string;
   qtyPerKg: number;
   wastagePct: number;
+  costPerKg: number | null;
+  currencyCode: string | null;
+  costPerKgInAed: number | null;
+  contributionAed: number | null;
 }
 
 export interface BomDetail {

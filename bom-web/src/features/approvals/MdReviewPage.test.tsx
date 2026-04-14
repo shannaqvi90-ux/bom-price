@@ -57,7 +57,9 @@ beforeEach(() => {
 
 describe("MdReviewPage", () => {
   it("renders cost breakdown rows from the API response", async () => {
-    mockedApi.get.mockResolvedValueOnce({ data: baseReview });
+    mockedApi.get
+      .mockResolvedValueOnce({ data: baseReview })
+      .mockResolvedValueOnce({ data: null });
 
     renderPage();
 
@@ -74,7 +76,9 @@ describe("MdReviewPage", () => {
   });
 
   it("live-calculates profit margin as sales price is typed", async () => {
-    mockedApi.get.mockResolvedValueOnce({ data: baseReview });
+    mockedApi.get
+      .mockResolvedValueOnce({ data: baseReview })
+      .mockResolvedValueOnce({ data: null });
     const user = userEvent.setup();
 
     renderPage();
@@ -92,7 +96,9 @@ describe("MdReviewPage", () => {
   });
 
   it("approve fires mutation with payload and flips to approved state with Download PDF", async () => {
-    mockedApi.get.mockImplementation(() => Promise.resolve({ data: baseReview }));
+    mockedApi.get.mockImplementation((url: string) =>
+      Promise.resolve({ data: url.includes("/bom/") ? null : baseReview }),
+    );
     mockedApi.post.mockResolvedValueOnce({
       data: { message: "Approved", refNo: "REQ-0042" },
     });
@@ -126,7 +132,9 @@ describe("MdReviewPage", () => {
   });
 
   it("reject with empty notes shows validation error and does not fire mutation", async () => {
-    mockedApi.get.mockResolvedValueOnce({ data: baseReview });
+    mockedApi.get
+      .mockResolvedValueOnce({ data: baseReview })
+      .mockResolvedValueOnce({ data: null });
     const user = userEvent.setup();
 
     renderPage();
@@ -143,7 +151,9 @@ describe("MdReviewPage", () => {
   });
 
   it("reject with notes fires mutation and navigates back to detail", async () => {
-    mockedApi.get.mockResolvedValueOnce({ data: baseReview });
+    mockedApi.get
+      .mockResolvedValueOnce({ data: baseReview })
+      .mockResolvedValueOnce({ data: null });
     mockedApi.post.mockResolvedValueOnce({ data: { message: "Rejected" } });
     const user = userEvent.setup();
 
@@ -179,5 +189,51 @@ describe("MdReviewPage", () => {
         screen.getByText(/not found or not ready for review/i),
       ).toBeInTheDocument(),
     );
+  });
+
+  it("View BOM dialog shows cost/kg and contribution columns", async () => {
+    const bomData = {
+      id: 1,
+      quotationRequestId: 42,
+      refNo: "REQ-0042",
+      itemDescription: "HDPE Pipe 20mm",
+      totalCostPerKg: 3.98,
+      submittedAt: "2026-04-15T10:00:00Z",
+      lines: [
+        {
+          id: 1,
+          processId: 1,
+          processName: "Extrusion",
+          rawMaterialItemId: 1,
+          rawMaterialDescription: "PE100 Resin",
+          qtyPerKg: 0.85,
+          wastagePct: 2.0,
+          costPerKg: 1.25,
+          currencyCode: "USD",
+          costPerKgInAed: 4.59,
+          contributionAed: 3.9765,
+        },
+      ],
+    };
+    mockedApi.get
+      .mockResolvedValueOnce({ data: baseReview })  // approval data
+      .mockResolvedValueOnce({ data: bomData });     // BOM data
+
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByText("REQ-0042")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: /View BOM/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText("PE100 Resin")).toBeInTheDocument(),
+    );
+
+    // Column headers unique to the cost columns
+    expect(screen.getByText(/Contribution \(AED\)/i)).toBeInTheDocument();
+
+    // Line values: cost/kg with currency and contribution
+    expect(screen.getByText(/1\.25 USD/i)).toBeInTheDocument();
+    expect(screen.getByText(/3\.9765/)).toBeInTheDocument();
   });
 });

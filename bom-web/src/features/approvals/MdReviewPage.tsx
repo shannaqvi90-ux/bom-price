@@ -312,6 +312,8 @@ export default function MdReviewPage() {
                       <th className="pb-1 font-medium">Material</th>
                       <th className="pb-1 text-right font-medium">Qty/kg</th>
                       <th className="pb-1 text-right font-medium">Wastage%</th>
+                      <th className="pb-1 text-right font-medium">Cost/kg</th>
+                      <th className="pb-1 text-right font-medium">Contribution (AED)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -322,6 +324,16 @@ export default function MdReviewPage() {
                           <td className="py-1">{l.rawMaterialDescription}</td>
                           <td className="py-1 text-right font-mono">{l.qtyPerKg.toFixed(4)}</td>
                           <td className="py-1 text-right font-mono">{l.wastagePct.toFixed(2)}%</td>
+                          <td className="py-1 text-right font-mono">
+                            {l.costPerKg != null
+                              ? `${l.costPerKg.toFixed(2)} ${l.currencyCode}`
+                              : "—"}
+                          </td>
+                          <td className="py-1 text-right font-mono">
+                            {l.contributionAed != null
+                              ? l.contributionAed.toFixed(4)
+                              : "—"}
+                          </td>
                         </tr>
                       ))}
                   </tbody>

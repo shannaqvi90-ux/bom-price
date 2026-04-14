@@ -128,15 +128,17 @@ using (var scope = app.Services.CreateScope())
         db.Customers.AddRange(
             new Customer
             {
+                Code = "CUST-001",
                 Name = "ACME Trading LLC", Address = "Fujairah Free Zone",
                 Email = "orders@acme.test", PhoneNumber = "+97192000001",
-                BranchId = fujairahBranchId, CreatedByUserId = salesPerson.Id
+                SalesPersonId = salesPerson.Id, CreatedByUserId = salesPerson.Id
             },
             new Customer
             {
+                Code = "CUST-002",
                 Name = "Gulf Plastics Co", Address = "Industrial Area, Fujairah",
                 Email = "procurement@gulfplastics.test", PhoneNumber = "+97192000002",
-                BranchId = fujairahBranchId, CreatedByUserId = salesPerson.Id
+                SalesPersonId = salesPerson.Id, CreatedByUserId = salesPerson.Id
             }
         );
 

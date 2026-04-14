@@ -14,7 +14,6 @@ public class CustomersController(AppDbContext db) : ControllerBase
 {
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string CurrentRole => User.FindFirstValue(ClaimTypes.Role)!;
-    private int? CurrentBranchId => int.TryParse(User.FindFirstValue("branchId"), out var b) && b > 0 ? b : null;
 
     [HttpGet]
     public async Task<IActionResult> GetAll()
@@ -22,12 +21,10 @@ public class CustomersController(AppDbContext db) : ControllerBase
         var query = db.Customers.AsQueryable();
 
         if (CurrentRole == "SalesPerson")
-            query = query.Where(c => c.CreatedByUserId == CurrentUserId);
-        else if (CurrentBranchId.HasValue)
-            query = query.Where(c => c.BranchId == CurrentBranchId);
+            query = query.Where(c => c.SalesPersonId == CurrentUserId);
 
         return Ok(await query
-            .Select(c => new CustomerResponse(c.Id, c.Name, c.Address, c.Email, c.PhoneNumber, c.BranchId, c.CreatedByUserId))
+            .Select(c => new CustomerResponse(c.Id, c.Code, c.Name, c.Address, c.Email, c.PhoneNumber, c.SalesPersonId, c.CreatedByUserId))
             .ToListAsync());
     }
 
@@ -36,34 +33,38 @@ public class CustomersController(AppDbContext db) : ControllerBase
     {
         var c = await db.Customers.FindAsync(id);
         if (c is null) return NotFound();
-        if (CurrentRole == "SalesPerson" && c.CreatedByUserId != CurrentUserId) return Forbid();
-        return Ok(new CustomerResponse(c.Id, c.Name, c.Address, c.Email, c.PhoneNumber, c.BranchId, c.CreatedByUserId));
+        if (CurrentRole == "SalesPerson" && c.SalesPersonId != CurrentUserId) return Forbid();
+        return Ok(new CustomerResponse(c.Id, c.Code, c.Name, c.Address, c.Email, c.PhoneNumber, c.SalesPersonId, c.CreatedByUserId));
     }
 
     [HttpPost]
-    [Authorize(Roles = "SalesPerson")]
+    [Authorize(Roles = "SalesPerson,Admin")]
     public async Task<IActionResult> Create(CreateCustomerRequest req)
     {
+        if (await db.Customers.AnyAsync(c => c.Code == req.Code))
+            return Conflict(new { error = $"Customer with code '{req.Code}' already exists." });
+
         var customer = new Customer
         {
+            Code = req.Code,
             Name = req.Name, Address = req.Address, Email = req.Email,
             PhoneNumber = req.PhoneNumber,
-            BranchId = CurrentBranchId!.Value,
+            SalesPersonId = CurrentRole == "SalesPerson" ? CurrentUserId : null,
             CreatedByUserId = CurrentUserId
         };
         db.Customers.Add(customer);
         await db.SaveChangesAsync();
         return CreatedAtAction(nameof(Get), new { id = customer.Id },
-            new CustomerResponse(customer.Id, customer.Name, customer.Address, customer.Email, customer.PhoneNumber, customer.BranchId, customer.CreatedByUserId));
+            new CustomerResponse(customer.Id, customer.Code, customer.Name, customer.Address, customer.Email, customer.PhoneNumber, customer.SalesPersonId, customer.CreatedByUserId));
     }
 
     [HttpPut("{id}")]
-    [Authorize(Roles = "SalesPerson")]
+    [Authorize(Roles = "SalesPerson,Admin")]
     public async Task<IActionResult> Update(int id, UpdateCustomerRequest req)
     {
         var c = await db.Customers.FindAsync(id);
         if (c is null) return NotFound();
-        if (c.CreatedByUserId != CurrentUserId) return Forbid();
+        if (CurrentRole == "SalesPerson" && c.SalesPersonId != CurrentUserId) return Forbid();
         c.Name = req.Name; c.Address = req.Address; c.Email = req.Email; c.PhoneNumber = req.PhoneNumber;
         await db.SaveChangesAsync();
         return NoContent();

@@ -63,6 +63,7 @@ public class CostingTests(WebApplicationFactory<Program> factory)
             }
         });
 
+        _client.DefaultRequestHeaders.Authorization = null;
         return requisitionId;
     }
 

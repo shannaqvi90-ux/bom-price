@@ -177,14 +177,17 @@ using (var scope = app.Services.CreateScope())
     // Ensure USD exchange rate exists (guard separately in case earlier seed was skipped or failed)
     if (!db.ExchangeRates.Any(e => e.CurrencyCode == "USD" && e.IsActive))
     {
-        var admin = db.Users.First(u => u.Email == "admin@test.com");
-        db.ExchangeRates.Add(new ExchangeRate
+        var admin = db.Users.FirstOrDefault(u => u.Email == "admin@test.com");
+        if (admin is not null)
         {
-            CurrencyCode = "USD", CurrencyName = "US Dollar",
-            RateToAed = 3.6725m, SetByUserId = admin.Id,
-            EffectiveDate = DateTime.UtcNow, IsActive = true
-        });
-        await db.SaveChangesAsync();
+            db.ExchangeRates.Add(new ExchangeRate
+            {
+                CurrencyCode = "USD", CurrencyName = "US Dollar",
+                RateToAed = 3.6725m, SetByUserId = admin.Id,
+                EffectiveDate = DateTime.UtcNow, IsActive = true
+            });
+            await db.SaveChangesAsync();
+        }
     }
 }
 

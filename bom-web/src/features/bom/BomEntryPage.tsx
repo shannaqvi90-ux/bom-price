@@ -12,6 +12,7 @@ import type { Item, Process } from "@/types/api";
 // ─── Local types ──────────────────────────────────────────────────────────────
 
 interface LocalLine {
+  localId: string;
   processId: number;
   processName: string;
   rawMaterialItemId: number;
@@ -102,6 +103,7 @@ export default function BomEntryPage() {
     setProcessSections(sections);
     setLines(
       bom.lines.map((l) => ({
+        localId: crypto.randomUUID(),
         processId: l.processId,
         processName: l.processName,
         rawMaterialItemId: l.rawMaterialItemId,
@@ -166,6 +168,7 @@ export default function BomEntryPage() {
     if (!qty || qty <= 0) return;
 
     const newLine: LocalLine = {
+      localId: crypto.randomUUID(),
       processId,
       processName,
       rawMaterialItemId: pendingLine.rawMaterial.id,
@@ -196,11 +199,9 @@ export default function BomEntryPage() {
     doSave(newLines, prevLines);
   }
 
-  function removeLine(processId: number, rawMaterialItemId: number) {
+  function removeLine(localId: string) {
     const prevLines = lines;
-    const newLines = lines.filter(
-      (l) => !(l.processId === processId && l.rawMaterialItemId === rawMaterialItemId),
-    );
+    const newLines = lines.filter((l) => l.localId !== localId);
     setLines(newLines);
     doSave(newLines, prevLines);
   }
@@ -327,7 +328,7 @@ export default function BomEntryPage() {
             {/* Lines */}
             {sectionLines.map((line) => (
               <div
-                key={`${line.processId}-${line.rawMaterialItemId}`}
+                key={line.localId}
                 className="grid grid-cols-[1fr_100px_90px_32px] gap-2 px-4 py-2 text-sm border-b border-border items-center"
               >
                 <span>{line.rawMaterialDescription}</span>
@@ -336,7 +337,7 @@ export default function BomEntryPage() {
                 {!isReadOnly && (
                   <button
                     type="button"
-                    onClick={() => removeLine(line.processId, line.rawMaterialItemId)}
+                    onClick={() => removeLine(line.localId)}
                     className="text-destructive hover:opacity-70"
                     aria-label="Remove line"
                   >

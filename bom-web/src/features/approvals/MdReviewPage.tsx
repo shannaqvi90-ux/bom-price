@@ -1,0 +1,280 @@
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import {
+  useMdReview,
+  useApproveRequisition,
+  useRejectRequisition,
+} from "./approvalsApi";
+
+type PageState =
+  | { kind: "reviewing" }
+  | { kind: "approved"; salesPrice: number; marginPct: number };
+
+function LabeledRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-4 py-1 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="text-right font-mono">{value}</span>
+    </div>
+  );
+}
+
+export default function MdReviewPage() {
+  const { id } = useParams<{ id: string }>();
+  const requisitionId = Number(id);
+  const navigate = useNavigate();
+  const { data, isLoading, error } = useMdReview(requisitionId);
+  const approve = useApproveRequisition();
+  const reject = useRejectRequisition();
+
+  const [pageState, setPageState] = useState<PageState>({ kind: "reviewing" });
+  const [salesPriceInput, setSalesPriceInput] = useState("");
+  const [notes, setNotes] = useState("");
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  const httpStatus = (error as { response?: { status?: number } } | null)
+    ?.response?.status;
+
+  if (httpStatus === 404) {
+    return (
+      <Card className="mx-auto max-w-lg">
+        <CardContent className="py-8 text-center">
+          <p className="text-sm">Requisition not found or not ready for review.</p>
+          <Link to="/requisitions" className="mt-4 inline-block text-sm underline">
+            Back to Requisitions
+          </Link>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (httpStatus === 403) {
+    return (
+      <Card className="mx-auto max-w-lg">
+        <CardContent className="py-8 text-center">
+          <p className="text-sm">You don't have access to this requisition.</p>
+          <Link to="/requisitions" className="mt-4 inline-block text-sm underline">
+            Back to Requisitions
+          </Link>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="mx-auto max-w-lg">
+        <CardContent className="py-8 text-center text-destructive">
+          Failed to load review data.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isLoading || !data) {
+    return <p className="text-sm text-muted-foreground">Loading…</p>;
+  }
+
+  const salesPrice = Number(salesPriceInput);
+  const hasValidPrice = Number.isFinite(salesPrice) && salesPrice > 0;
+  const marginPct =
+    hasValidPrice && salesPrice > 0
+      ? ((salesPrice - data.totalCostPerKg) / salesPrice) * 100
+      : 0;
+  const marginIsPositive = marginPct > 0;
+
+  async function handleApprove() {
+    setValidationError(null);
+    if (!hasValidPrice) {
+      setValidationError("Enter a sales price greater than zero.");
+      return;
+    }
+    try {
+      await approve.mutateAsync({
+        requisitionId,
+        payload: { salesPricePerKgAed: salesPrice, notes: notes || undefined },
+      });
+      setPageState({ kind: "approved", salesPrice, marginPct });
+    } catch (e) {
+      const msg =
+        (e as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Failed to approve.";
+      setValidationError(msg);
+    }
+  }
+
+  async function handleReject() {
+    setValidationError(null);
+    if (notes.trim().length === 0) {
+      setValidationError("Notes are required when rejecting.");
+      return;
+    }
+    try {
+      await reject.mutateAsync({
+        requisitionId,
+        payload: { notes: notes.trim() },
+      });
+      navigate(`/requisitions/${requisitionId}`);
+    } catch (e) {
+      const msg =
+        (e as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Failed to reject.";
+      setValidationError(msg);
+    }
+  }
+
+  function handleDownloadPdf() {
+    window.open(`/api/approvals/${requisitionId}/pdf`, "_blank");
+  }
+
+  return (
+    <div className="space-y-6">
+      <Link
+        to={`/requisitions/${requisitionId}`}
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" /> Back to Requisition
+      </Link>
+
+      <div>
+        <h1 className="font-mono text-2xl font-semibold">{data.refNo}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {data.itemDescription} — {data.customerName}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Cost Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LabeledRow
+              label="Raw Material"
+              value={`${data.rawMaterialCostPerKg.toFixed(4)} AED/kg`}
+            />
+            <LabeledRow
+              label="Landed Cost"
+              value={`${data.landedCostPerKg.toFixed(4)} AED/kg`}
+            />
+            <LabeledRow label="FOH" value={`${data.fohPerKg.toFixed(4)} AED/kg`} />
+            <div className="mt-2 flex justify-between gap-4 border-t pt-2 text-sm font-semibold">
+              <span>Total Cost/kg</span>
+              <span className="font-mono">{data.totalCostPerKg.toFixed(4)} AED</span>
+            </div>
+            <div className="mt-4 space-y-1 text-xs text-muted-foreground">
+              <div>Expected qty: {data.expectedQty} kg</div>
+              <div>Currency: {data.currencyCode}</div>
+              {data.exchangeRate !== null && (
+                <div>Exchange rate: {data.exchangeRate}</div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {pageState.kind === "approved" ? "Approved" : "Your Decision"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {pageState.kind === "approved" ? (
+              <div className="space-y-4">
+                <div className="rounded-md bg-green-50 p-3 text-sm text-green-800">
+                  Quotation approved ✓
+                </div>
+                <LabeledRow
+                  label="Sales Price"
+                  value={`${pageState.salesPrice.toFixed(4)} AED/kg`}
+                />
+                <LabeledRow
+                  label="Profit Margin"
+                  value={`${pageState.marginPct.toFixed(2)}%`}
+                />
+                <Button onClick={handleDownloadPdf} className="w-full">
+                  Download PDF
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label
+                    className="mb-1 block text-xs text-muted-foreground"
+                    htmlFor="sales-price"
+                  >
+                    Sales Price (AED/kg)
+                  </label>
+                  <input
+                    id="sales-price"
+                    type="number"
+                    step="0.0001"
+                    min="0"
+                    value={salesPriceInput}
+                    onChange={(e) => setSalesPriceInput(e.target.value)}
+                    className="w-full rounded-md border px-3 py-2 text-sm"
+                    placeholder="0.0000"
+                  />
+                </div>
+
+                {hasValidPrice && (
+                  <div
+                    data-testid="margin-pill"
+                    className={`rounded-md p-3 text-center text-sm font-semibold ${
+                      marginIsPositive
+                        ? "bg-green-50 text-green-800"
+                        : "bg-red-50 text-red-800"
+                    }`}
+                  >
+                    Profit Margin: {marginPct.toFixed(2)}%
+                  </div>
+                )}
+
+                <div>
+                  <label
+                    className="mb-1 block text-xs text-muted-foreground"
+                    htmlFor="notes"
+                  >
+                    Notes (required when rejecting)
+                  </label>
+                  <textarea
+                    id="notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="w-full rounded-md border px-3 py-2 text-sm"
+                    rows={3}
+                  />
+                </div>
+
+                {validationError && (
+                  <p className="text-sm text-destructive">{validationError}</p>
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleApprove}
+                    disabled={approve.isPending || !hasValidPrice}
+                    className="flex-1 bg-green-700 hover:bg-green-800"
+                  >
+                    {approve.isPending ? "Approving…" : "Approve"}
+                  </Button>
+                  <Button
+                    onClick={handleReject}
+                    disabled={reject.isPending}
+                    variant="destructive"
+                    className="flex-1"
+                  >
+                    {reject.isPending ? "Rejecting…" : "Reject"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

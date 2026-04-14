@@ -34,15 +34,12 @@ function renderPage(requisitionId = 5) {
   );
 }
 
-function mockGet(path: string, data: unknown) {
-  mockedApi.get.mockImplementation((url: string) => {
-    if (url.startsWith(path)) return Promise.resolve({ data });
-    return Promise.reject(new Error(`Unexpected GET ${url}`));
-  });
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 const baseRequisition = {
@@ -267,5 +264,47 @@ describe("CostingEntryPage", () => {
     const btn = screen.getByRole("button", { name: /Submit Costing/i });
     await user.click(btn);
     expect(await screen.findByText(/No exchange rate found for SAR/i)).toBeInTheDocument();
+  });
+
+  it("calls /start when status is CostingPending", async () => {
+    mockedApi.post.mockResolvedValue({ status: 204 });
+    defaultGetHandler(
+      {
+        id: 0,
+        rawMaterialCostTotal: 0,
+        landedCostType: "Percentage",
+        landedCostValue: 0,
+        fohAmount: 0,
+        totalCostPerKg: 0,
+        submittedAt: null,
+        bomLines: [{ ...baseBomLine, lastCost: null }],
+        draft: null,
+      },
+      { ...baseRequisition, status: "CostingPending" },
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(mockedApi.post).toHaveBeenCalledWith("/costing/5/start");
+    });
+  });
+
+  it("enables submit when all costs are greater than 0", async () => {
+    defaultGetHandler({
+      id: 0,
+      rawMaterialCostTotal: 0,
+      landedCostType: "Percentage",
+      landedCostValue: 0,
+      fohAmount: 0,
+      totalCostPerKg: 0,
+      submittedAt: null,
+      bomLines: [{
+        ...baseBomLine,
+        lastCost: { costPerKg: 1.25, currencyCode: "AED", updatedAt: new Date().toISOString() },
+      }],
+      draft: null,
+    });
+    renderPage();
+    const btn = await screen.findByRole("button", { name: /Submit Costing/i });
+    expect(btn).not.toBeDisabled();
   });
 });

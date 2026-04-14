@@ -72,4 +72,22 @@ describe("MdReviewPage", () => {
     expect(screen.getByText(/0\.1800 AED\/kg/)).toBeInTheDocument();
     expect(screen.getByText(/2\.9500 AED/)).toBeInTheDocument();
   });
+
+  it("live-calculates profit margin as sales price is typed", async () => {
+    mockedApi.get.mockResolvedValueOnce({ data: baseReview });
+    const user = userEvent.setup();
+
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByText("REQ-0042")).toBeInTheDocument(),
+    );
+
+    const priceInput = screen.getByLabelText(/Sales Price/i);
+    await user.type(priceInput, "4.2");
+
+    // margin = ((4.2 - 2.95) / 4.2) * 100 = 29.76%
+    const pill = screen.getByTestId("margin-pill");
+    expect(pill).toHaveTextContent(/29\.76%/);
+    expect(pill.className).toMatch(/green/);
+  });
 });

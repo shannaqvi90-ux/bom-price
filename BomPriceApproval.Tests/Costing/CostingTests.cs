@@ -152,6 +152,14 @@ public class CostingTests(WebApplicationFactory<Program> factory)
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", spToken);
         var req = await _client.GetFromJsonAsync<RequisitionDto>($"/api/requisitions/{requisitionId}");
         req!.Status.Should().Be("MdReview");
+
+        // Verify BomCost aggregate written + ItemLastCost upserted
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", acctToken);
+        var afterSubmit = await GetCostingAsync(requisitionId);
+        afterSubmit.RawMaterialCostTotal.Should().BeGreaterThan(0); // conversion happened, BomCostLine written
+        afterSubmit.BomLines[0].LastCost.Should().NotBeNull(); // ItemLastCost upserted
+        afterSubmit.BomLines[0].LastCost!.CostPerKg.Should().Be(1.00m); // original entry cost stored
+        afterSubmit.BomLines[0].LastCost!.CurrencyCode.Should().Be("USD"); // original entry currency stored
     }
 
     [Fact]

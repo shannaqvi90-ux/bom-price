@@ -15,6 +15,7 @@ namespace BomPriceApproval.API.Features.Bom;
 public class BomController(AppDbContext db, NotificationService notificationService) : ControllerBase
 {
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+    private int? CurrentBranchId => int.TryParse(User.FindFirstValue("branchId"), out var b) && b > 0 ? b : null;
 
     [HttpGet("{requisitionId}")]
     public async Task<IActionResult> Get(int requisitionId)
@@ -27,6 +28,8 @@ public class BomController(AppDbContext db, NotificationService notificationServ
             .FirstOrDefaultAsync(b => b.QuotationRequestId == requisitionId);
 
         if (bom is null) return NotFound();
+        if (CurrentBranchId.HasValue && bom.QuotationRequest.BranchId != CurrentBranchId)
+            return Forbid();
 
         return Ok(new BomDetailResponse(
             bom.Id, bom.QuotationRequestId, bom.QuotationRequest.RefNo,
@@ -43,6 +46,8 @@ public class BomController(AppDbContext db, NotificationService notificationServ
     {
         var req = await db.QuotationRequests.FindAsync(requisitionId);
         if (req is null) return NotFound();
+        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId)
+            return Forbid();
         if (req.Status != RequisitionStatus.BomPending)
             return BadRequest(new { message = "Requisition is not in BomPending status" });
 
@@ -61,11 +66,15 @@ public class BomController(AppDbContext db, NotificationService notificationServ
     {
         var req = await db.QuotationRequests.Include(q => q.Branch).FirstOrDefaultAsync(q => q.Id == requisitionId);
         if (req is null) return NotFound();
+        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId)
+            return Forbid();
         if (req.Status != RequisitionStatus.BomInProgress)
             return BadRequest(new { message = "BOM can only be submitted when status is BomInProgress" });
 
         var bom = await db.BomHeaders.Include(b => b.Lines).FirstOrDefaultAsync(b => b.QuotationRequestId == requisitionId);
         if (bom is null) return BadRequest(new { message = "BOM not started. Call /start first." });
+        if (bom.CreatedByUserId != CurrentUserId)
+            return Forbid();
 
         // Replace lines
         db.BomLines.RemoveRange(bom.Lines);
@@ -98,12 +107,16 @@ public class BomController(AppDbContext db, NotificationService notificationServ
     {
         var req = await db.QuotationRequests.FindAsync(requisitionId);
         if (req is null) return NotFound();
+        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId)
+            return Forbid();
         if (req.Status != RequisitionStatus.BomInProgress)
             return BadRequest(new { message = "BOM can only be saved when status is BomInProgress" });
 
         var bom = await db.BomHeaders.Include(b => b.Lines)
             .FirstOrDefaultAsync(b => b.QuotationRequestId == requisitionId);
         if (bom is null) return NotFound();
+        if (bom.CreatedByUserId != CurrentUserId)
+            return Forbid();
 
         db.BomLines.RemoveRange(bom.Lines);
         bom.Lines = request.Lines.Select(l => new BomLine

@@ -105,12 +105,28 @@ export interface CreateRequisitionRequest {
 
 export interface Customer {
   id: number;
+  code: string;
   name: string;
   address: string;
   email: string;
   phoneNumber: string;
-  branchId: number;
+  salesPersonId: number | null;
+  salesPersonName: string | null;
   createdByUserId: number;
+}
+
+export interface CreateCustomerRequest {
+  code: string;
+  name: string;
+  address: string;
+  email: string;
+  phoneNumber: string;
+}
+
+export interface ImportResult {
+  imported: number;
+  skipped: number;
+  errors: string[];
 }
 
 export type ItemKind = "FinishedGood" | "RawMaterial";
@@ -122,6 +138,24 @@ export interface Item {
   type: ItemKind;
   branchId: number;
   isActive: boolean;
+  lastPurchasePrice: number | null;
+}
+
+export interface CreateItemRequest {
+  code: string;
+  description: string;
+  type: ItemKind;
+  lastPurchasePrice: number | null;
+}
+
+export interface LedgerHeadersResponse {
+  headers: string[];
+}
+
+export interface LedgerImportResult {
+  updated: number;
+  skipped: number;
+  unmatchedCodes: string[];
 }
 
 export interface ExchangeRate {
@@ -132,4 +166,33 @@ export interface ExchangeRate {
   effectiveDate: string;
   isActive: boolean;
   setByName: string;
+}
+
+// ─── BOM Entry ────────────────────────────────────────────────────────────────
+
+export interface Process {
+  id: number;
+  name: string;
+  displayOrder: number;
+  isActive: boolean;
+}
+
+export interface BomLine {
+  id: number;
+  processId: number;
+  processName: string;
+  rawMaterialItemId: number;
+  rawMaterialDescription: string;
+  qtyPerKg: number;
+  wastagePct: number;
+}
+
+export interface BomDetail {
+  id: number;
+  quotationRequestId: number;
+  refNo: string;
+  itemDescription: string;
+  lines: BomLine[];
+  totalCostPerKg: number;
+  submittedAt: string | null;
 }

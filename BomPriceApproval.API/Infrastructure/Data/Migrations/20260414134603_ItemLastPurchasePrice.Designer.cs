@@ -3,6 +3,7 @@ using System;
 using BomPriceApproval.API.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BomPriceApproval.API.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260414134603_ItemLastPurchasePrice")]
+    partial class ItemLastPurchasePrice
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -69,41 +72,6 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                     b.HasIndex("SubmittedById");
 
                     b.ToTable("BomCosts");
-                });
-
-            modelBuilder.Entity("BomPriceApproval.API.Domain.Entities.BomCostLine", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("BomHeaderId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("BomLineId")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("CostPerKg")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("numeric(18,4)");
-
-                    b.Property<decimal>("CostPerKgInQuoteCurrency")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("numeric(18,4)");
-
-                    b.Property<string>("CurrencyCode")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BomHeaderId");
-
-                    b.HasIndex("BomLineId");
-
-                    b.ToTable("BomCostLines");
                 });
 
             modelBuilder.Entity("BomPriceApproval.API.Domain.Entities.BomHeader", b =>
@@ -163,6 +131,9 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                         .HasPrecision(18, 6)
                         .HasColumnType("numeric(18,6)");
 
+                    b.Property<int>("RawMaterialId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("RawMaterialItemId")
                         .HasColumnType("integer");
 
@@ -176,7 +147,7 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
 
                     b.HasIndex("ProcessId");
 
-                    b.HasIndex("RawMaterialItemId");
+                    b.HasIndex("RawMaterialId");
 
                     b.ToTable("BomLines");
                 });
@@ -208,43 +179,6 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                             Id = 2,
                             Name = "Al Ain"
                         });
-                });
-
-            modelBuilder.Entity("BomPriceApproval.API.Domain.Entities.CostingDraft", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("BomHeaderId")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("FohAmount")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("numeric(18,4)");
-
-                    b.Property<int>("LandedCostType")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("LandedCostValue")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("numeric(18,4)");
-
-                    b.Property<string>("LinesJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BomHeaderId")
-                        .IsUnique();
-
-                    b.ToTable("CostingDrafts");
                 });
 
             modelBuilder.Entity("BomPriceApproval.API.Domain.Entities.Customer", b =>
@@ -380,41 +314,6 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                     b.HasIndex("BranchId");
 
                     b.ToTable("Items");
-                });
-
-            modelBuilder.Entity("BomPriceApproval.API.Domain.Entities.ItemLastCost", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<decimal>("CostPerKg")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("numeric(18,4)");
-
-                    b.Property<string>("CurrencyCode")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("ItemId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("UpdatedByUserId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ItemId")
-                        .IsUnique();
-
-                    b.HasIndex("UpdatedByUserId");
-
-                    b.ToTable("ItemLastCosts");
                 });
 
             modelBuilder.Entity("BomPriceApproval.API.Domain.Entities.Notification", b =>
@@ -680,25 +579,6 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                     b.Navigation("SubmittedBy");
                 });
 
-            modelBuilder.Entity("BomPriceApproval.API.Domain.Entities.BomCostLine", b =>
-                {
-                    b.HasOne("BomPriceApproval.API.Domain.Entities.BomHeader", "BomHeader")
-                        .WithMany()
-                        .HasForeignKey("BomHeaderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("BomPriceApproval.API.Domain.Entities.BomLine", "BomLine")
-                        .WithMany()
-                        .HasForeignKey("BomLineId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("BomHeader");
-
-                    b.Navigation("BomLine");
-                });
-
             modelBuilder.Entity("BomPriceApproval.API.Domain.Entities.BomHeader", b =>
                 {
                     b.HasOne("BomPriceApproval.API.Domain.Entities.User", "CreatedBy")
@@ -742,7 +622,7 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
 
                     b.HasOne("BomPriceApproval.API.Domain.Entities.Item", "RawMaterial")
                         .WithMany()
-                        .HasForeignKey("RawMaterialItemId")
+                        .HasForeignKey("RawMaterialId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -751,17 +631,6 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                     b.Navigation("Process");
 
                     b.Navigation("RawMaterial");
-                });
-
-            modelBuilder.Entity("BomPriceApproval.API.Domain.Entities.CostingDraft", b =>
-                {
-                    b.HasOne("BomPriceApproval.API.Domain.Entities.BomHeader", "BomHeader")
-                        .WithOne()
-                        .HasForeignKey("BomPriceApproval.API.Domain.Entities.CostingDraft", "BomHeaderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("BomHeader");
                 });
 
             modelBuilder.Entity("BomPriceApproval.API.Domain.Entities.Customer", b =>
@@ -806,25 +675,6 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Branch");
-                });
-
-            modelBuilder.Entity("BomPriceApproval.API.Domain.Entities.ItemLastCost", b =>
-                {
-                    b.HasOne("BomPriceApproval.API.Domain.Entities.Item", "Item")
-                        .WithOne()
-                        .HasForeignKey("BomPriceApproval.API.Domain.Entities.ItemLastCost", "ItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("BomPriceApproval.API.Domain.Entities.User", "UpdatedBy")
-                        .WithMany()
-                        .HasForeignKey("UpdatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Item");
-
-                    b.Navigation("UpdatedBy");
                 });
 
             modelBuilder.Entity("BomPriceApproval.API.Domain.Entities.Notification", b =>

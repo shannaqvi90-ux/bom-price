@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -21,15 +21,18 @@ function LabeledValue({ label, value }: { label: string; value: string | number 
 function actionButtonFor(
   role: UserRole | undefined,
   status: RequisitionStatus,
-): { label: string } | null {
-  if (role === "BomCreator" && (status === "BomPending" || status === "BomInProgress")) {
-    return { label: "Start BOM" };
+): { label: string; path: string } | null {
+  if (role === "BomCreator" && status === "BomPending") {
+    return { label: "Start BOM", path: "bom" };
+  }
+  if (role === "BomCreator" && status === "BomInProgress") {
+    return { label: "Continue BOM", path: "bom" };
   }
   if (role === "Accountant" && (status === "CostingPending" || status === "CostingInProgress")) {
-    return { label: "Start Costing" };
+    return { label: "Start Costing", path: "costing" };
   }
   if (role === "ManagingDirector" && status === "MdReview") {
-    return { label: "Review & Approve" };
+    return { label: "Review & Approve", path: "approval" };
   }
   return null;
 }
@@ -39,6 +42,7 @@ export default function RequisitionDetailPage() {
   const numericId = Number(id);
   const { data, isLoading, error } = useRequisition(numericId);
   const role = useAuthStore((s) => s.user?.role);
+  const navigate = useNavigate();
 
   const httpStatus = (error as { response?: { status?: number } } | null)?.response?.status;
 
@@ -103,7 +107,11 @@ export default function RequisitionDetailPage() {
           </p>
         </div>
         {action && (
-          <Button disabled title="Coming soon">
+          <Button
+            onClick={() => navigate(`/requisitions/${id}/${action.path}`)}
+            disabled={action.path !== "bom"}
+            title={action.path !== "bom" ? "Coming soon" : undefined}
+          >
             {action.label}
           </Button>
         )}

@@ -6,6 +6,9 @@ import DashboardRouter from "@/features/dashboard/DashboardRouter";
 import RequisitionListPage from "@/features/requisitions/RequisitionListPage";
 import NewRequisitionPage from "@/features/requisitions/NewRequisitionPage";
 import RequisitionDetailPage from "@/features/requisitions/RequisitionDetailPage";
+import CustomerListPage from "@/features/customers/CustomerListPage";
+import ItemListPage from "@/features/items/ItemListPage";
+import BomEntryPage from "@/features/bom/BomEntryPage";
 
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -19,6 +22,24 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/dashboard" replace /> },
       { path: "dashboard", element: <DashboardRouter /> },
+      {
+        path: "customers",
+        element: (
+          <ProtectedRoute allow={["Admin", "SalesPerson"]}>
+            <CustomerListPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "items",
+        element: (
+          <ProtectedRoute
+            allow={["Admin", "SalesPerson", "BomCreator", "Accountant", "ManagingDirector"]}
+          >
+            <ItemListPage />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: "requisitions",
         element: (
@@ -44,6 +65,14 @@ const router = createBrowserRouter([
             allow={["Admin", "SalesPerson", "BomCreator", "Accountant", "ManagingDirector"]}
           >
             <RequisitionDetailPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "requisitions/:id/bom",
+        element: (
+          <ProtectedRoute allow={["BomCreator"]}>
+            <BomEntryPage />
           </ProtectedRoute>
         ),
       },

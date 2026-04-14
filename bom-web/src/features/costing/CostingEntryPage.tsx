@@ -80,6 +80,7 @@ export default function CostingEntryPage() {
       hasStartedRef.current = true;
       startCosting.mutate(requisitionId, { onSuccess: () => refetch() });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requisition?.status, requisitionId]);
 
   // Hydrate local state from server once
@@ -107,7 +108,6 @@ export default function CostingEntryPage() {
         lastCost: bl.lastCost,
       };
     });
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLines(local);
 
     if (costing.draft) {

@@ -6,7 +6,7 @@ namespace BomPriceApproval.API.Features.Costing;
 public record RawMaterialCostInput(int BomLineId, decimal CostPerKg, string CurrencyCode);
 
 public record SubmitCostingRequest(
-    List<RawMaterialCostInput> RawMaterialCosts,
+    [Required] List<RawMaterialCostInput> RawMaterialCosts,
     LandedCostType LandedCostType,
     decimal LandedCostValue,
     decimal FohAmount);

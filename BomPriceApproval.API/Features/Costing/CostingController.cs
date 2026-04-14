@@ -119,7 +119,7 @@ public class CostingController(AppDbContext db, NotificationService notification
     [HttpPost("{requisitionId}/submit")]
     public async Task<IActionResult> Submit(int requisitionId, SubmitCostingRequest request)
     {
-        var req = await db.QuotationRequests.Include(q => q.Branch).FirstOrDefaultAsync(q => q.Id == requisitionId);
+        var req = await db.QuotationRequests.FirstOrDefaultAsync(q => q.Id == requisitionId);
         if (req is null) return NotFound();
         if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId)
             return Forbid();
@@ -232,15 +232,16 @@ public class CostingController(AppDbContext db, NotificationService notification
             }
             else
             {
-                db.ItemLastCosts.Add(new ItemLastCost
+                var newEntry = new ItemLastCost
                 {
                     ItemId = itemId,
                     CostPerKg = costLine.CostPerKg,
                     CurrencyCode = costLine.CurrencyCode,
                     UpdatedAt = DateTime.UtcNow,
                     UpdatedByUserId = CurrentUserId
-                });
-                existingLastCosts[itemId] = null!; // avoid duplicate add inside same loop
+                };
+                db.ItemLastCosts.Add(newEntry);
+                existingLastCosts[itemId] = newEntry;
             }
         }
 

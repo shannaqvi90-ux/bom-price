@@ -90,4 +90,38 @@ describe("MdReviewPage", () => {
     expect(pill).toHaveTextContent(/29\.76%/);
     expect(pill.className).toMatch(/green/);
   });
+
+  it("approve fires mutation with payload and flips to approved state with Download PDF", async () => {
+    mockedApi.get.mockImplementation(() => Promise.resolve({ data: baseReview }));
+    mockedApi.post.mockResolvedValueOnce({
+      data: { message: "Approved", refNo: "REQ-0042" },
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByText("REQ-0042")).toBeInTheDocument(),
+    );
+
+    const priceInput = screen.getByLabelText(/Sales Price/i);
+    await user.type(priceInput, "4.2");
+
+    const notesInput = screen.getByLabelText(/Notes/i);
+    await user.type(notesInput, "Looks good");
+
+    const approveButton = screen.getByRole("button", { name: /^Approve$/i });
+    await user.click(approveButton);
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /Download PDF/i }),
+      ).toBeInTheDocument(),
+    );
+
+    expect(mockedApi.post).toHaveBeenCalledWith(
+      "/approvals/42/approve",
+      { salesPricePerKgAed: 4.2, notes: "Looks good" },
+    );
+    expect(screen.getByText(/Quotation approved/i)).toBeInTheDocument();
+  });
 });

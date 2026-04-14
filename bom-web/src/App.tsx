@@ -9,6 +9,7 @@ import RequisitionDetailPage from "@/features/requisitions/RequisitionDetailPage
 import CustomerListPage from "@/features/customers/CustomerListPage";
 import ItemListPage from "@/features/items/ItemListPage";
 import BomEntryPage from "@/features/bom/BomEntryPage";
+import CostingEntryPage from "@/features/costing/CostingEntryPage";
 
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -73,6 +74,14 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute allow={["BomCreator"]}>
             <BomEntryPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "requisitions/:id/costing",
+        element: (
+          <ProtectedRoute allow={["Accountant"]}>
+            <CostingEntryPage />
           </ProtectedRoute>
         ),
       },

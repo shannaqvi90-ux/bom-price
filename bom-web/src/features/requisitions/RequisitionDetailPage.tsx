@@ -28,8 +28,11 @@ function actionButtonFor(
   if (role === "BomCreator" && status === "BomInProgress") {
     return { label: "Continue BOM", path: "bom" };
   }
-  if (role === "Accountant" && (status === "CostingPending" || status === "CostingInProgress")) {
+  if (role === "Accountant" && status === "CostingPending") {
     return { label: "Start Costing", path: "costing" };
+  }
+  if (role === "Accountant" && status === "CostingInProgress") {
+    return { label: "Continue Costing", path: "costing" };
   }
   if (role === "ManagingDirector" && status === "MdReview") {
     return { label: "Review & Approve", path: "approval" };
@@ -109,8 +112,8 @@ export default function RequisitionDetailPage() {
         {action && (
           <Button
             onClick={() => navigate(`/requisitions/${id}/${action.path}`)}
-            disabled={action.path !== "bom"}
-            title={action.path !== "bom" ? "Coming soon" : undefined}
+            disabled={action.path !== "bom" && action.path !== "costing"}
+            title={action.path !== "bom" && action.path !== "costing" ? "Coming soon" : undefined}
           >
             {action.label}
           </Button>

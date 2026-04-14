@@ -18,6 +18,7 @@ builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<PdfService>();
 builder.Services.AddScoped<ItemImportService>();
+builder.Services.AddScoped<CustomerImportService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt =>

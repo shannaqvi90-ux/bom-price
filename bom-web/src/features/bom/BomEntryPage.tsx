@@ -100,6 +100,7 @@ export default function BomEntryPage() {
         sections.push({ processId: l.processId, processName: l.processName });
       }
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setProcessSections(sections);
     setLines(
       bom.lines.map((l) => ({

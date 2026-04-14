@@ -107,6 +107,7 @@ export default function CostingEntryPage() {
         lastCost: bl.lastCost,
       };
     });
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLines(local);
 
     if (costing.draft) {

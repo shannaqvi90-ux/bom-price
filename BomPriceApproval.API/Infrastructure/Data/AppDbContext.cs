@@ -30,6 +30,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .Property(q => q.RefNo)
             .HasComputedColumnSql("'REQ-' || LPAD(\"Id\"::text, 4, '0')", stored: true);
 
+        mb.Entity<Customer>().HasIndex(c => c.Code).IsUnique();
+        mb.Entity<Customer>()
+            .HasOne(c => c.SalesPerson)
+            .WithMany()
+            .HasForeignKey(c => c.SalesPersonId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         mb.Entity<BomCost>()
             .HasOne(c => c.BomHeader)
             .WithOne(h => h.Cost)

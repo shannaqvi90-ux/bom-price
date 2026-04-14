@@ -124,4 +124,44 @@ describe("MdReviewPage", () => {
     );
     expect(screen.getByText(/Quotation approved/i)).toBeInTheDocument();
   });
+
+  it("reject with empty notes shows validation error and does not fire mutation", async () => {
+    mockedApi.get.mockResolvedValueOnce({ data: baseReview });
+    const user = userEvent.setup();
+
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByText("REQ-0042")).toBeInTheDocument(),
+    );
+
+    await user.click(screen.getByRole("button", { name: /^reject$/i }));
+
+    expect(
+      screen.getByText(/Notes are required when rejecting/i),
+    ).toBeInTheDocument();
+    expect(mockedApi.post).not.toHaveBeenCalled();
+  });
+
+  it("reject with notes fires mutation and navigates back to detail", async () => {
+    mockedApi.get.mockResolvedValueOnce({ data: baseReview });
+    mockedApi.post.mockResolvedValueOnce({ data: { message: "Rejected" } });
+    const user = userEvent.setup();
+
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByText("REQ-0042")).toBeInTheDocument(),
+    );
+
+    await user.type(screen.getByLabelText(/Notes/i), "Price too high");
+    await user.click(screen.getByRole("button", { name: /^reject$/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/Requisition Detail Stub/i)).toBeInTheDocument(),
+    );
+
+    expect(mockedApi.post).toHaveBeenCalledWith(
+      "/approvals/42/reject",
+      { notes: "Price too high" },
+    );
+  });
 });

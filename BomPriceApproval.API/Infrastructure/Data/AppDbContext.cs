@@ -18,6 +18,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<BomCost> BomCosts => Set<BomCost>();
     public DbSet<QuotationApproval> QuotationApprovals => Set<QuotationApproval>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<CostingDraft> CostingDrafts => Set<CostingDraft>();
+    public DbSet<BomCostLine> BomCostLines => Set<BomCostLine>();
+    public DbSet<ItemLastCost> ItemLastCosts => Set<ItemLastCost>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -80,5 +83,44 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<QuotationRequest>().Property(q => q.ExchangeRateSnapshot).HasPrecision(18, 6);
         mb.Entity<BomHeader>().Property(b => b.TotalCostPerKg).HasPrecision(18, 4);
         mb.Entity<Item>().Property(i => i.LastPurchasePrice).HasPrecision(18, 4);
+
+        // CostingDraft — one per BomHeader
+        mb.Entity<CostingDraft>()
+            .HasOne(d => d.BomHeader)
+            .WithOne()
+            .HasForeignKey<CostingDraft>(d => d.BomHeaderId)
+            .OnDelete(DeleteBehavior.Cascade);
+        mb.Entity<CostingDraft>().HasIndex(d => d.BomHeaderId).IsUnique();
+
+        // BomCostLine — many per BomHeader and per BomLine (permanent history)
+        mb.Entity<BomCostLine>()
+            .HasOne(l => l.BomHeader)
+            .WithMany()
+            .HasForeignKey(l => l.BomHeaderId)
+            .OnDelete(DeleteBehavior.Cascade);
+        mb.Entity<BomCostLine>()
+            .HasOne(l => l.BomLine)
+            .WithMany()
+            .HasForeignKey(l => l.BomLineId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // ItemLastCost — one per Item
+        mb.Entity<ItemLastCost>()
+            .HasOne(l => l.Item)
+            .WithOne()
+            .HasForeignKey<ItemLastCost>(l => l.ItemId)
+            .OnDelete(DeleteBehavior.Cascade);
+        mb.Entity<ItemLastCost>()
+            .HasOne(l => l.UpdatedBy)
+            .WithMany()
+            .HasForeignKey(l => l.UpdatedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+        mb.Entity<ItemLastCost>().HasIndex(l => l.ItemId).IsUnique();
+
+        mb.Entity<CostingDraft>().Property(d => d.LandedCostValue).HasPrecision(18, 4);
+        mb.Entity<CostingDraft>().Property(d => d.FohAmount).HasPrecision(18, 4);
+        mb.Entity<BomCostLine>().Property(l => l.CostPerKg).HasPrecision(18, 4);
+        mb.Entity<BomCostLine>().Property(l => l.CostPerKgInQuoteCurrency).HasPrecision(18, 4);
+        mb.Entity<ItemLastCost>().Property(l => l.CostPerKg).HasPrecision(18, 4);
     }
 }

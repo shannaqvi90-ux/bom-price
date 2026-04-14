@@ -196,3 +196,49 @@ export interface BomDetail {
   totalCostPerKg: number;
   submittedAt: string | null;
 }
+
+// ─── Costing Entry ────────────────────────────────────────────────────────────
+
+export interface LastCostInfo {
+  costPerKg: number;
+  currencyCode: string;
+  updatedAt: string;
+}
+
+export interface CostingBomLine {
+  bomLineId: number;
+  processId: number;
+  processName: string;
+  rawMaterialItemId: number;
+  rawMaterialDescription: string;
+  qtyPerKg: number;
+  wastagePct: number;
+  lastCost: LastCostInfo | null;
+}
+
+export type LandedCostType = "Percentage" | "FixedValue";
+
+export interface CostingDraftLine {
+  bomLineId: number;
+  costPerKg: number;
+  currencyCode: string;
+}
+
+export interface CostingDraft {
+  lines: CostingDraftLine[];
+  landedCostType: LandedCostType;
+  landedCostValue: number;
+  fohAmount: number;
+}
+
+export interface CostingDetail {
+  id: number;
+  rawMaterialCostTotal: number;
+  landedCostType: string;
+  landedCostValue: number;
+  fohAmount: number;
+  totalCostPerKg: number;
+  submittedAt: string | null;
+  bomLines: CostingBomLine[];
+  draft: CostingDraft | null;
+}

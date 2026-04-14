@@ -3,7 +3,9 @@ import { ArrowLeft } from "lucide-react";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Dialog } from "@/components/ui/Dialog";
 import { api } from "@/api/axios";
+import { useBom } from "@/features/bom/bomApi";
 import {
   useMdReview,
   useApproveRequisition,
@@ -31,10 +33,13 @@ export default function MdReviewPage() {
   const approve = useApproveRequisition();
   const reject = useRejectRequisition();
 
+  const { data: bom } = useBom(requisitionId);
+
   const [pageState, setPageState] = useState<PageState>({ kind: "reviewing" });
   const [salesPriceInput, setSalesPriceInput] = useState("");
   const [notes, setNotes] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [showBom, setShowBom] = useState(false);
 
   const httpStatus = (error as { response?: { status?: number } } | null)
     ?.response?.status;
@@ -148,11 +153,16 @@ export default function MdReviewPage() {
         <ArrowLeft className="h-4 w-4" /> Back to Requisition
       </Link>
 
-      <div>
-        <h1 className="font-mono text-2xl font-semibold">{data.refNo}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {data.itemDescription} — {data.customerName}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-mono text-2xl font-semibold">{data.refNo}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {data.itemDescription} — {data.customerName}
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => setShowBom(true)}>
+          View BOM
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -284,6 +294,48 @@ export default function MdReviewPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog
+        open={showBom}
+        onClose={() => setShowBom(false)}
+        title="Bill of Materials"
+        className="max-w-2xl"
+      >
+        {bom ? (
+          <div className="space-y-4 text-sm">
+            {Array.from(new Set(bom.lines.map((l) => l.processName))).map((proc) => (
+              <div key={proc}>
+                <p className="mb-1 font-semibold text-muted-foreground">{proc}</p>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b text-left text-muted-foreground">
+                      <th className="pb-1 font-medium">Material</th>
+                      <th className="pb-1 text-right font-medium">Qty/kg</th>
+                      <th className="pb-1 text-right font-medium">Wastage%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bom.lines
+                      .filter((l) => l.processName === proc)
+                      .map((l) => (
+                        <tr key={l.id} className="border-b last:border-0">
+                          <td className="py-1">{l.rawMaterialDescription}</td>
+                          <td className="py-1 text-right font-mono">{l.qtyPerKg.toFixed(4)}</td>
+                          <td className="py-1 text-right font-mono">{l.wastagePct.toFixed(2)}%</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+            <div className="border-t pt-2 text-right font-semibold">
+              Total Cost/kg: <span className="font-mono">{bom.totalCostPerKg.toFixed(4)} AED</span>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Loading BOM…</p>
+        )}
+      </Dialog>
     </div>
   );
 }

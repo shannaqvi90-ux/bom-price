@@ -36,6 +36,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany()
             .HasForeignKey(c => c.SalesPersonId)
             .OnDelete(DeleteBehavior.Restrict);
+        mb.Entity<Customer>()
+            .HasOne(c => c.CreatedBy)
+            .WithMany()
+            .HasForeignKey(c => c.CreatedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        mb.Entity<BomHeader>()
+            .HasOne(b => b.CreatedBy)
+            .WithMany()
+            .HasForeignKey(b => b.CreatedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         mb.Entity<BomCost>()
             .HasOne(c => c.BomHeader)

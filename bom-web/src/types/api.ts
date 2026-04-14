@@ -242,3 +242,21 @@ export interface CostingDetail {
   bomLines: CostingBomLine[];
   draft: CostingDraft | null;
 }
+
+// ─── MD Review ───────────────────────────────────────────────────────────────
+
+export interface MdReviewDetail {
+  refNo: string;
+  itemDescription: string;
+  customerName: string;
+  expectedQty: number;
+  currencyCode: string;
+  exchangeRate: number | null;
+  rawMaterialCostPerKg: number;
+  landedCostPerKg: number;
+  fohPerKg: number;
+  totalCostPerKg: number;
+  materialCostPct: number;
+  landedCostPct: number;
+  fohPct: number;
+}

@@ -112,8 +112,6 @@ export default function RequisitionDetailPage() {
         {action && (
           <Button
             onClick={() => navigate(`/requisitions/${id}/${action.path}`)}
-            disabled={action.path !== "bom" && action.path !== "costing"}
-            title={action.path !== "bom" && action.path !== "costing" ? "Coming soon" : undefined}
           >
             {action.label}
           </Button>

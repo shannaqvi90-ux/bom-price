@@ -55,6 +55,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasOne(c => c.BomHeader)
             .WithOne(h => h.Cost)
             .HasForeignKey<BomCost>(c => c.BomHeaderId);
+        mb.Entity<BomCost>()
+            .HasOne(c => c.SubmittedBy)
+            .WithMany()
+            .HasForeignKey(c => c.SubmittedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        mb.Entity<ExchangeRate>()
+            .HasOne(e => e.SetBy)
+            .WithMany()
+            .HasForeignKey(e => e.SetByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         mb.Entity<QuotationApproval>()
             .HasOne(a => a.QuotationRequest)

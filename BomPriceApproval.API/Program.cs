@@ -19,6 +19,7 @@ builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<PdfService>();
 builder.Services.AddScoped<ItemImportService>();
 builder.Services.AddScoped<CustomerImportService>();
+builder.Services.AddScoped<PurchaseLedgerService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt =>
@@ -44,7 +45,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(o =>
+        o.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -168,6 +171,19 @@ using (var scope = app.Services.CreateScope())
             EffectiveDate = DateTime.UtcNow, IsActive = true
         });
 
+        await db.SaveChangesAsync();
+    }
+
+    // Ensure USD exchange rate exists (guard separately in case earlier seed was skipped or failed)
+    if (!db.ExchangeRates.Any(e => e.CurrencyCode == "USD" && e.IsActive))
+    {
+        var admin = db.Users.First(u => u.Email == "admin@test.com");
+        db.ExchangeRates.Add(new ExchangeRate
+        {
+            CurrencyCode = "USD", CurrencyName = "US Dollar",
+            RateToAed = 3.6725m, SetByUserId = admin.Id,
+            EffectiveDate = DateTime.UtcNow, IsActive = true
+        });
         await db.SaveChangesAsync();
     }
 }

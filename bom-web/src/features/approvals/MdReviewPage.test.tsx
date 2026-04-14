@@ -164,4 +164,20 @@ describe("MdReviewPage", () => {
       { notes: "Price too high" },
     );
   });
+
+  it("shows loading indicator while data is fetching", () => {
+    mockedApi.get.mockReturnValueOnce(new Promise(() => {})); // never resolves
+    renderPage();
+    expect(screen.getByText(/Loading/i)).toBeInTheDocument();
+  });
+
+  it("shows a not-found card on 404", async () => {
+    mockedApi.get.mockRejectedValueOnce({ response: { status: 404 } });
+    renderPage();
+    await waitFor(() =>
+      expect(
+        screen.getByText(/not found or not ready for review/i),
+      ).toBeInTheDocument(),
+    );
+  });
 });

@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { api } from "@/api/axios";
 import {
   useMdReview,
   useApproveRequisition,
@@ -126,8 +127,16 @@ export default function MdReviewPage() {
     }
   }
 
-  function handleDownloadPdf() {
-    window.open(`/api/approvals/${requisitionId}/pdf`, "_blank");
+  async function handleDownloadPdf() {
+    const response = await api.get(`/approvals/${requisitionId}/pdf`, {
+      responseType: "blob",
+    });
+    const url = URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${data.refNo}-Quotation.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (

@@ -141,9 +141,12 @@ public class CostingController(AppDbContext db, NotificationService notification
             .Distinct()
             .ToList();
 
-        var rates = await db.ExchangeRates
+        var rates = (await db.ExchangeRates
             .Where(e => e.IsActive && usedCurrencies.Contains(e.CurrencyCode))
-            .ToDictionaryAsync(e => e.CurrencyCode.ToUpperInvariant(), e => e.RateToAed);
+            .OrderByDescending(e => e.EffectiveDate)
+            .ToListAsync())
+            .GroupBy(e => e.CurrencyCode.ToUpperInvariant())
+            .ToDictionary(g => g.Key, g => g.First().RateToAed);
 
         decimal RateToAed(string code)
         {
@@ -179,7 +182,8 @@ public class CostingController(AppDbContext db, NotificationService notification
                 BomLineId = line.Id,
                 CostPerKg = rc.CostPerKg,
                 CurrencyCode = currency,
-                CostPerKgInQuoteCurrency = costInQuote
+                CostPerKgInQuoteCurrency = costInQuote,
+                CostPerKgInAed = rc.CostPerKg * entryRate
             });
         }
 

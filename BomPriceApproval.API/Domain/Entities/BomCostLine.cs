@@ -8,6 +8,7 @@ public class BomCostLine
     public decimal CostPerKg { get; set; }
     public string CurrencyCode { get; set; } = "AED";
     public decimal CostPerKgInQuoteCurrency { get; set; }
+    public decimal CostPerKgInAed { get; set; }
     public BomHeader BomHeader { get; set; } = null!;
     public BomLine BomLine { get; set; } = null!;
 }

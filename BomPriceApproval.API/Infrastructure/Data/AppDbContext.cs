@@ -132,6 +132,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<CostingDraft>().Property(d => d.FohAmount).HasPrecision(18, 4);
         mb.Entity<BomCostLine>().Property(l => l.CostPerKg).HasPrecision(18, 4);
         mb.Entity<BomCostLine>().Property(l => l.CostPerKgInQuoteCurrency).HasPrecision(18, 4);
+        mb.Entity<BomCostLine>().Property(l => l.CostPerKgInAed).HasPrecision(18, 4);
         mb.Entity<ItemLastCost>().Property(l => l.CostPerKg).HasPrecision(18, 4);
     }
 }

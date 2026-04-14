@@ -31,12 +31,24 @@ public class BomController(AppDbContext db, NotificationService notificationServ
         if (CurrentBranchId.HasValue && bom.QuotationRequest.BranchId != CurrentBranchId)
             return Forbid();
 
+        var costLines = await db.BomCostLines
+            .Where(c => c.BomHeaderId == bom.Id)
+            .ToDictionaryAsync(c => c.BomLineId);
+
         return Ok(new BomDetailResponse(
             bom.Id, bom.QuotationRequestId, bom.QuotationRequest.RefNo,
             bom.Item.Description,
-            bom.Lines.Select(l => new BomLineResponse(
-                l.Id, l.ProcessId, l.Process.Name, l.RawMaterialItemId,
-                l.RawMaterial.Description, l.QtyPerKg, l.WastagePct)).ToList(),
+            bom.Lines.Select(l =>
+            {
+                costLines.TryGetValue(l.Id, out var cl);
+                decimal? contributionAed = cl is not null
+                    ? cl.CostPerKgInAed * l.QtyPerKg * (1 + l.WastagePct / 100)
+                    : null;
+                return new BomLineResponse(
+                    l.Id, l.ProcessId, l.Process.Name, l.RawMaterialItemId,
+                    l.RawMaterial.Description, l.QtyPerKg, l.WastagePct,
+                    cl?.CostPerKg, cl?.CurrencyCode, cl?.CostPerKgInAed, contributionAed);
+            }).ToList(),
             bom.TotalCostPerKg, bom.SubmittedAt));
     }
 

@@ -9,10 +9,12 @@ import {
   Building2,
   Coins,
   Package,
+  Contact,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
+import { notificationsStore } from "@/store/notificationsStore";
 import type { UserRole } from "@/types/api";
 import { cn } from "@/lib/cn";
 
@@ -32,6 +34,18 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["Admin", "SalesPerson", "BomCreator", "Accountant", "ManagingDirector"],
   },
   { to: "/notifications", label: "Notifications", icon: Bell },
+  {
+    to: "/customers",
+    label: "Customers",
+    icon: Contact,
+    roles: ["Admin", "SalesPerson"],
+  },
+  {
+    to: "/items",
+    label: "Items",
+    icon: Package,
+    roles: ["Admin", "SalesPerson", "BomCreator", "Accountant", "ManagingDirector"],
+  },
   { to: "/admin/users", label: "Users", icon: Users, roles: ["Admin"] },
   {
     to: "/admin/branches",
@@ -45,7 +59,6 @@ const NAV_ITEMS: NavItem[] = [
     icon: Coins,
     roles: ["Admin", "Accountant"],
   },
-  { to: "/admin/items", label: "Items", icon: Package, roles: ["Admin"] },
 ];
 
 const STORAGE_KEY = "bom-sidebar-collapsed";
@@ -53,6 +66,8 @@ const NARROW_BREAKPOINT = 1024;
 
 export function Sidebar() {
   const user = useAuthStore((s) => s.user);
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const { connect, unreadCount } = notificationsStore();
 
   const [userCollapsed, setUserCollapsed] = useState<boolean>(() => {
     return localStorage.getItem(STORAGE_KEY) === "true";
@@ -72,8 +87,15 @@ export function Sidebar() {
     localStorage.setItem(STORAGE_KEY, String(userCollapsed));
   }, [userCollapsed]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (accessToken) connect(accessToken);
+  }, [accessToken]);
+
   // Narrow viewport always collapses; on wide, honour the user preference.
   const collapsed = isNarrow || userCollapsed;
+
+  const badgeText = unreadCount > 99 ? "99+" : String(unreadCount);
 
   const visible = NAV_ITEMS.filter(
     (item) => !item.roles || (user && item.roles.includes(user.role)),
@@ -108,7 +130,14 @@ export function Sidebar() {
             }
             title={collapsed ? label : undefined}
           >
-            <Icon className="h-4 w-4 shrink-0" />
+            <span className="relative shrink-0">
+              <Icon className="h-4 w-4" />
+              {to === "/notifications" && unreadCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold text-destructive-foreground leading-none">
+                  {badgeText}
+                </span>
+              )}
+            </span>
             {!collapsed && <span>{label}</span>}
           </NavLink>
         ))}

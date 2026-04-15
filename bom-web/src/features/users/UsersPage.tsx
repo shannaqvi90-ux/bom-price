@@ -25,6 +25,7 @@ export default function UsersPage() {
     } catch {
       // errors visible via deactivate.isError
     }
+    deactivate.reset();
     setDeactivateTarget(null);
   }
 
@@ -34,7 +35,6 @@ export default function UsersPage() {
       { accessorKey: "email", header: "Email" },
       { accessorKey: "role", header: "Role" },
       {
-        id: "isActive",
         accessorKey: "isActive",
         header: "Status",
         cell: (i) =>
@@ -115,7 +115,7 @@ export default function UsersPage() {
 
       <Dialog
         open={deactivateTarget !== null}
-        onClose={() => setDeactivateTarget(null)}
+        onClose={() => { deactivate.reset(); setDeactivateTarget(null); }}
         title="Confirm Deactivate"
       >
         <p className="text-sm">
@@ -123,7 +123,7 @@ export default function UsersPage() {
           <span className="font-semibold">{deactivateTarget?.name}</span>?
         </p>
         <div className="flex justify-end gap-2 pt-4">
-          <Button type="button" variant="ghost" onClick={() => setDeactivateTarget(null)}>
+          <Button type="button" variant="ghost" onClick={() => { deactivate.reset(); setDeactivateTarget(null); }}>
             Cancel
           </Button>
           <Button

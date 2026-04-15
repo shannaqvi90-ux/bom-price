@@ -6,6 +6,7 @@ import type {
   Item,
   LedgerHeadersResponse,
   LedgerImportResult,
+  UpdateItemRequest,
 } from "@/types/api";
 
 export const itemKeys = {
@@ -33,13 +34,8 @@ export function useCreateItem() {
 export function useUpdateItem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      id,
-      data,
-    }: {
-      id: number;
-      data: { code: string; description: string; type: string; lastPurchasePrice: number | null };
-    }) => api.put(`/items/${id}`, data),
+    mutationFn: ({ id, data }: { id: number; data: UpdateItemRequest }) =>
+      api.put(`/items/${id}`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: itemKeys.all }),
   });
 }

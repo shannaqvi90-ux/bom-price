@@ -148,6 +148,13 @@ export interface CreateItemRequest {
   lastPurchasePrice: number | null;
 }
 
+export interface UpdateItemRequest {
+  code: string;
+  description: string;
+  type: ItemKind;
+  lastPurchasePrice: number | null;
+}
+
 export interface LedgerHeadersResponse {
   headers: string[];
 }

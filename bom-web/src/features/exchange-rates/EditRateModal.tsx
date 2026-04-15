@@ -44,14 +44,20 @@ export function EditRateModal({ open, rate, onClose }: Props) {
     }
   }, [rate, reset]);
 
+  function handleClose() {
+    update.reset();
+    onClose();
+  }
+
   const onSubmit = handleSubmit(async (values) => {
     if (!rate) return;
     await update.mutateAsync({ id: rate.id, data: values });
+    update.reset();
     onClose();
   });
 
   return (
-    <Dialog open={open} onClose={onClose} title="Edit Exchange Rate">
+    <Dialog open={open} onClose={handleClose} title="Edit Exchange Rate">
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         <div className="space-y-1">
           <Label>Currency</Label>
@@ -100,7 +106,7 @@ export function EditRateModal({ open, rate, onClose }: Props) {
         )}
 
         <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="ghost" onClick={onClose}>
+          <Button type="button" variant="ghost" onClick={handleClose}>
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting || update.isPending}>

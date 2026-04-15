@@ -2,6 +2,7 @@ using System.Security.Claims;
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Domain.Enums;
 using BomPriceApproval.API.Infrastructure.Data;
+using BomPriceApproval.API.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +12,7 @@ namespace BomPriceApproval.API.Features.Requisitions;
 [ApiController]
 [Route("api/requisitions")]
 [Authorize]
-public class RequisitionsController(AppDbContext db) : ControllerBase
+public class RequisitionsController(AppDbContext db, NotificationService notificationService) : ControllerBase
 {
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string CurrentRole => User.FindFirstValue(ClaimTypes.Role)!;
@@ -96,6 +97,16 @@ public class RequisitionsController(AppDbContext db) : ControllerBase
 
         db.QuotationRequests.Add(requisition);
         await db.SaveChangesAsync();
+
+        // Notify BomCreators in the same branch
+        var bomCreators = await db.Users
+            .Where(u => u.Role == UserRole.BomCreator && (u.BranchId == requisition.BranchId || u.BranchId == null) && u.IsActive)
+            .ToListAsync();
+
+        foreach (var creator in bomCreators)
+            await notificationService.SendAsync(creator.Id,
+                $"New BOM request: {requisition.RefNo}", requisition.Id, "QuotationRequest");
+
         return CreatedAtAction(nameof(Get), new { id = requisition.Id }, new { requisition.Id, requisition.RefNo });
     }
 

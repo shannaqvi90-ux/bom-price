@@ -16,14 +16,16 @@ public class ItemsController(AppDbContext db) : ControllerBase
     private int? CurrentBranchId => int.TryParse(User.FindFirstValue("branchId"), out var b) && b > 0 ? b : null;
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] string? type = null)
+    public async Task<IActionResult> GetAll([FromQuery] string? type = null, [FromQuery] bool includeInactive = false)
     {
         var query = db.Items.AsQueryable();
         if (CurrentBranchId.HasValue) query = query.Where(i => i.BranchId == CurrentBranchId);
         if (type is not null && Enum.TryParse<ItemType>(type, out var t))
             query = query.Where(i => i.Type == t);
-        return Ok(await query.Where(i => i.IsActive)
-            .Select(i => new ItemResponse(i.Id, i.Code, i.Description, i.Type.ToString(), i.BranchId, i.IsActive))
+        if (!includeInactive)
+            query = query.Where(i => i.IsActive);
+        return Ok(await query
+            .Select(i => new ItemResponse(i.Id, i.Code, i.Description, i.Type.ToString(), i.BranchId, i.IsActive, i.LastPurchasePrice))
             .ToListAsync());
     }
 
@@ -49,11 +51,46 @@ public class ItemsController(AppDbContext db) : ControllerBase
         var item = new Item
         {
             Code = req.Code, Description = req.Description, Type = req.Type,
-            BranchId = CurrentBranchId.Value
+            BranchId = CurrentBranchId.Value,
+            LastPurchasePrice = req.LastPurchasePrice
         };
         db.Items.Add(item);
         await db.SaveChangesAsync();
         return CreatedAtAction(nameof(GetAll),
-            new ItemResponse(item.Id, item.Code, item.Description, item.Type.ToString(), item.BranchId, item.IsActive));
+            new ItemResponse(item.Id, item.Code, item.Description, item.Type.ToString(), item.BranchId, item.IsActive, item.LastPurchasePrice));
+    }
+
+    [HttpPut("{id}")]
+    [Authorize(Roles = "Admin,Accountant")]
+    public async Task<IActionResult> Update(int id, UpdateItemRequest req)
+    {
+        var item = await db.Items.FindAsync(id);
+        if (item is null) return NotFound();
+        if (CurrentBranchId.HasValue && item.BranchId != CurrentBranchId)
+            return Forbid();
+
+        var duplicate = await db.Items.AnyAsync(i => i.Code == req.Code && i.BranchId == item.BranchId && i.Id != id);
+        if (duplicate) return Conflict(new { message = "An item with this code already exists in the branch." });
+
+        item.Code = req.Code;
+        item.Description = req.Description;
+        item.Type = req.Type;
+        item.LastPurchasePrice = req.LastPurchasePrice;
+        await db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpPatch("{id}/status")]
+    [Authorize(Roles = "Admin,Accountant")]
+    public async Task<IActionResult> UpdateStatus(int id, UpdateItemStatusRequest req)
+    {
+        var item = await db.Items.FindAsync(id);
+        if (item is null) return NotFound();
+        if (CurrentBranchId.HasValue && item.BranchId != CurrentBranchId)
+            return Forbid();
+
+        item.IsActive = req.IsActive;
+        await db.SaveChangesAsync();
+        return NoContent();
     }
 }

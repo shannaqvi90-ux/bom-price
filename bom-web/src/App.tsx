@@ -11,6 +11,7 @@ import ItemListPage from "@/features/items/ItemListPage";
 import BomEntryPage from "@/features/bom/BomEntryPage";
 import CostingEntryPage from "@/features/costing/CostingEntryPage";
 import MdReviewPage from "@/features/approvals/MdReviewPage";
+import NotificationsPage from "@/features/notifications/NotificationsPage";
 
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -24,6 +25,16 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/dashboard" replace /> },
       { path: "dashboard", element: <DashboardRouter /> },
+      {
+        path: "notifications",
+        element: (
+          <ProtectedRoute
+            allow={["Admin", "SalesPerson", "BomCreator", "Accountant", "ManagingDirector"]}
+          >
+            <NotificationsPage />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: "customers",
         element: (

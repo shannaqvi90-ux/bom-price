@@ -266,28 +266,6 @@ describe("CostingEntryPage", () => {
     expect(await screen.findByText(/No exchange rate found for SAR/i)).toBeInTheDocument();
   });
 
-  it("calls /start when status is CostingPending", async () => {
-    mockedApi.post.mockResolvedValue({ status: 204 });
-    defaultGetHandler(
-      {
-        id: 0,
-        rawMaterialCostTotal: 0,
-        landedCostType: "Percentage",
-        landedCostValue: 0,
-        fohAmount: 0,
-        totalCostPerKg: 0,
-        submittedAt: null,
-        bomLines: [{ ...baseBomLine, lastCost: null }],
-        draft: null,
-      },
-      { ...baseRequisition, status: "CostingPending" },
-    );
-    renderPage();
-    await waitFor(() => {
-      expect(mockedApi.post).toHaveBeenCalledWith("/costing/5/start");
-    });
-  });
-
   it("enables submit when all costs are greater than 0", async () => {
     defaultGetHandler({
       id: 0,

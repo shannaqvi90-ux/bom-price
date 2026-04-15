@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
@@ -6,7 +7,7 @@ import type { ReactNode } from "react";
 import type { RequisitionDetail } from "@/types/api";
 import { useAuthStore } from "@/store/authStore";
 
-vi.mock("@/api/axios", () => ({ api: { get: vi.fn() } }));
+vi.mock("@/api/axios", () => ({ api: { get: vi.fn(), post: vi.fn() } }));
 
 import { api } from "@/api/axios";
 import RequisitionDetailPage from "./RequisitionDetailPage";
@@ -75,12 +76,12 @@ describe("RequisitionDetailPage", () => {
     expect(screen.getByTestId("step-Submitted")).toBeInTheDocument();
   });
 
-  it('renders a disabled "Start BOM" button for BomCreator when status is BomPending', async () => {
+  it('renders an enabled "Start BOM" button for BomCreator when status is BomPending', async () => {
     vi.mocked(api.get).mockResolvedValueOnce({ data: sample });
     render(wrap(<RequisitionDetailPage />));
     await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
     const btn = screen.getByRole("button", { name: /start bom/i });
-    expect(btn).toBeDisabled();
+    expect(btn).not.toBeDisabled();
   });
 
   it("does not render action buttons for SalesPerson", async () => {
@@ -113,6 +114,39 @@ describe("RequisitionDetailPage", () => {
     render(wrap(<RequisitionDetailPage />));
     await waitFor(() =>
       expect(screen.getByText(/don't have access/i)).toBeInTheDocument(),
+    );
+  });
+
+  it("Start Costing button calls /start then navigates to the costing page", async () => {
+    useAuthStore.getState().setSession({
+      accessToken: "at", refreshToken: "rt",
+      role: "Accountant", userId: 11, name: "Bob", branchId: null,
+    });
+    vi.mocked(api.get).mockResolvedValue({ data: { ...sample, status: "CostingPending" } });
+    vi.mocked(api.post as ReturnType<typeof vi.fn>).mockResolvedValue({ status: 204 });
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/requisitions/1"]}>
+          <Routes>
+            <Route path="/requisitions/:id" element={<RequisitionDetailPage />} />
+            <Route path="/requisitions/:id/costing" element={<div>Costing Page</div>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const btn = await screen.findByRole("button", { name: /start costing/i });
+    await userEvent.click(btn);
+
+    await waitFor(() =>
+      expect(vi.mocked(api.post as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(
+        "/costing/1/start",
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByText("Costing Page")).toBeInTheDocument(),
     );
   });
 

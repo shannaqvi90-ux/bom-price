@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { RequisitionTimeline } from "./components/RequisitionTimeline";
 import { useRequisition } from "./requisitionsApi";
+import { useStartCosting } from "@/features/costing/costingApi";
 import { useAuthStore } from "@/store/authStore";
 import { formatRelative } from "@/utils/date";
 import type { RequisitionDetail, RequisitionStatus, UserRole } from "@/types/api";
@@ -46,6 +47,7 @@ export default function RequisitionDetailPage() {
   const { data, isLoading, error } = useRequisition(numericId);
   const role = useAuthStore((s) => s.user?.role);
   const navigate = useNavigate();
+  const startCosting = useStartCosting();
 
   const httpStatus = (error as { response?: { status?: number } } | null)?.response?.status;
 
@@ -111,9 +113,18 @@ export default function RequisitionDetailPage() {
         </div>
         {action && (
           <Button
-            onClick={() => navigate(`/requisitions/${id}/${action.path}`)}
+            disabled={startCosting.isPending}
+            onClick={() => {
+              if (action.label === "Start Costing") {
+                startCosting.mutate(numericId, {
+                  onSuccess: () => navigate(`/requisitions/${id}/costing`),
+                });
+              } else {
+                navigate(`/requisitions/${id}/${action.path}`);
+              }
+            }}
           >
-            {action.label}
+            {startCosting.isPending ? "Starting…" : action.label}
           </Button>
         )}
       </div>

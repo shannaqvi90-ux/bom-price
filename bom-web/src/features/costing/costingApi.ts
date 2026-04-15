@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/axios";
 import type { CostingDetail, LandedCostType } from "@/types/api";
+import { requisitionKeys } from "@/features/requisitions/requisitionsApi";
 
 export const costingKeys = {
   detail: (requisitionId: number) => ["costing", requisitionId] as const,
@@ -32,7 +33,6 @@ export function useCosting(requisitionId: number) {
     queryFn: () =>
       api.get<CostingDetail>(`/costing/${requisitionId}`).then((r) => r.data),
     enabled: Number.isFinite(requisitionId) && requisitionId > 0,
-    retry: false,
   });
 }
 
@@ -43,6 +43,7 @@ export function useStartCosting() {
       api.post(`/costing/${requisitionId}/start`),
     onSuccess: (_d, requisitionId) => {
       qc.invalidateQueries({ queryKey: costingKeys.detail(requisitionId) });
+      qc.invalidateQueries({ queryKey: requisitionKeys.detail(requisitionId) });
     },
   });
 }

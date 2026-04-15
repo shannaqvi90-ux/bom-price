@@ -7,7 +7,6 @@ import { useActiveExchangeRates } from "@/api/lookups";
 import { useRequisition } from "@/features/requisitions/requisitionsApi";
 import {
   useCosting,
-  useStartCosting,
   useSaveCostingDraft,
   useSubmitCosting,
 } from "./costingApi";
@@ -53,10 +52,9 @@ export default function CostingEntryPage() {
   const navigate = useNavigate();
 
   const { data: requisition } = useRequisition(requisitionId);
-  const { data: costing, isLoading: costingLoading, refetch } = useCosting(requisitionId);
+  const { data: costing, isLoading: costingLoading } = useCosting(requisitionId);
   const { data: exchangeRates = [] } = useActiveExchangeRates();
 
-  const startCosting = useStartCosting();
   const saveDraft = useSaveCostingDraft();
   const submitCosting = useSubmitCosting();
 
@@ -67,21 +65,7 @@ export default function CostingEntryPage() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  const hasStartedRef = useRef(false);
   const debounceRef = useRef<number | undefined>(undefined);
-
-  // Auto-start when CostingPending
-  useEffect(() => {
-    if (
-      requisition?.status === "CostingPending" &&
-      !hasStartedRef.current &&
-      !startCosting.isPending
-    ) {
-      hasStartedRef.current = true;
-      startCosting.mutate(requisitionId, { onSuccess: () => refetch() });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requisition?.status, requisitionId]);
 
   // Hydrate local state from server once
   useEffect(() => {
@@ -237,17 +221,7 @@ export default function CostingEntryPage() {
   }
 
   // ── Render ──
-  if (startCosting.isError) {
-    return (
-      <Card className="mx-auto max-w-lg">
-        <CardContent className="py-8 text-center text-destructive">
-          Failed to start costing. Please go back and try again.
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (costingLoading || startCosting.isPending || !requisition || !costing) {
+  if (costingLoading || !requisition || !costing) {
     return <p className="text-sm text-muted-foreground">Loading costing…</p>;
   }
 

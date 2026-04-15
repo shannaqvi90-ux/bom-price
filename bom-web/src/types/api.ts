@@ -175,6 +175,19 @@ export interface ExchangeRate {
   setByName: string;
 }
 
+export interface CreateExchangeRateRequest {
+  currencyCode: string;
+  currencyName: string;
+  rateToAed: number;
+  effectiveDate: string;
+}
+
+export interface UpdateExchangeRateRequest {
+  rateToAed: number;
+  effectiveDate: string;
+  isActive: boolean;
+}
+
 // ─── BOM Entry ────────────────────────────────────────────────────────────────
 
 export interface Process {

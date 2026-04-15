@@ -43,6 +43,7 @@ export function AddRateModal({ open, onClose }: Props) {
 
   const onSubmit = handleSubmit(async (values) => {
     await create.mutateAsync(values);
+    create.reset();
     reset();
     onClose();
   });

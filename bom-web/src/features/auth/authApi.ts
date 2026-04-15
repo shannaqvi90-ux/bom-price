@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { api } from "@/api/axios";
 import { useAuthStore } from "@/store/authStore";
+import { notificationsStore } from "@/store/notificationsStore";
 import type { LoginRequest, LoginResponse } from "@/types/api";
 
 async function loginRequest(req: LoginRequest): Promise<LoginResponse> {
@@ -33,6 +34,9 @@ export function useLogout() {
         }
       }
     },
-    onSettled: () => logout(),
+    onSettled: () => {
+      notificationsStore.getState().disconnect();
+      logout();
+    },
   });
 }

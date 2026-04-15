@@ -67,7 +67,8 @@ const NARROW_BREAKPOINT = 1024;
 export function Sidebar() {
   const user = useAuthStore((s) => s.user);
   const accessToken = useAuthStore((s) => s.accessToken);
-  const { connect, unreadCount } = notificationsStore();
+  const connect = notificationsStore((s) => s.connect);
+  const unreadCount = notificationsStore((s) => s.unreadCount);
 
   const [userCollapsed, setUserCollapsed] = useState<boolean>(() => {
     return localStorage.getItem(STORAGE_KEY) === "true";

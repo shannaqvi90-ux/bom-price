@@ -13,6 +13,7 @@ import CostingEntryPage from "@/features/costing/CostingEntryPage";
 import MdReviewPage from "@/features/approvals/MdReviewPage";
 import NotificationsPage from "@/features/notifications/NotificationsPage";
 import ExchangeRatesPage from "@/features/exchange-rates/ExchangeRatesPage";
+import UsersPage from "@/features/users/UsersPage";
 
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -61,6 +62,14 @@ const router = createBrowserRouter([
             allow={["Admin", "SalesPerson", "BomCreator", "Accountant", "ManagingDirector"]}
           >
             <ExchangeRatesPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "admin/users",
+        element: (
+          <ProtectedRoute allow={["Admin"]}>
+            <UsersPage />
           </ProtectedRoute>
         ),
       },

@@ -299,7 +299,7 @@ export default function MdReviewPage() {
         open={showBom}
         onClose={() => setShowBom(false)}
         title="Bill of Materials"
-        className="max-w-2xl"
+        className="max-w-3xl"
       >
         {bom ? (
           <div className="space-y-4 text-sm">
@@ -313,7 +313,7 @@ export default function MdReviewPage() {
                       <th className="pb-1 text-right font-medium">Qty/kg</th>
                       <th className="pb-1 text-right font-medium">Wastage%</th>
                       <th className="pb-1 text-right font-medium">Cost/kg</th>
-                      <th className="pb-1 text-right font-medium">Contribution (AED)</th>
+                      <th className="pb-1 text-right font-medium">Contribution</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -326,12 +326,12 @@ export default function MdReviewPage() {
                           <td className="py-1 text-right font-mono">{l.wastagePct.toFixed(2)}%</td>
                           <td className="py-1 text-right font-mono">
                             {l.costPerKg != null
-                              ? `${l.costPerKg.toFixed(2)} ${l.currencyCode}`
+                              ? `${l.costPerKg.toFixed(4)} ${l.currencyCode}`
                               : "—"}
                           </td>
                           <td className="py-1 text-right font-mono">
                             {l.contributionAed != null
-                              ? l.contributionAed.toFixed(4)
+                              ? `${l.contributionAed.toFixed(4)} AED`
                               : "—"}
                           </td>
                         </tr>
@@ -340,8 +340,15 @@ export default function MdReviewPage() {
                 </table>
               </div>
             ))}
-            <div className="border-t pt-2 text-right font-semibold">
-              Total Cost/kg: <span className="font-mono">{bom.totalCostPerKg.toFixed(4)} AED</span>
+            <div className="mt-2 space-y-1 border-t pt-2 text-sm">
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">Raw Material</span>
+                <span className="font-mono">{data.rawMaterialCostPerKg.toFixed(4)} AED/kg</span>
+              </div>
+              <div className="flex justify-between gap-4 font-semibold">
+                <span>Total Cost/kg</span>
+                <span className="font-mono">{bom.totalCostPerKg.toFixed(4)} AED/kg</span>
+              </div>
             </div>
           </div>
         ) : (

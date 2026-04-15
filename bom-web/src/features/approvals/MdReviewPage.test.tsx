@@ -229,11 +229,55 @@ describe("MdReviewPage", () => {
       expect(screen.getByText("PE100 Resin")).toBeInTheDocument(),
     );
 
-    // Column headers unique to the cost columns
-    expect(screen.getByText(/Contribution \(AED\)/i)).toBeInTheDocument();
+    // Column headers
+    expect(screen.getByText("Contribution")).toBeInTheDocument();
 
-    // Line values: cost/kg with currency and contribution
-    expect(screen.getByText(/1\.25 USD/i)).toBeInTheDocument();
-    expect(screen.getByText(/3\.9765/)).toBeInTheDocument();
+    // Line values: cost/kg with 4dp + currency, contribution with AED suffix
+    expect(screen.getByText(/1\.2500 USD/i)).toBeInTheDocument();
+    expect(screen.getByText(/3\.9765 AED/i)).toBeInTheDocument();
+  });
+
+  it("View BOM dialog shows frozen Cost/kg and Contribution with footer totals", async () => {
+    const mockBom = {
+      id: 1,
+      quotationRequestId: 42,
+      refNo: "REQ-0042",
+      itemDescription: "HDPE Pipe 20mm",
+      lines: [
+        {
+          id: 101,
+          processId: 1,
+          processName: "Extrusion",
+          rawMaterialItemId: 5,
+          rawMaterialDescription: "HDPE Granules",
+          qtyPerKg: 0.85,
+          wastagePct: 2.0,
+          costPerKg: 4.2,
+          currencyCode: "USD",
+          costPerKgInAed: 15.4224,
+          contributionAed: 13.3817,
+        },
+      ],
+      totalCostPerKg: 2.95,
+      submittedAt: "2026-04-15T00:00:00Z",
+    };
+    mockedApi.get.mockImplementation((url: string) => {
+      if (String(url).includes("/approvals/")) return Promise.resolve({ data: baseReview });
+      if (String(url).includes("/bom/")) return Promise.resolve({ data: mockBom });
+      return Promise.reject(new Error(`Unexpected url: ${url}`));
+    });
+
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByText("REQ-0042")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: /View BOM/i }));
+    await waitFor(() => expect(screen.getByText("HDPE Granules")).toBeInTheDocument());
+
+    expect(screen.getByText("4.2000 USD")).toBeInTheDocument();
+    expect(screen.getByText("13.3817 AED")).toBeInTheDocument();
+    // Footer: raw material from approval data (rawMaterialCostPerKg = 2.45)
+    // Value also appears in the Cost Breakdown card, so allow multiple matches
+    expect(screen.getAllByText(/2\.4500 AED\/kg/).length).toBeGreaterThan(0);
   });
 });

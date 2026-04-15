@@ -48,6 +48,7 @@ export function AddRateModal({ open, onClose }: Props) {
   });
 
   function handleClose() {
+    create.reset();
     reset();
     onClose();
   }

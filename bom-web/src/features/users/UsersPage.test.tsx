@@ -126,6 +126,23 @@ describe("UsersPage", () => {
     expect(screen.getByDisplayValue("alice@example.com")).toBeInTheDocument();
   });
 
+  it("shows error state with Retry button on API failure", async () => {
+    vi.mocked(api.get).mockRejectedValueOnce(new Error("Network error"));
+    wrap(<UsersPage />);
+    await waitFor(() =>
+      expect(screen.getByText(/Failed to load users/i)).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: /Retry/i })).toBeInTheDocument();
+  });
+
+  it("shows empty state when no users returned", async () => {
+    vi.mocked(api.get).mockResolvedValueOnce({ data: [] });
+    wrap(<UsersPage />);
+    await waitFor(() =>
+      expect(screen.getByText(/No users found/i)).toBeInTheDocument(),
+    );
+  });
+
   it("Deactivate shows confirmation dialog; cancel dismisses", async () => {
     vi.mocked(api.get).mockResolvedValueOnce({ data: sampleUsers });
     const user = userEvent.setup();
@@ -242,6 +259,15 @@ describe("AddUserModal", () => {
       expect(screen.getByText(/Email already exists/i)).toBeInTheDocument(),
     );
     expect(screen.getByRole("heading", { name: "Add User" })).toBeInTheDocument();
+  });
+
+  it("resets form and closes modal when Cancel is clicked", async () => {
+    const user = await openAddModal();
+    await user.type(screen.getByLabelText(/^Name$/i), "TYPED");
+    await user.click(screen.getByRole("button", { name: /Cancel/i }));
+    await waitFor(() =>
+      expect(screen.queryByRole("heading", { name: "Add User" })).not.toBeInTheDocument(),
+    );
   });
 });
 

@@ -23,7 +23,7 @@ export const notificationsStore = create<NotificationsState>()((set, get) => ({
   _connection: null,
 
   connect: async (token: string) => {
-    if (get().connected) return;
+    if (get().connected || get()._connection) return;
 
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(`/hubs/notifications?access_token=${token}`)
@@ -34,10 +34,18 @@ export const notificationsStore = create<NotificationsState>()((set, get) => ({
       get().prependNotification(n);
     });
 
-    await connection.start();
+    set({ _connection: connection });
+
+    try {
+      await connection.start();
+    } catch (err) {
+      set({ _connection: null });
+      console.error("[SignalR] Failed to connect:", err);
+      return;
+    }
 
     const { data } = await api.get<{ count: number }>("/notifications/unread-count");
-    set({ connected: true, _connection: connection, unreadCount: data.count });
+    set({ connected: true, unreadCount: data.count });
   },
 
   disconnect: async () => {

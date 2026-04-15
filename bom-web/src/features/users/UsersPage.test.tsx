@@ -178,6 +178,28 @@ describe("UsersPage", () => {
       expect(vi.mocked(api.delete as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith("/users/1"),
     );
   });
+
+  it("shows error message when Deactivate fails and keeps dialog open", async () => {
+    vi.mocked(api.get).mockResolvedValue({ data: sampleUsers });
+    vi.mocked(api.delete as ReturnType<typeof vi.fn>).mockRejectedValueOnce({
+      response: { data: { message: "Cannot deactivate last admin" } },
+    });
+    const user = userEvent.setup();
+    wrap(<UsersPage />);
+    await waitFor(() => expect(screen.getByText("Alice Admin")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: /Deactivate Alice Admin/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /^Confirm$/i })).toBeInTheDocument(),
+    );
+    await user.click(screen.getByRole("button", { name: /^Confirm$/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/Cannot deactivate last admin/i)).toBeInTheDocument(),
+    );
+    // Dialog stays open
+    expect(screen.getByText(/Are you sure you want to deactivate/i)).toBeInTheDocument();
+  });
 });
 
 // ─── AddUserModal ─────────────────────────────────────────────────────────────

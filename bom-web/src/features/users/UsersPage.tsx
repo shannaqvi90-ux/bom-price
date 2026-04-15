@@ -22,11 +22,11 @@ export default function UsersPage() {
     if (!deactivateTarget) return;
     try {
       await deactivate.mutateAsync(deactivateTarget.id);
+      deactivate.reset();
+      setDeactivateTarget(null);
     } catch {
-      // errors visible via deactivate.isError
+      // error displayed via deactivate.isError
     }
-    deactivate.reset();
-    setDeactivateTarget(null);
   }
 
   const columns = useMemo<ColumnDef<User>[]>(
@@ -122,6 +122,14 @@ export default function UsersPage() {
           Are you sure you want to deactivate{" "}
           <span className="font-semibold">{deactivateTarget?.name}</span>?
         </p>
+
+        {deactivate.isError && (
+          <p className="text-sm text-destructive">
+            {(deactivate.error as { response?: { data?: { message?: string } } })?.response?.data
+              ?.message ?? "Failed to deactivate user"}
+          </p>
+        )}
+
         <div className="flex justify-end gap-2 pt-4">
           <Button type="button" variant="ghost" onClick={() => { deactivate.reset(); setDeactivateTarget(null); }}>
             Cancel

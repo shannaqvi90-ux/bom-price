@@ -33,25 +33,24 @@ const sampleRates = [
   },
 ];
 
-beforeEach(() => {
-  vi.mocked(api.get).mockReset();
-  vi.mocked(api.post as ReturnType<typeof vi.fn>).mockReset();
-  vi.mocked(api.put as ReturnType<typeof vi.fn>).mockReset();
-  useAuthStore.getState().setSession({
-    accessToken: "at",
-    refreshToken: "rt",
-    role: "Accountant",
-    userId: 1,
-    name: "Alice",
-    branchId: null,
-  });
-});
-
-afterEach(() => {
-  useAuthStore.getState().logout();
-});
-
 describe("ExchangeRatesPage", () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post as ReturnType<typeof vi.fn>).mockReset();
+    vi.mocked(api.put as ReturnType<typeof vi.fn>).mockReset();
+    useAuthStore.getState().setSession({
+      accessToken: "at",
+      refreshToken: "rt",
+      role: "Accountant",
+      userId: 1,
+      name: "Alice",
+      branchId: null,
+    });
+  });
+
+  afterEach(() => {
+    useAuthStore.getState().logout();
+  });
   it("renders rate rows from API response", async () => {
     vi.mocked(api.get).mockResolvedValueOnce({ data: sampleRates });
     wrap(<ExchangeRatesPage />);
@@ -119,6 +118,7 @@ describe("ExchangeRatesPage", () => {
           currencyCode: "EUR",
           currencyName: "Euro",
           rateToAed: 3.98,
+          effectiveDate: "2026-04-01",
         }),
       ),
     );
@@ -140,7 +140,7 @@ describe("ExchangeRatesPage", () => {
     await waitFor(() =>
       expect(vi.mocked(api.put as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(
         "/exchange-rates/1",
-        expect.objectContaining({ rateToAed: 3.75 }),
+        expect.objectContaining({ rateToAed: 3.75, effectiveDate: "2026-04-01", isActive: true }),
       ),
     );
   });

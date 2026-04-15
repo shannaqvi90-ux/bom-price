@@ -271,3 +271,14 @@ export interface MdReviewDetail {
   landedCostPct: number;
   fohPct: number;
 }
+
+// ─── Notifications ────────────────────────────────────────────────────────────────
+
+export interface Notification {
+  id: number;
+  message: string;
+  referenceId: number;
+  referenceType: string;
+  isRead: boolean;
+  createdAt: string;
+}

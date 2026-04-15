@@ -53,12 +53,7 @@ const NAV_ITEMS: NavItem[] = [
     icon: Building2,
     roles: ["Admin"],
   },
-  {
-    to: "/admin/exchange-rates",
-    label: "Exchange Rates",
-    icon: Coins,
-    roles: ["Admin", "Accountant"],
-  },
+  { to: "/exchange-rates", label: "Exchange Rates", icon: Coins },
 ];
 
 const STORAGE_KEY = "bom-sidebar-collapsed";

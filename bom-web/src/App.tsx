@@ -12,6 +12,7 @@ import BomEntryPage from "@/features/bom/BomEntryPage";
 import CostingEntryPage from "@/features/costing/CostingEntryPage";
 import MdReviewPage from "@/features/approvals/MdReviewPage";
 import NotificationsPage from "@/features/notifications/NotificationsPage";
+import ExchangeRatesPage from "@/features/exchange-rates/ExchangeRatesPage";
 
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -50,6 +51,16 @@ const router = createBrowserRouter([
             allow={["Admin", "SalesPerson", "BomCreator", "Accountant", "ManagingDirector"]}
           >
             <ItemListPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "exchange-rates",
+        element: (
+          <ProtectedRoute
+            allow={["Admin", "SalesPerson", "BomCreator", "Accountant", "ManagingDirector"]}
+          >
+            <ExchangeRatesPage />
           </ProtectedRoute>
         ),
       },

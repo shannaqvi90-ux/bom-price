@@ -295,3 +295,31 @@ export interface Notification {
   isRead: boolean;
   createdAt: string;
 }
+
+// ─── Users ───────────────────────────────────────────────────────────────────
+
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: UserRole;
+  branchId: number | null;
+  branchName: string | null;
+  isActive: boolean;
+}
+
+export interface CreateUserRequest {
+  name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+  branchId: null;
+}
+
+export interface UpdateUserRequest {
+  name: string;
+  email: string;
+  role: UserRole;
+  branchId: null;
+  isActive: boolean;
+}

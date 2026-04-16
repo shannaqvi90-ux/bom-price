@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
+import { extractApiError } from "@/lib/apiError";
 import { Button } from "@/components/ui/Button";
 import { useActiveExchangeRates } from "@/api/lookups";
 import { useRequisition } from "@/features/requisitions/requisitionsApi";
@@ -279,12 +280,7 @@ export default function CostingEntryPage() {
           }
         },
         onError: (err: unknown) => {
-          const e = err as { response?: { status?: number; data?: { message?: string } } };
-          if (e.response?.status === 400 && e.response.data?.message) {
-            setSubmitError(e.response.data.message);
-          } else {
-            setSubmitError("Failed to submit costing.");
-          }
+          setSubmitError(extractApiError(err, "Failed to submit costing."));
         },
       },
     );

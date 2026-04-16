@@ -150,6 +150,19 @@ public class CostingController(AppDbContext db, NotificationService notification
             .FirstOrDefaultAsync(b => b.RequisitionItemId == requisitionItemId);
         if (bom is null) return BadRequest(new { message = "No BOM found for this item" });
 
+        if (request.RawMaterialCosts.Any(rc => rc.CostPerKg < 0))
+            return BadRequest(new { message = "CostPerKg cannot be negative." });
+
+        var submittedBomLineIds = request.RawMaterialCosts.Select(rc => rc.BomLineId).Distinct().ToList();
+        var bomLineIds = bom.Lines.Select(l => l.Id).ToList();
+        var unknownBomLines = submittedBomLineIds.Except(bomLineIds).ToList();
+        if (unknownBomLines.Count > 0)
+            return BadRequest(new { message = $"Unknown BOM line(s): {string.Join(", ", unknownBomLines)}" });
+
+        var missingBomLines = bomLineIds.Except(submittedBomLineIds).ToList();
+        if (missingBomLines.Count > 0)
+            return BadRequest(new { message = $"Missing cost for BOM line(s): {string.Join(", ", missingBomLines)}" });
+
         var quoteCurrency = (req.CurrencyCode ?? "AED").ToUpperInvariant();
 
         var usedCurrencies = request.RawMaterialCosts
@@ -179,8 +192,7 @@ public class CostingController(AppDbContext db, NotificationService notification
         var newCostLines = new List<BomCostLine>();
         foreach (var rc in request.RawMaterialCosts)
         {
-            var line = bom.Lines.FirstOrDefault(l => l.Id == rc.BomLineId);
-            if (line is null) continue;
+            var line = bom.Lines.First(l => l.Id == rc.BomLineId);
 
             var currency = (rc.CurrencyCode ?? "AED").ToUpperInvariant();
             decimal entryRate;

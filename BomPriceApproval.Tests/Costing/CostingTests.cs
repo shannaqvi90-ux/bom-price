@@ -234,6 +234,142 @@ public class CostingTests(WebApplicationFactory<Program> factory)
         reloadedA.Items[0].Cost!.TotalCostPerKg.Should().Be(totalA);
     }
 
+    private async Task<(int RequisitionId, int RequisitionItemId, int[] BomLineIds)> BootstrapToCostingAsync(int bomLineCount)
+    {
+        // 1. SalesPerson creates items + requisition
+        var spToken = await LoginAsync("ali@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", spToken);
+
+        var fgCode = $"FG-{Guid.NewGuid():N}".Substring(0, 10);
+        var fgResp = await _client.PostAsJsonAsync("/api/items",
+            new { Code = fgCode, Description = "Test FG", Type = "FinishedGood", LastPurchasePrice = (decimal?)null });
+        var fg = await fgResp.Content.ReadFromJsonAsync<ItemDto>();
+
+        var rmIds = new List<int>();
+        for (var i = 0; i < bomLineCount; i++)
+        {
+            var rmCode = $"RM-{Guid.NewGuid():N}".Substring(0, 10);
+            var rmResp = await _client.PostAsJsonAsync("/api/items",
+                new { Code = rmCode, Description = $"RM {i}", Type = "RawMaterial", LastPurchasePrice = (decimal?)null });
+            var rm = await rmResp.Content.ReadFromJsonAsync<ItemDto>();
+            rmIds.Add(rm!.Id);
+        }
+
+        var customers = await _client.GetFromJsonAsync<List<CustomerDto>>("/api/customers");
+        var reqResp = await _client.PostAsJsonAsync("/api/requisitions", new
+        {
+            CustomerId = customers!.First().Id,
+            Items = new[] { new { ItemId = fg!.Id, ExpectedQty = 100m } },
+            CurrencyCode = "AED"
+        });
+        var created = await reqResp.Content.ReadFromJsonAsync<CreatedRequisition>();
+        var requisitionId = created!.Id;
+
+        var reqDetail = await _client.GetFromJsonAsync<RequisitionDetailDto>($"/api/requisitions/{requisitionId}");
+        var requisitionItemId = reqDetail!.Items[0].Id;
+
+        // 2. Admin creates a process
+        var adminToken = await LoginAsync("admin@test.com", "Admin@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var procName = $"P-{Guid.NewGuid():N}".Substring(0, 12);
+        var procResp = await _client.PostAsJsonAsync("/api/processes", new { Name = procName, DisplayOrder = 1 });
+        var process = await procResp.Content.ReadFromJsonAsync<ProcessDto>();
+
+        // 3. BomCreator starts, saves lines, submits BOM → CostingPending
+        var bomToken = await LoginAsync("bob@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bomToken);
+        await _client.PostAsync($"/api/bom/{requisitionId}/items/{requisitionItemId}/start", null);
+        await _client.PutAsJsonAsync($"/api/bom/{requisitionId}/items/{requisitionItemId}/lines", new
+        {
+            Lines = rmIds.Select(rmId =>
+                new { ProcessId = process!.Id, RawMaterialItemId = rmId, QtyPerKg = 0.85m, WastagePct = 2.0m })
+                .ToArray()
+        });
+        await _client.PostAsync($"/api/bom/{requisitionId}/submit", null);
+
+        // 4. Accountant starts costing → CostingInProgress
+        var accToken = await LoginAsync("sara@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accToken);
+        await _client.PostAsync($"/api/costing/{requisitionId}/items/{requisitionItemId}/start", null);
+
+        // 5. Fetch costing to extract bomLineIds
+        var review = await _client.GetFromJsonAsync<CostingReviewDto>($"/api/costing/{requisitionId}");
+        var bomLineIds = review!.Items[0].BomLines.Select(l => l.BomLineId).ToArray();
+
+        _client.DefaultRequestHeaders.Authorization = null;
+        return (requisitionId, requisitionItemId, bomLineIds);
+    }
+
+    [Fact]
+    public async Task Submit_NegativeCost_Returns400()
+    {
+        var (reqId, itemId, bomLineIds) = await BootstrapToCostingAsync(bomLineCount: 1);
+
+        var accToken = await LoginAsync("sara@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accToken);
+
+        var resp = await _client.PostAsJsonAsync(
+            $"/api/costing/{reqId}/items/{itemId}/submit",
+            new
+            {
+                RawMaterialCosts = new[] { new { BomLineId = bomLineIds[0], CostPerKg = -5m, CurrencyCode = "AED" } },
+                LandedCostType = "Percentage",
+                LandedCostValue = 5m,
+                FohAmount = 1m
+            });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await resp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Requisitions.ErrorResponse>();
+        body!.Message.ToLower().Should().Contain("cost");
+    }
+
+    [Fact]
+    public async Task Submit_UnknownBomLineId_Returns400()
+    {
+        var (reqId, itemId, _) = await BootstrapToCostingAsync(bomLineCount: 1);
+
+        var accToken = await LoginAsync("sara@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accToken);
+
+        var resp = await _client.PostAsJsonAsync(
+            $"/api/costing/{reqId}/items/{itemId}/submit",
+            new
+            {
+                RawMaterialCosts = new[] { new { BomLineId = 999999, CostPerKg = 5m, CurrencyCode = "AED" } },
+                LandedCostType = "Percentage",
+                LandedCostValue = 5m,
+                FohAmount = 1m
+            });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await resp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Requisitions.ErrorResponse>();
+        body!.Message.ToLower().Should().Contain("unknown");
+    }
+
+    [Fact]
+    public async Task Submit_MissingLineCost_Returns400()
+    {
+        var (reqId, itemId, bomLineIds) = await BootstrapToCostingAsync(bomLineCount: 2);
+
+        var accToken = await LoginAsync("sara@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accToken);
+
+        // Submit cost for only 1 of 2 BOM lines
+        var resp = await _client.PostAsJsonAsync(
+            $"/api/costing/{reqId}/items/{itemId}/submit",
+            new
+            {
+                RawMaterialCosts = new[] { new { BomLineId = bomLineIds[0], CostPerKg = 5m, CurrencyCode = "AED" } },
+                LandedCostType = "Percentage",
+                LandedCostValue = 5m,
+                FohAmount = 1m
+            });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await resp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Requisitions.ErrorResponse>();
+        body!.Message.Should().Contain("Missing cost");
+    }
+
     // ── DTOs ──
     private record LoginResponse(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId);
     private record ItemDto(int Id, string Code, string Description, string Type, int BranchId, bool IsActive, decimal? LastPurchasePrice);

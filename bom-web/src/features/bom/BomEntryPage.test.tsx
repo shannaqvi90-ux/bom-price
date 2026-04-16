@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { ReactNode } from "react";
 import { useAuthStore } from "@/store/authStore";
-import type { BomDetail, RequisitionDetail } from "@/types/api";
+import type { BomReviewResponse, RequisitionDetail } from "@/types/api";
 
 vi.mock("@/api/axios", () => ({ api: { get: vi.fn(), post: vi.fn(), put: vi.fn() } }));
 
@@ -16,35 +16,71 @@ import BomEntryPage from "./BomEntryPage";
 
 const baseRequisition: RequisitionDetail = {
   id: 1, refNo: "REQ-0001", status: "BomPending",
-  itemId: 1, itemDescription: "HDPE Pipe", customerId: 1,
+  customerId: 1,
   customerName: "ACME", customerEmail: "a@b.com", customerPhone: "123",
-  customerAddress: "Addr", expectedQty: 100, currencyCode: "AED",
+  customerAddress: "Addr", currencyCode: "AED",
   exchangeRateSnapshot: null, branchId: 1, branchName: "Fujairah",
   salesPersonId: 2, salesPersonName: "Ali", createdAt: "2026-01-01T00:00:00Z",
-  updatedAt: "2026-01-01T00:00:00Z", bom: null, approval: null,
+  updatedAt: "2026-01-01T00:00:00Z",
+  items: [{ id: 1, itemId: 1, itemDescription: "HDPE Pipe", expectedQty: 100, sortOrder: 1 }],
+  approval: null,
 };
 
 const mockRequisitionBomPending = { data: baseRequisition };
 const mockRequisitionBomInProgress = { data: { ...baseRequisition, status: "BomInProgress" as const } };
 
-const baseBom: BomDetail = {
-  id: 10, quotationRequestId: 1, refNo: "REQ-0001",
-  itemDescription: "HDPE Pipe", lines: [], totalCostPerKg: 0, submittedAt: null,
+const baseBom: BomReviewResponse = {
+  requisitionId: 1,
+  refNo: "REQ-0001",
+  requisitionStatus: "BomInProgress",
+  items: [
+    {
+      requisitionItemId: 1,
+      itemId: 1,
+      itemDescription: "HDPE Pipe",
+      expectedQty: 100,
+      sortOrder: 1,
+      bomHeaderId: 10,
+      bomStatus: "InProgress",
+      lines: [],
+      totalCostPerKg: 0,
+      submittedAt: null,
+    },
+  ],
+};
+
+const baseBomNotStarted: BomReviewResponse = {
+  ...baseBom,
+  requisitionStatus: "BomPending",
+  items: [
+    {
+      ...baseBom.items[0],
+      bomHeaderId: null,
+      bomStatus: "NotStarted",
+    },
+  ],
 };
 
 const mockBomEmpty = { data: baseBom };
 
-const mockBomWithLines = {
+const mockBomWithLines: { data: BomReviewResponse } = {
   data: {
     ...baseBom,
-    lines: [
+    items: [
       {
-        id: 1, processId: 5, processName: "Extrusion",
-        rawMaterialItemId: 3, rawMaterialDescription: "HDPE Granules",
-        qtyPerKg: 0.85, wastagePct: 2.0,
+        ...baseBom.items[0],
+        lines: [
+          {
+            id: 1, processId: 5, processName: "Extrusion",
+            rawMaterialItemId: 3, rawMaterialDescription: "HDPE Granules",
+            qtyPerKg: 0.85, wastagePct: 2.0,
+            costPerKg: null, currencyCode: null,
+            costPerKgInAed: null, contributionAed: null,
+          },
+        ],
       },
     ],
-  } satisfies BomDetail,
+  },
 };
 
 const mockProcesses = {
@@ -96,7 +132,7 @@ describe("BomEntryPage", () => {
 
   function setupMocks(
     requisitionMock: typeof mockRequisitionBomPending,
-    bomMock: typeof mockBomEmpty | null,
+    bomMock: { data: BomReviewResponse } | null,
   ) {
     vi.mocked(api.get).mockImplementation((url: string) => {
       if (url === "/requisitions/1") return Promise.resolve(requisitionMock);
@@ -110,16 +146,14 @@ describe("BomEntryPage", () => {
     });
   }
 
-  it("auto-calls /start when status is BomPending and no BOM exists", async () => {
-    // Phase 1: requisition is BomPending, BOM fetch returns 404
-    // Phase 2: after /start is called, subsequent fetches return BomInProgress + empty BOM
+  it("auto-calls /start for the first NotStarted item when status is BomPending", async () => {
     let startCalled = false;
     vi.mocked(api.get).mockImplementation((url: string) => {
       if (url === "/requisitions/1") {
         return Promise.resolve(startCalled ? mockRequisitionBomInProgress : mockRequisitionBomPending);
       }
       if (url === "/bom/1") {
-        if (!startCalled) return Promise.reject({ response: { status: 404 } });
+        if (!startCalled) return Promise.resolve({ data: baseBomNotStarted });
         return Promise.resolve(mockBomEmpty);
       }
       if (url === "/processes") return Promise.resolve(mockProcesses);
@@ -127,7 +161,7 @@ describe("BomEntryPage", () => {
       return Promise.reject(new Error(`Unmocked: ${url}`));
     });
     vi.mocked(api.post).mockImplementation((url: string) => {
-      if (url === "/bom/1/start") {
+      if (url === "/bom/1/items/1/start") {
         startCalled = true;
         return Promise.resolve({ data: { id: 10 } });
       }
@@ -137,7 +171,7 @@ describe("BomEntryPage", () => {
     render(wrap(<BomEntryPage />));
 
     await waitFor(() => {
-      expect(vi.mocked(api.post)).toHaveBeenCalledWith("/bom/1/start");
+      expect(vi.mocked(api.post)).toHaveBeenCalledWith("/bom/1/items/1/start");
     }, { timeout: 3000 });
   });
 
@@ -157,7 +191,6 @@ describe("BomEntryPage", () => {
 
     render(wrap(<BomEntryPage />));
 
-    // "Extrusion" appears as "⚙ Extrusion" — use regex to match partial text
     expect(await screen.findByText(/Extrusion/)).toBeInTheDocument();
     expect(screen.getByText("HDPE Granules")).toBeInTheDocument();
     expect(screen.getByText("0.8500")).toBeInTheDocument();
@@ -165,7 +198,6 @@ describe("BomEntryPage", () => {
 
   it("shows Net Qty warning when overall net deviates from 1.0 by more than 0.01", async () => {
     setupMocks(mockRequisitionBomInProgress, mockBomWithLines);
-    // 0.85 qty, 2% waste → net = 0.85 - 0.017 = 0.833 → warning expected
 
     render(wrap(<BomEntryPage />));
 
@@ -173,13 +205,24 @@ describe("BomEntryPage", () => {
   });
 
   it("shows no Net Qty warning when net is within 0.01 of 1.0", async () => {
-    const nearOneBom = {
+    const nearOneBom: { data: BomReviewResponse } = {
       data: {
         ...baseBom,
-        lines: [
-          { id: 1, processId: 5, processName: "Extrusion", rawMaterialItemId: 3, rawMaterialDescription: "HDPE Granules", qtyPerKg: 1.0, wastagePct: 0.0 },
+        items: [
+          {
+            ...baseBom.items[0],
+            lines: [
+              {
+                id: 1, processId: 5, processName: "Extrusion",
+                rawMaterialItemId: 3, rawMaterialDescription: "HDPE Granules",
+                qtyPerKg: 1.0, wastagePct: 0.0,
+                costPerKg: null, currencyCode: null,
+                costPerKgInAed: null, contributionAed: null,
+              },
+            ],
+          },
         ],
-      } satisfies BomDetail,
+      },
     };
     setupMocks(mockRequisitionBomInProgress, nearOneBom);
 
@@ -189,22 +232,22 @@ describe("BomEntryPage", () => {
     expect(screen.queryByText(/Net Qty\/kg is/)).not.toBeInTheDocument();
   });
 
-  it("Submit BOM button is disabled when no lines exist", async () => {
+  it("Submit All button is disabled when no lines exist", async () => {
     setupMocks(mockRequisitionBomInProgress, mockBomEmpty);
 
     render(wrap(<BomEntryPage />));
 
     await screen.findByText("BOM Entry");
-    expect(screen.getByRole("button", { name: /submit bom/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /submit all/i })).toBeDisabled();
   });
 
-  it("Submit BOM button is enabled when lines exist", async () => {
+  it("Submit All button is enabled when lines exist", async () => {
     setupMocks(mockRequisitionBomInProgress, mockBomWithLines);
 
     render(wrap(<BomEntryPage />));
 
     await screen.findByText("HDPE Granules");
-    expect(screen.getByRole("button", { name: /submit bom/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /submit all/i })).toBeEnabled();
   });
 
   it("navigates to detail page on successful submit", async () => {
@@ -214,7 +257,7 @@ describe("BomEntryPage", () => {
     render(wrap(<BomEntryPage />));
 
     await screen.findByText("HDPE Granules");
-    await userEvent.click(screen.getByRole("button", { name: /submit bom/i }));
+    await userEvent.click(screen.getByRole("button", { name: /submit all/i }));
 
     await waitFor(() => {
       expect(screen.getByTestId("detail-page")).toBeInTheDocument();
@@ -232,7 +275,7 @@ describe("BomEntryPage", () => {
 
     await waitFor(() => {
       expect(vi.mocked(api.put)).toHaveBeenCalledWith(
-        expect.stringContaining("/bom/1/lines"),
+        expect.stringContaining("/bom/1/items/1/lines"),
         expect.objectContaining({ lines: [] }),
       );
     });

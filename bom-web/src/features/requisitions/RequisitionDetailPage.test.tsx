@@ -29,14 +29,11 @@ const sample: RequisitionDetail = {
   id: 1,
   refNo: "REQ-0001",
   status: "BomPending",
-  itemId: 2,
-  itemDescription: "HDPE Pipe 20mm",
   customerId: 3,
   customerName: "ACME",
   customerEmail: "sales@acme.test",
   customerPhone: "+971501234567",
   customerAddress: "Fujairah FZ",
-  expectedQty: 100,
   currencyCode: "AED",
   exchangeRateSnapshot: null,
   branchId: 1,
@@ -45,7 +42,9 @@ const sample: RequisitionDetail = {
   salesPersonName: "Ali",
   createdAt: "2026-04-14T10:00:00Z",
   updatedAt: "2026-04-14T11:00:00Z",
-  bom: null,
+  items: [
+    { id: 1, itemId: 2, itemDescription: "HDPE Pipe 20mm", expectedQty: 100, sortOrder: 1 },
+  ],
   approval: null,
 };
 
@@ -71,7 +70,6 @@ describe("RequisitionDetailPage", () => {
     render(wrap(<RequisitionDetailPage />));
     await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
     expect(screen.getByText("ACME")).toBeInTheDocument();
-    expect(screen.getByText(/BOM not yet created/i)).toBeInTheDocument();
     expect(screen.getByText(/Not yet submitted for approval/i)).toBeInTheDocument();
     expect(screen.getByTestId("step-Submitted")).toBeInTheDocument();
   });
@@ -117,13 +115,12 @@ describe("RequisitionDetailPage", () => {
     );
   });
 
-  it("Start Costing button calls /start then navigates to the costing page", async () => {
+  it("Start Costing button navigates to the costing page", async () => {
     useAuthStore.getState().setSession({
       accessToken: "at", refreshToken: "rt",
       role: "Accountant", userId: 11, name: "Bob", branchId: null,
     });
     vi.mocked(api.get).mockResolvedValue({ data: { ...sample, status: "CostingPending" } });
-    vi.mocked(api.post as ReturnType<typeof vi.fn>).mockResolvedValue({ status: 204 });
 
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
@@ -141,28 +138,20 @@ describe("RequisitionDetailPage", () => {
     await userEvent.click(btn);
 
     await waitFor(() =>
-      expect(vi.mocked(api.post as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(
-        "/costing/1/start",
-      ),
-    );
-    await waitFor(() =>
       expect(screen.getByText("Costing Page")).toBeInTheDocument(),
     );
   });
 
-  it("shows populated BOM and Approval cards when present", async () => {
+  it("shows populated Approval card when present", async () => {
     vi.mocked(api.get).mockResolvedValueOnce({
       data: {
         ...sample,
         status: "Approved",
-        bom: { id: 9, totalCostPerKg: 5.25, hasCost: true },
-        approval: { salesPriceAed: 7.5, salesPriceForeign: null, profitMarginPct: 30, isApproved: true },
+        approval: { isApproved: true },
       },
     });
     render(wrap(<RequisitionDetailPage />));
     await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
-    expect(screen.getByText(/5\.25/)).toBeInTheDocument();
-    expect(screen.getByText(/7\.5/)).toBeInTheDocument();
-    expect(screen.getByText(/30%/)).toBeInTheDocument();
+    expect(screen.getByText("Yes")).toBeInTheDocument();
   });
 });

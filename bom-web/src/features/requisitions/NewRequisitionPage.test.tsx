@@ -62,16 +62,15 @@ describe("NewRequisitionPage", () => {
   it("populates lookups and renders the form", async () => {
     mockLookups();
     render(wrap(<NewRequisitionPage />));
-    await waitFor(() => expect(screen.getByLabelText(/expected qty/i)).toBeInTheDocument());
-    expect(screen.getByLabelText(/customer/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/item/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText(/customer/i)).toBeInTheDocument());
+    expect(screen.getByPlaceholderText(/qty/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/currency/i)).toBeInTheDocument();
   });
 
   it("blocks submit and surfaces validation errors when fields are missing", async () => {
     mockLookups();
     render(wrap(<NewRequisitionPage />));
-    await waitFor(() => expect(screen.getByLabelText(/expected qty/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText(/customer/i)).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: /create/i }));
     await waitFor(() =>
@@ -84,20 +83,20 @@ describe("NewRequisitionPage", () => {
     mockLookups();
     vi.mocked(api.post).mockResolvedValueOnce({ data: { id: 42, refNo: "REQ-0042" } });
     render(wrap(<NewRequisitionPage />));
-    await waitFor(() => expect(screen.getByLabelText(/expected qty/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText(/customer/i)).toBeInTheDocument());
 
-    // Pick customer via SearchableSelect — use mouseDown not click
+    // Pick customer via SearchableSelect
     const customerBox = screen.getByLabelText(/customer/i);
     fireEvent.focus(customerBox);
     fireEvent.mouseDown(screen.getByText("ACME"));
 
     // Pick item — use mouseDown not click
-    const itemBox = screen.getByLabelText(/item/i);
+    const itemBox = screen.getByPlaceholderText(/search items/i);
     fireEvent.focus(itemBox);
     fireEvent.mouseDown(screen.getByText("HDPE Pipe 20mm"));
 
     // Qty
-    fireEvent.change(screen.getByLabelText(/expected qty/i), {
+    fireEvent.change(screen.getByPlaceholderText(/qty/i), {
       target: { value: "100" },
     });
 
@@ -106,8 +105,7 @@ describe("NewRequisitionPage", () => {
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/requisitions", {
         customerId: 1,
-        itemId: 2,
-        expectedQty: 100,
+        items: [{ itemId: 2, expectedQty: 100 }],
         currencyCode: "AED",
       }),
     );
@@ -122,13 +120,14 @@ describe("NewRequisitionPage", () => {
       response: { data: { message: "Boom" } },
     });
     render(wrap(<NewRequisitionPage />));
-    await waitFor(() => expect(screen.getByLabelText(/expected qty/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText(/customer/i)).toBeInTheDocument());
 
     fireEvent.focus(screen.getByLabelText(/customer/i));
     fireEvent.mouseDown(screen.getByText("ACME"));
-    fireEvent.focus(screen.getByLabelText(/item/i));
+    const itemBox = screen.getByPlaceholderText(/search items/i);
+    fireEvent.focus(itemBox);
     fireEvent.mouseDown(screen.getByText("HDPE Pipe 20mm"));
-    fireEvent.change(screen.getByLabelText(/expected qty/i), { target: { value: "10" } });
+    fireEvent.change(screen.getByPlaceholderText(/qty/i), { target: { value: "10" } });
 
     fireEvent.click(screen.getByRole("button", { name: /create/i }));
 

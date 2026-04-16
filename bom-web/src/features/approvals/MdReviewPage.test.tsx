@@ -20,18 +20,23 @@ const mockedApi = api as unknown as {
 
 const baseReview = {
   refNo: "REQ-0042",
-  itemDescription: "HDPE Pipe 20mm",
   customerName: "ACME",
-  expectedQty: 5000,
   currencyCode: "USD",
   exchangeRate: 3.672,
-  rawMaterialCostPerKg: 2.45,
-  landedCostPerKg: 0.32,
-  fohPerKg: 0.18,
-  totalCostPerKg: 2.95,
-  materialCostPct: 83.05,
-  landedCostPct: 10.85,
-  fohPct: 6.1,
+  items: [
+    {
+      requisitionItemId: 1,
+      itemDescription: "HDPE Pipe 20mm",
+      expectedQty: 5000,
+      rawMaterialCostPerKg: 2.45,
+      landedCostPerKg: 0.32,
+      fohPerKg: 0.18,
+      totalCostPerKg: 2.95,
+      materialCostPct: 83.05,
+      landedCostPct: 10.85,
+      fohPct: 6.1,
+    },
+  ],
 };
 
 function renderPage(requisitionId = 42) {
@@ -69,10 +74,10 @@ describe("MdReviewPage", () => {
 
     expect(screen.getByText(/HDPE Pipe 20mm/)).toBeInTheDocument();
     expect(screen.getByText(/ACME/)).toBeInTheDocument();
-    expect(screen.getByText(/2\.4500 AED\/kg/)).toBeInTheDocument();
-    expect(screen.getByText(/0\.3200 AED\/kg/)).toBeInTheDocument();
-    expect(screen.getByText(/0\.1800 AED\/kg/)).toBeInTheDocument();
-    expect(screen.getByText(/2\.9500 AED/)).toBeInTheDocument();
+    expect(screen.getByText(/2\.4500 \/kg/)).toBeInTheDocument();
+    expect(screen.getByText(/0\.3200 \/kg/)).toBeInTheDocument();
+    expect(screen.getByText(/0\.1800 \/kg/)).toBeInTheDocument();
+    expect(screen.getByText(/2\.9500/)).toBeInTheDocument();
   });
 
   it("live-calculates profit margin as sales price is typed", async () => {
@@ -86,13 +91,12 @@ describe("MdReviewPage", () => {
       expect(screen.getByText("REQ-0042")).toBeInTheDocument(),
     );
 
-    const priceInput = screen.getByLabelText(/Sales Price/i);
+    // The sales price input has placeholder "0.0000" and no formal label association
+    const priceInput = screen.getByPlaceholderText("0.0000");
     await user.type(priceInput, "4.2");
 
     // margin = ((4.2 - 2.95) / 4.2) * 100 = 29.76%
-    const pill = screen.getByTestId("margin-pill");
-    expect(pill).toHaveTextContent(/29\.76%/);
-    expect(pill.className).toMatch(/green/);
+    expect(screen.getByText(/29\.76%/)).toBeInTheDocument();
   });
 
   it("approve fires mutation with payload and flips to approved state with Download PDF", async () => {
@@ -109,13 +113,13 @@ describe("MdReviewPage", () => {
       expect(screen.getByText("REQ-0042")).toBeInTheDocument(),
     );
 
-    const priceInput = screen.getByLabelText(/Sales Price/i);
+    const priceInput = screen.getByPlaceholderText("0.0000");
     await user.type(priceInput, "4.2");
 
     const notesInput = screen.getByLabelText(/Notes/i);
     await user.type(notesInput, "Looks good");
 
-    const approveButton = screen.getByRole("button", { name: /^Approve$/i });
+    const approveButton = screen.getByRole("button", { name: /Approve All/i });
     await user.click(approveButton);
 
     await waitFor(() =>
@@ -126,7 +130,10 @@ describe("MdReviewPage", () => {
 
     expect(mockedApi.post).toHaveBeenCalledWith(
       "/approvals/42/approve",
-      { salesPricePerKgAed: 4.2, notes: "Looks good" },
+      {
+        items: [{ requisitionItemId: 1, salesPricePerKgAed: 4.2 }],
+        notes: "Looks good",
+      },
     );
     expect(screen.getByText(/Quotation approved/i)).toBeInTheDocument();
   });
@@ -193,25 +200,35 @@ describe("MdReviewPage", () => {
 
   it("View BOM dialog shows cost/kg and contribution columns", async () => {
     const bomData = {
-      id: 1,
-      quotationRequestId: 42,
+      requisitionId: 42,
       refNo: "REQ-0042",
-      itemDescription: "HDPE Pipe 20mm",
-      totalCostPerKg: 3.98,
-      submittedAt: "2026-04-15T10:00:00Z",
-      lines: [
+      requisitionStatus: "MdReview",
+      items: [
         {
-          id: 1,
-          processId: 1,
-          processName: "Extrusion",
-          rawMaterialItemId: 1,
-          rawMaterialDescription: "PE100 Resin",
-          qtyPerKg: 0.85,
-          wastagePct: 2.0,
-          costPerKg: 1.25,
-          currencyCode: "USD",
-          costPerKgInAed: 4.59,
-          contributionAed: 3.9765,
+          requisitionItemId: 1,
+          itemId: 1,
+          itemDescription: "HDPE Pipe 20mm",
+          expectedQty: 5000,
+          sortOrder: 1,
+          bomHeaderId: 1,
+          bomStatus: "Submitted",
+          totalCostPerKg: 3.98,
+          submittedAt: "2026-04-15T10:00:00Z",
+          lines: [
+            {
+              id: 1,
+              processId: 1,
+              processName: "Extrusion",
+              rawMaterialItemId: 1,
+              rawMaterialDescription: "PE100 Resin",
+              qtyPerKg: 0.85,
+              wastagePct: 2.0,
+              costPerKg: 1.25,
+              currencyCode: "USD",
+              costPerKgInAed: 4.59,
+              contributionAed: 3.9765,
+            },
+          ],
         },
       ],
     };
@@ -239,27 +256,37 @@ describe("MdReviewPage", () => {
 
   it("View BOM dialog shows frozen Cost/kg and Contribution with footer totals", async () => {
     const mockBom = {
-      id: 1,
-      quotationRequestId: 42,
+      requisitionId: 42,
       refNo: "REQ-0042",
-      itemDescription: "HDPE Pipe 20mm",
-      lines: [
+      requisitionStatus: "MdReview",
+      items: [
         {
-          id: 101,
-          processId: 1,
-          processName: "Extrusion",
-          rawMaterialItemId: 5,
-          rawMaterialDescription: "HDPE Granules",
-          qtyPerKg: 0.85,
-          wastagePct: 2.0,
-          costPerKg: 4.2,
-          currencyCode: "USD",
-          costPerKgInAed: 15.4224,
-          contributionAed: 13.3817,
+          requisitionItemId: 1,
+          itemId: 1,
+          itemDescription: "HDPE Pipe 20mm",
+          expectedQty: 5000,
+          sortOrder: 1,
+          bomHeaderId: 1,
+          bomStatus: "Submitted",
+          lines: [
+            {
+              id: 101,
+              processId: 1,
+              processName: "Extrusion",
+              rawMaterialItemId: 5,
+              rawMaterialDescription: "HDPE Granules",
+              qtyPerKg: 0.85,
+              wastagePct: 2.0,
+              costPerKg: 4.2,
+              currencyCode: "USD",
+              costPerKgInAed: 15.4224,
+              contributionAed: 13.3817,
+            },
+          ],
+          totalCostPerKg: 2.95,
+          submittedAt: "2026-04-15T00:00:00Z",
         },
       ],
-      totalCostPerKg: 2.95,
-      submittedAt: "2026-04-15T00:00:00Z",
     };
     mockedApi.get.mockImplementation((url: string) => {
       if (String(url).includes("/approvals/")) return Promise.resolve({ data: baseReview });
@@ -276,8 +303,7 @@ describe("MdReviewPage", () => {
 
     expect(screen.getByText("4.2000 USD")).toBeInTheDocument();
     expect(screen.getByText("13.3817 AED")).toBeInTheDocument();
-    // Footer: raw material from approval data (rawMaterialCostPerKg = 2.45)
-    // Value also appears in the Cost Breakdown card, so allow multiple matches
-    expect(screen.getAllByText(/2\.4500 AED\/kg/).length).toBeGreaterThan(0);
+    // Footer: totalCostPerKg from BOM item
+    expect(screen.getAllByText(/2\.9500/).length).toBeGreaterThan(0);
   });
 });

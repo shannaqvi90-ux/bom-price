@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **BOM & Price Approval** is a quotation workflow system for Fujairah Plastic Factory. Sales staff submit quotation requests; BOM creators build Bills of Materials; accountants enter costing data; the Managing Director approves and dispatches PDF quotations via email.
 
-The repository currently contains only the **ASP.NET Core 8 backend**. A React 19 + Vite web frontend and React Native mobile app are planned but not yet implemented.
+The repository contains an **ASP.NET Core 8 backend** and a **React 19 + Vite web frontend** (`bom-web/`). A React Native mobile app is planned but not yet implemented.
 
 ## Commands
 
@@ -42,7 +42,7 @@ Swagger UI is available at `http://localhost:7300/swagger` when the API is runni
 ```
 BomPriceApproval.API/
   Domain/
-    Entities/        # Pure C# entity classes (no behaviour)
+    Entities/        # Pure C# entity classes (RequisitionItem, ApprovalItem, etc.)
     Enums/           # UserRole, RequisitionStatus, ItemType, LandedCostType
   Infrastructure/
     Data/
@@ -52,8 +52,14 @@ BomPriceApproval.API/
   Features/          # One folder per feature, each containing *Controller.cs + *Dtos.cs
 BomPriceApproval.Tests/
   Auth/              # AuthTests.cs
-  Bom/               # BomTests.cs
+  Bom/               # BomSaveLinesTests.cs, BomWithCostTests.cs, BomTests.cs
+  Costing/           # CostingTests.cs
   Requisitions/      # RequisitionWorkflowTests.cs
+bom-web/             # React 19 + Vite + TanStack Query + Tailwind CSS
+  src/
+    features/        # requisitions, bom, costing, approvals
+    types/api.ts     # Shared TypeScript types
+    api/             # Axios instance + lookup hooks
 ```
 
 ### Feature-Slice Controllers
@@ -64,17 +70,21 @@ Each feature folder under `Features/` is self-contained: a controller and its DT
 
 Every data-access query must scope results to the user's `BranchId` extracted from JWT claims. Admins, Accountants, and the MD have `null` BranchId and see all branches. SalesPersons are isolated to their own branch **and** to their own requisitions only.
 
+### Multi-Item Requisition Model
+
+A `QuotationRequest` contains multiple `RequisitionItem` entries (each with an `Item` + `ExpectedQty`). BOM and costing are tracked per-item via `BomHeader.RequisitionItemId`. Approval uses `ApprovalItem` (per-item price/margin on `QuotationApproval`).
+
 ### Requisition Workflow State Machine
 
 ```
-Draft → BomPending → BomInProgress → CostingPending → CostingInProgress → MdReview → Approved | Rejected
+BomPending → BomInProgress → CostingPending → CostingInProgress → MdReview → Approved | Rejected
 ```
 
 Status transitions are role-gated:
-- **SalesPerson** creates (Draft → BomPending)
-- **BomCreator** starts/submits BOM (BomPending → BomInProgress → CostingPending)
-- **Accountant** starts/submits costing (CostingPending → CostingInProgress → MdReview)
-- **ManagingDirector** approves/rejects (MdReview → Approved | Rejected)
+- **SalesPerson** creates (→ BomPending), can add/remove items
+- **BomCreator** starts/saves/submits BOM per item (BomPending → BomInProgress → CostingPending)
+- **Accountant** starts/drafts/submits costing per item (CostingPending → CostingInProgress → MdReview)
+- **ManagingDirector** approves/rejects with per-item prices (MdReview → Approved | Rejected)
 
 ### Authentication
 
@@ -120,12 +130,8 @@ Integration tests using `WebApplicationFactory<Program>` with Testcontainers for
 |---|---|
 | API (HTTP) | 7300 |
 | API (HTTPS) | 7301 |
-| React web (planned) | 5300 |
+| React web (`bom-web`) | 5300 |
 | React Native / Expo (planned) | 5500 |
-
-## Model Strategy
-- Planning & Specs (brainstorm, write-plan): use opus
-- Coding & Implementation (execute-plan, debugging): use sonnet
 
 ---
 
@@ -146,24 +152,12 @@ Always follow this order — no exceptions:
 4. Never start coding without an approved plan
 5. Never skip brainstorm phase even for small features
 
-## Execution Rules
-- Do ONE task at a time — never do multiple things together
-- After every single task: stop, show me result, wait for my approval
-- Only proceed to next task after I explicitly say "ok" or "continue"
-- If a task has multiple steps: do one step, pause, wait for approval
-- Never assume approval — always wait for my confirmation
-
 ## "continue" Command
 When the user types **"continue"** (alone, at the start of a session, or after a compact):
 1. Check claude-mem for the most recent session/observations on this project
 2. Identify where we left off (last completed task, next pending task)
 3. Resume from there — no need to re-explain what was already done
 
-## Context Window Rules
-- After every 3-4 completed tasks: stop and say exactly this:
-  "⚠️ We've completed X tasks. Please check context % on Claude HUD and confirm if I should continue."
-- Do not proceed until I reply "continue"
-- Never proceed if I say "compact" — wait for me to run /compact and confirm done
 
 ## Memory Rules
 - At session start: review CLAUDE.md and auto memory

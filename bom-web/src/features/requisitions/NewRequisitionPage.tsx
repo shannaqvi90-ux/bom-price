@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useNavigate } from "react-router-dom";
+import { Plus, Trash2 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -11,18 +12,22 @@ import { useCustomers, useItems, useActiveExchangeRates } from "@/api/lookups";
 import { useCreateRequisition } from "./requisitionsApi";
 import type { Customer, Item } from "@/types/api";
 
-const schema = z.object({
-  customer: z
-    .object({ id: z.number() })
-    .nullable()
-    .refine((v) => v !== null, { message: "Customer is required" }),
+const itemRowSchema = z.object({
   item: z
     .object({ id: z.number() })
     .nullable()
     .refine((v) => v !== null, { message: "Item is required" }),
   expectedQty: z
-    .number({ invalid_type_error: "Expected qty is required" })
+    .number({ invalid_type_error: "Qty is required" })
     .positive("Qty must be greater than zero"),
+});
+
+const schema = z.object({
+  customer: z
+    .object({ id: z.number() })
+    .nullable()
+    .refine((v) => v !== null, { message: "Customer is required" }),
+  items: z.array(itemRowSchema).min(1, "At least one item is required"),
   currencyCode: z.string().min(1, "Currency is required"),
 });
 
@@ -45,11 +50,12 @@ export default function NewRequisitionPage() {
     resolver: zodResolver(schema),
     defaultValues: {
       customer: null as unknown as { id: number },
-      item: null as unknown as { id: number },
-      expectedQty: undefined as unknown as number,
+      items: [{ item: null as unknown as { id: number }, expectedQty: undefined as unknown as number }],
       currencyCode: "AED",
     },
   });
+
+  const { fields, append, remove } = useFieldArray({ control, name: "items" });
 
   const isLoadingLookups = customersQ.isLoading || itemsQ.isLoading || ratesQ.isLoading;
   const isErrorLookups = customersQ.isError || itemsQ.isError || ratesQ.isError;
@@ -62,8 +68,10 @@ export default function NewRequisitionPage() {
     try {
       const created = await create.mutateAsync({
         customerId: values.customer!.id,
-        itemId: values.item!.id,
-        expectedQty: values.expectedQty,
+        items: values.items.map((row) => ({
+          itemId: row.item!.id,
+          expectedQty: row.expectedQty,
+        })),
         currencyCode: values.currencyCode,
       });
       navigate(`/requisitions/${created.id}`, { replace: true });
@@ -113,42 +121,68 @@ export default function NewRequisitionPage() {
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="item" className="text-sm font-medium">
-                  Item
-                </label>
-                <Controller
-                  control={control}
-                  name="item"
-                  render={({ field }) => (
-                    <SearchableSelect<Item>
-                      id="item"
-                      options={itemsQ.data ?? []}
-                      value={field.value as Item | null}
-                      onChange={field.onChange}
-                      getLabel={(i) => i.description}
-                      getValue={(i) => i.id}
-                      placeholder="Search items…"
-                    />
-                  )}
-                />
-                {errors.item && (
-                  <p className="text-xs text-destructive">{errors.item.message as string}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="expectedQty" className="text-sm font-medium">
-                  Expected Qty
-                </label>
-                <input
-                  id="expectedQty"
-                  type="number"
-                  step="0.0001"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  {...register("expectedQty", { valueAsNumber: true })}
-                />
-                {errors.expectedQty && (
-                  <p className="text-xs text-destructive">{errors.expectedQty.message}</p>
+                <label className="text-sm font-medium">Items</label>
+                {fields.map((field, index) => (
+                  <div key={field.id} className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <Controller
+                        control={control}
+                        name={`items.${index}.item`}
+                        render={({ field: f }) => (
+                          <SearchableSelect<Item>
+                            id={`item-${index}`}
+                            options={itemsQ.data ?? []}
+                            value={f.value as Item | null}
+                            onChange={f.onChange}
+                            getLabel={(i) => i.description}
+                            getValue={(i) => i.id}
+                            placeholder="Search items…"
+                          />
+                        )}
+                      />
+                      {errors.items?.[index]?.item && (
+                        <p className="text-xs text-destructive">
+                          {errors.items[index].item?.message as string}
+                        </p>
+                      )}
+                    </div>
+                    <div className="w-32">
+                      <input
+                        type="number"
+                        step="0.0001"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        placeholder="Qty"
+                        {...register(`items.${index}.expectedQty`, { valueAsNumber: true })}
+                      />
+                      {errors.items?.[index]?.expectedQty && (
+                        <p className="text-xs text-destructive">
+                          {errors.items[index].expectedQty?.message}
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      disabled={fields.length <= 1}
+                      onClick={() => remove(index)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    append({ item: null as unknown as { id: number }, expectedQty: undefined as unknown as number })
+                  }
+                >
+                  <Plus className="mr-1 h-4 w-4" /> Add Item
+                </Button>
+                {errors.items?.root && (
+                  <p className="text-xs text-destructive">{errors.items.root.message}</p>
                 )}
               </div>
 

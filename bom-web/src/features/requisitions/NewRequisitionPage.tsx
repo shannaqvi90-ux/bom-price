@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { useCustomers, useItems, useActiveExchangeRates } from "@/api/lookups";
 import { useCreateRequisition } from "./requisitionsApi";
+import { extractApiError } from "@/lib/apiError";
 import type { Customer, Item } from "@/types/api";
 
 const itemRowSchema = z.object({
@@ -99,10 +100,7 @@ export default function NewRequisitionPage() {
       });
       navigate(`/requisitions/${created.id}`, { replace: true });
     } catch (e) {
-      const msg =
-        (e as { response?: { data?: { message?: string } } }).response?.data?.message ??
-        "Failed to create requisition";
-      setServerError(msg);
+      setServerError(extractApiError(e, "Failed to create requisition"));
     }
   });
 

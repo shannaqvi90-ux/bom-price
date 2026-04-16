@@ -20,68 +20,89 @@ public class ApprovalsController(AppDbContext db, NotificationService notificati
     public async Task<IActionResult> GetReview(int requisitionId)
     {
         var req = await db.QuotationRequests
-            .Include(q => q.Item).Include(q => q.Customer).Include(q => q.Branch)
-            .Include(q => q.BomHeader).ThenInclude(b => b!.Cost)
+            .Include(q => q.Customer).Include(q => q.Branch)
+            .Include(q => q.Items).ThenInclude(ri => ri.Item)
+            .Include(q => q.Items).ThenInclude(ri => ri.BomHeader).ThenInclude(b => b!.Cost)
             .FirstOrDefaultAsync(q => q.Id == requisitionId);
 
-        if (req?.BomHeader?.Cost is null) return NotFound();
-        var c = req.BomHeader.Cost;
+        if (req is null) return NotFound();
+
+        if (req.Items.Any(ri => ri.BomHeader?.Cost is null)) return NotFound();
+
+        var items = req.Items.OrderBy(ri => ri.SortOrder).Select(ri =>
+        {
+            var c = ri.BomHeader!.Cost!;
+            var totalCost = ri.BomHeader.TotalCostPerKg;
+            var landedCost = totalCost > 0 ? totalCost - c.RawMaterialCostTotal - c.FohAmount : 0;
+
+            return new MdReviewItemDetail(
+                ri.Id, ri.Item.Description, ri.ExpectedQty,
+                c.RawMaterialCostTotal, landedCost, c.FohAmount, totalCost,
+                totalCost > 0 ? c.RawMaterialCostTotal / totalCost * 100 : 0,
+                totalCost > 0 ? landedCost / totalCost * 100 : 0,
+                totalCost > 0 ? c.FohAmount / totalCost * 100 : 0);
+        }).ToList();
 
         return Ok(new MdReviewDetail(
-            req.RefNo, req.Item.Description, req.Customer.Name,
-            req.ExpectedQty, req.CurrencyCode, req.ExchangeRateSnapshot,
-            c.RawMaterialCostTotal,
-            req.BomHeader.TotalCostPerKg > 0 ? req.BomHeader.TotalCostPerKg - c.RawMaterialCostTotal - c.FohAmount : 0,
-            c.FohAmount, req.BomHeader.TotalCostPerKg,
-            c.RawMaterialCostTotal / req.BomHeader.TotalCostPerKg * 100,
-            (req.BomHeader.TotalCostPerKg - c.RawMaterialCostTotal - c.FohAmount) / req.BomHeader.TotalCostPerKg * 100,
-            c.FohAmount / req.BomHeader.TotalCostPerKg * 100));
+            req.RefNo, req.Customer.Name,
+            req.CurrencyCode, req.ExchangeRateSnapshot, items));
     }
 
     [HttpPost("{requisitionId}/approve")]
     public async Task<IActionResult> Approve(int requisitionId, ApproveRequest request)
     {
         var req = await db.QuotationRequests
-            .Include(q => q.Item).Include(q => q.Customer)
-            .Include(q => q.Branch).Include(q => q.SalesPerson)
-            .Include(q => q.BomHeader).ThenInclude(b => b!.Cost)
+            .Include(q => q.Customer).Include(q => q.Branch)
+            .Include(q => q.SalesPerson)
+            .Include(q => q.Items).ThenInclude(ri => ri.Item)
+            .Include(q => q.Items).ThenInclude(ri => ri.BomHeader).ThenInclude(b => b!.Cost)
             .FirstOrDefaultAsync(q => q.Id == requisitionId);
 
-        if (req is null || req.BomHeader?.Cost is null) return NotFound();
+        if (req is null) return NotFound();
         if (req.Status != RequisitionStatus.MdReview)
             return BadRequest(new { message = "Requisition is not in MdReview status" });
-
-        var totalCost = req.BomHeader.TotalCostPerKg;
-        var profitMargin = (request.SalesPricePerKgAed - totalCost) / request.SalesPricePerKgAed * 100;
-        var matPct = req.BomHeader.Cost.RawMaterialCostTotal / totalCost * 100;
-        var otherPct = 100 - matPct;
-
-        decimal? foreignPrice = null;
-        if (req.CurrencyCode != "AED" && req.ExchangeRateSnapshot.HasValue)
-            foreignPrice = request.SalesPricePerKgAed / req.ExchangeRateSnapshot.Value;
 
         var approval = new QuotationApproval
         {
             QuotationRequestId = req.Id,
-            SalesPricePerKgAed = request.SalesPricePerKgAed,
-            SalesPricePerKgForeign = foreignPrice,
-            ProfitMarginPct = profitMargin,
-            MaterialCostPct = matPct,
-            OtherCostPct = otherPct,
             ApprovedByUserId = CurrentUserId,
             Notes = request.Notes,
             IsApproved = true
         };
+
+        foreach (var input in request.Items)
+        {
+            var ri = req.Items.FirstOrDefault(i => i.Id == input.RequisitionItemId);
+            if (ri?.BomHeader?.Cost is null) continue;
+
+            var totalCost = ri.BomHeader.TotalCostPerKg;
+            var profitMargin = (input.SalesPricePerKgAed - totalCost) / input.SalesPricePerKgAed * 100;
+            var matPct = ri.BomHeader.Cost.RawMaterialCostTotal / totalCost * 100;
+            var otherPct = 100 - matPct;
+
+            decimal? foreignPrice = null;
+            if (req.CurrencyCode != "AED" && req.ExchangeRateSnapshot.HasValue)
+                foreignPrice = input.SalesPricePerKgAed / req.ExchangeRateSnapshot.Value;
+
+            approval.Items.Add(new ApprovalItem
+            {
+                RequisitionItemId = ri.Id,
+                SalesPricePerKgAed = input.SalesPricePerKgAed,
+                SalesPricePerKgForeign = foreignPrice,
+                ProfitMarginPct = profitMargin,
+                MaterialCostPct = matPct,
+                OtherCostPct = otherPct
+            });
+        }
+
         db.QuotationApprovals.Add(approval);
         req.Status = RequisitionStatus.Approved;
         req.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        // Reload for PDF, notify + email — failures here must not block the approval response
         try
         {
-            await db.Entry(approval).Reference(a => a.QuotationRequest).LoadAsync();
-
+            await db.Entry(approval).Collection(a => a.Items).LoadAsync();
             var pdf = pdfSvc.GenerateQuotation(req, approval);
 
             await notificationSvc.SendAsync(req.SalesPersonId,
@@ -94,7 +115,7 @@ public class ApprovalsController(AppDbContext db, NotificationService notificati
         }
         catch
         {
-            // Approval is committed; notification/email failures are non-fatal
+            // Approval committed; notification/email failures are non-fatal
         }
 
         return Ok(new { message = "Approved", req.RefNo });
@@ -105,7 +126,6 @@ public class ApprovalsController(AppDbContext db, NotificationService notificati
     {
         var req = await db.QuotationRequests
             .Include(q => q.SalesPerson)
-            .Include(q => q.BomHeader).ThenInclude(b => b!.Cost)
             .FirstOrDefaultAsync(q => q.Id == requisitionId);
 
         if (req is null) return NotFound();
@@ -115,10 +135,6 @@ public class ApprovalsController(AppDbContext db, NotificationService notificati
         var approval = new QuotationApproval
         {
             QuotationRequestId = req.Id,
-            SalesPricePerKgAed = 0,
-            ProfitMarginPct = 0,
-            MaterialCostPct = 0,
-            OtherCostPct = 0,
             ApprovedByUserId = CurrentUserId,
             Notes = request.Notes,
             IsApproved = false
@@ -128,7 +144,6 @@ public class ApprovalsController(AppDbContext db, NotificationService notificati
         req.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        // Notify sales person and accountants
         await notificationSvc.SendAsync(req.SalesPersonId,
             $"Quotation rejected: {req.RefNo}. Reason: {request.Notes}", req.Id, "QuotationRequest");
 
@@ -146,10 +161,11 @@ public class ApprovalsController(AppDbContext db, NotificationService notificati
     public async Task<IActionResult> DownloadPdf(int requisitionId)
     {
         var req = await db.QuotationRequests
-            .Include(q => q.Item).Include(q => q.Customer)
-            .Include(q => q.Branch).Include(q => q.SalesPerson)
-            .Include(q => q.BomHeader).ThenInclude(b => b!.Cost)
-            .Include(q => q.Approval)
+            .Include(q => q.Items).ThenInclude(ri => ri.Item)
+            .Include(q => q.Customer).Include(q => q.Branch)
+            .Include(q => q.SalesPerson)
+            .Include(q => q.Items).ThenInclude(ri => ri.BomHeader).ThenInclude(b => b!.Cost)
+            .Include(q => q.Approval).ThenInclude(a => a!.Items)
             .FirstOrDefaultAsync(q => q.Id == requisitionId);
 
         if (req?.Approval is null || !req.Approval.IsApproved) return NotFound();

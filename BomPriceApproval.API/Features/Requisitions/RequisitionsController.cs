@@ -22,7 +22,8 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
     public async Task<IActionResult> GetAll()
     {
         var query = db.QuotationRequests
-            .Include(q => q.Item).Include(q => q.Customer)
+            .Include(q => q.Items)
+            .Include(q => q.Customer)
             .Include(q => q.Branch).Include(q => q.SalesPerson)
             .AsQueryable();
 
@@ -36,8 +37,8 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
 
         return Ok(await query.OrderByDescending(q => q.CreatedAt)
             .Select(q => new RequisitionListItem(
-                q.Id, q.RefNo, q.Status.ToString(), q.Item.Description,
-                q.Customer.Name, q.ExpectedQty, q.CurrencyCode,
+                q.Id, q.RefNo, q.Status.ToString(), q.Items.Count,
+                q.Customer.Name, q.CurrencyCode,
                 q.Branch.Name, q.SalesPerson.Name, q.CreatedAt))
             .ToListAsync());
     }
@@ -46,9 +47,9 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
     public async Task<IActionResult> Get(int id)
     {
         var q = await db.QuotationRequests
-            .Include(r => r.Item).Include(r => r.Customer)
+            .Include(r => r.Items).ThenInclude(ri => ri.Item)
+            .Include(r => r.Customer)
             .Include(r => r.Branch).Include(r => r.SalesPerson)
-            .Include(r => r.BomHeader).ThenInclude(b => b != null ? b.Cost : null)
             .Include(r => r.Approval)
             .FirstOrDefaultAsync(r => r.Id == id);
 
@@ -57,13 +58,13 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
 
         return Ok(new RequisitionDetail(
             q.Id, q.RefNo, q.Status.ToString(),
-            q.ItemId, q.Item.Description,
             q.CustomerId, q.Customer.Name, q.Customer.Email, q.Customer.PhoneNumber, q.Customer.Address,
-            q.ExpectedQty, q.CurrencyCode, q.ExchangeRateSnapshot,
+            q.CurrencyCode, q.ExchangeRateSnapshot,
             q.BranchId, q.Branch.Name, q.SalesPersonId, q.SalesPerson.Name,
             q.CreatedAt, q.UpdatedAt,
-            q.BomHeader is null ? null : new BomSummary(q.BomHeader.Id, q.BomHeader.TotalCostPerKg, q.BomHeader.Cost is not null),
-            q.Approval is null ? null : new ApprovalSummary(q.Approval.SalesPricePerKgAed, q.Approval.SalesPricePerKgForeign, q.Approval.ProfitMarginPct, q.Approval.IsApproved)));
+            q.Items.OrderBy(ri => ri.SortOrder).Select(ri => new RequisitionItemDto(
+                ri.Id, ri.ItemId, ri.Item.Description, ri.ExpectedQty, ri.SortOrder)).ToList(),
+            q.Approval is null ? null : new ApprovalSummary(q.Approval.IsApproved)));
     }
 
     [HttpPost]
@@ -72,6 +73,9 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
     {
         if (CurrentBranchId is null)
             return BadRequest(new { message = "A branch-assigned sales person is required to create requisitions." });
+
+        if (req.Items.Count == 0)
+            return BadRequest(new { message = "At least one item is required." });
 
         decimal? rateSnapshot = null;
         if (req.CurrencyCode != "AED")
@@ -88,17 +92,20 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
             BranchId = CurrentBranchId.Value,
             SalesPersonId = CurrentUserId,
             CustomerId = req.CustomerId,
-            ItemId = req.ItemId,
-            ExpectedQty = req.ExpectedQty,
             CurrencyCode = req.CurrencyCode,
             ExchangeRateSnapshot = rateSnapshot,
-            Status = RequisitionStatus.BomPending
+            Status = RequisitionStatus.BomPending,
+            Items = req.Items.Select((item, i) => new RequisitionItem
+            {
+                ItemId = item.ItemId,
+                ExpectedQty = item.ExpectedQty,
+                SortOrder = i + 1
+            }).ToList()
         };
 
         db.QuotationRequests.Add(requisition);
         await db.SaveChangesAsync();
 
-        // Notify BomCreators in the same branch
         var bomCreators = await db.Users
             .Where(u => u.Role == UserRole.BomCreator && (u.BranchId == requisition.BranchId || u.BranchId == null) && u.IsActive)
             .ToListAsync();
@@ -108,6 +115,50 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
                 $"New BOM request: {requisition.RefNo}", requisition.Id, "QuotationRequest");
 
         return CreatedAtAction(nameof(Get), new { id = requisition.Id }, new { requisition.Id, requisition.RefNo });
+    }
+
+    [HttpPost("{id}/items")]
+    [Authorize(Roles = "SalesPerson")]
+    public async Task<IActionResult> AddItem(int id, AddRequisitionItemRequest req)
+    {
+        var q = await db.QuotationRequests.Include(r => r.Items).FirstOrDefaultAsync(r => r.Id == id);
+        if (q is null) return NotFound();
+        if (q.SalesPersonId != CurrentUserId) return Forbid();
+        if (q.Status != RequisitionStatus.BomPending)
+            return BadRequest(new { message = "Items can only be added when status is BomPending" });
+
+        var maxSort = q.Items.Count > 0 ? q.Items.Max(ri => ri.SortOrder) : 0;
+        var ri = new RequisitionItem
+        {
+            QuotationRequestId = id,
+            ItemId = req.ItemId,
+            ExpectedQty = req.ExpectedQty,
+            SortOrder = maxSort + 1
+        };
+        db.RequisitionItems.Add(ri);
+        await db.SaveChangesAsync();
+        return Ok(new { ri.Id });
+    }
+
+    [HttpDelete("{id}/items/{requisitionItemId}")]
+    [Authorize(Roles = "SalesPerson")]
+    public async Task<IActionResult> RemoveItem(int id, int requisitionItemId)
+    {
+        var q = await db.QuotationRequests.Include(r => r.Items).FirstOrDefaultAsync(r => r.Id == id);
+        if (q is null) return NotFound();
+        if (q.SalesPersonId != CurrentUserId) return Forbid();
+        if (q.Status != RequisitionStatus.BomPending)
+            return BadRequest(new { message = "Items can only be removed when status is BomPending" });
+
+        if (q.Items.Count <= 1)
+            return BadRequest(new { message = "Cannot remove the last item" });
+
+        var ri = q.Items.FirstOrDefault(i => i.Id == requisitionItemId);
+        if (ri is null) return NotFound();
+
+        db.RequisitionItems.Remove(ri);
+        await db.SaveChangesAsync();
+        return NoContent();
     }
 
     private bool CanAccess(QuotationRequest q) => CurrentRole switch

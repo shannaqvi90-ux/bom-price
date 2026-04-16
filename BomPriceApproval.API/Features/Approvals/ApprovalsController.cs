@@ -77,20 +77,25 @@ public class ApprovalsController(AppDbContext db, NotificationService notificati
         req.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        // Reload for PDF
-        await db.Entry(approval).Reference(a => a.QuotationRequest).LoadAsync();
+        // Reload for PDF, notify + email — failures here must not block the approval response
+        try
+        {
+            await db.Entry(approval).Reference(a => a.QuotationRequest).LoadAsync();
 
-        // Generate PDF
-        var pdf = pdfSvc.GenerateQuotation(req, approval);
+            var pdf = pdfSvc.GenerateQuotation(req, approval);
 
-        // Notify + email sales person
-        await notificationSvc.SendAsync(req.SalesPersonId,
-            $"Quotation approved! Download ready: {req.RefNo}", req.Id, "QuotationRequest");
+            await notificationSvc.SendAsync(req.SalesPersonId,
+                $"Quotation approved! Download ready: {req.RefNo}", req.Id, "QuotationRequest");
 
-        await emailSvc.SendAsync(req.SalesPerson.Email, req.SalesPerson.Name,
-            $"Quotation Approved – {req.RefNo}",
-            $"<p>Dear {req.SalesPerson.Name},</p><p>Your quotation <strong>{req.RefNo}</strong> has been approved. Please find the quotation PDF attached.</p><p>Regards,<br/>Fujairah Plastic Factory</p>",
-            pdf, $"{req.RefNo}-Quotation.pdf");
+            await emailSvc.SendAsync(req.SalesPerson.Email, req.SalesPerson.Name,
+                $"Quotation Approved – {req.RefNo}",
+                $"<p>Dear {req.SalesPerson.Name},</p><p>Your quotation <strong>{req.RefNo}</strong> has been approved. Please find the quotation PDF attached.</p><p>Regards,<br/>Fujairah Plastic Factory</p>",
+                pdf, $"{req.RefNo}-Quotation.pdf");
+        }
+        catch
+        {
+            // Approval is committed; notification/email failures are non-fatal
+        }
 
         return Ok(new { message = "Approved", req.RefNo });
     }

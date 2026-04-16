@@ -72,6 +72,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithOne(q => q.Approval)
             .HasForeignKey<QuotationApproval>(a => a.QuotationRequestId);
 
+        mb.Entity<QuotationApproval>()
+            .HasOne(a => a.ApprovedBy)
+            .WithMany()
+            .HasForeignKey(a => a.ApprovedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         mb.Entity<BomLine>()
             .HasOne(l => l.RawMaterial)
             .WithMany()

@@ -180,6 +180,61 @@ public class ValidationTests(WebApplicationFactory<Program> factory)
         body!.Message.ToLower().Should().Contain("already");
     }
 
+    private record RaceTestRequisitionDetailItem(int Id, int ItemId);
+    private record RaceTestRequisitionDetail(int Id, List<RaceTestRequisitionDetailItem> Items);
+
+    [Fact]
+    public async Task AddItem_ParallelDuplicate_RejectsOneRequest()
+    {
+        // Seed: create requisition with item A; create a second item B to add.
+        var sp = await LoginAsync("ali@test.com", "Test@1234");
+        var itemA = await CreateActiveFinishedGoodAsync(sp);
+        var itemB = await CreateActiveFinishedGoodAsync(sp);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", sp);
+        var customerId = await GetCustomerIdAsync();
+
+        var createResp = await _client.PostAsJsonAsync("/api/requisitions", new
+        {
+            CustomerId = customerId,
+            Items = new[] { new { ItemId = itemA, ExpectedQty = 1m } },
+            CurrencyCode = "AED"
+        });
+        createResp.StatusCode.Should().Be(HttpStatusCode.Created);
+        var created = await createResp.Content.ReadFromJsonAsync<CreatedRequisition>();
+
+        var endpoint = $"/api/requisitions/{created!.Id}/items";
+        var payload = new { ItemId = itemB, ExpectedQty = 2m };
+
+        async Task<HttpResponseMessage> PostAdd()
+        {
+            var req = new HttpRequestMessage(HttpMethod.Post, endpoint)
+            {
+                Content = JsonContent.Create(payload),
+            };
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", sp);
+            return await _client.SendAsync(req);
+        }
+
+        // Kick off two requests in parallel.
+        var task1 = PostAdd();
+        var task2 = PostAdd();
+        var responses = await Task.WhenAll(task1, task2);
+
+        // At least one succeeded (2xx), at least one rejected (400 or 500).
+        var successCount = responses.Count(r => (int)r.StatusCode >= 200 && (int)r.StatusCode < 300);
+        var failCount = responses.Length - successCount;
+        successCount.Should().Be(1, "exactly one request must succeed under a duplicate-add race");
+        failCount.Should().Be(1, "exactly one request must be rejected");
+
+        // Verify DB state: after the race, requisition has exactly 2 items (itemA + itemB, not 3).
+        var detailResp = await _client.GetAsync($"/api/requisitions/{created.Id}");
+        detailResp.StatusCode.Should().Be(HttpStatusCode.OK);
+        var detail = await detailResp.Content.ReadFromJsonAsync<RaceTestRequisitionDetail>();
+        detail!.Items.Count.Should().Be(2);
+        detail.Items.Count(i => i.ItemId == itemB).Should().Be(1);
+    }
+
     [Fact]
     public async Task AddItem_ZeroQty_Returns400()
     {

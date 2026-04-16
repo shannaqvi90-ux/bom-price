@@ -77,6 +77,21 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
         if (req.Items.Count == 0)
             return BadRequest(new { message = "At least one item is required." });
 
+        if (req.Items.Any(i => i.ExpectedQty <= 0))
+            return BadRequest(new { message = "ExpectedQty must be greater than 0." });
+
+        var distinctItemIds = req.Items.Select(i => i.ItemId).Distinct().ToList();
+        if (distinctItemIds.Count != req.Items.Count)
+            return BadRequest(new { message = "Duplicate items in requisition are not allowed." });
+
+        var activeItemIds = await db.Items
+            .Where(i => distinctItemIds.Contains(i.Id) && i.IsActive)
+            .Select(i => i.Id)
+            .ToListAsync();
+        var missingItems = distinctItemIds.Except(activeItemIds).ToList();
+        if (missingItems.Count > 0)
+            return BadRequest(new { message = $"Unknown or inactive items: {string.Join(", ", missingItems)}" });
+
         decimal? rateSnapshot = null;
         if (req.CurrencyCode != "AED")
         {
@@ -126,6 +141,16 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
         if (q.SalesPersonId != CurrentUserId) return Forbid();
         if (q.Status != RequisitionStatus.BomPending)
             return BadRequest(new { message = "Items can only be added when status is BomPending" });
+
+        if (req.ExpectedQty <= 0)
+            return BadRequest(new { message = "ExpectedQty must be greater than 0." });
+
+        if (q.Items.Any(i => i.ItemId == req.ItemId))
+            return BadRequest(new { message = "Item already added to this requisition." });
+
+        var itemIsValid = await db.Items.AnyAsync(i => i.Id == req.ItemId && i.IsActive);
+        if (!itemIsValid)
+            return BadRequest(new { message = $"Unknown or inactive item: {req.ItemId}" });
 
         var maxSort = q.Items.Count > 0 ? q.Items.Max(ri => ri.SortOrder) : 0;
         var ri = new RequisitionItem

@@ -99,6 +99,8 @@ public class ValidationTests(WebApplicationFactory<Program> factory)
         });
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await resp.Content.ReadFromJsonAsync<ErrorResponse>();
+        body!.Message.Should().Contain("ExpectedQty");
     }
 
     [Fact]
@@ -127,6 +129,8 @@ public class ValidationTests(WebApplicationFactory<Program> factory)
         var sp = await LoginAsync("ali@test.com", "Test@1234");
         var itemId = await CreateActiveFinishedGoodAsync(sp);
 
+        // Note: this test deactivates the item and does not reactivate it.
+        // Each test creates its own item, so this tombstoning is safe.
         // Deactivate via admin
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", admin);
         var patch = await _client.PatchAsJsonAsync($"/api/items/{itemId}/status",
@@ -144,6 +148,8 @@ public class ValidationTests(WebApplicationFactory<Program> factory)
         });
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await resp.Content.ReadFromJsonAsync<ErrorResponse>();
+        body!.Message.ToLower().Should().Contain("inactive");
     }
 
     [Fact]
@@ -169,6 +175,8 @@ public class ValidationTests(WebApplicationFactory<Program> factory)
             new { ItemId = itemA, ExpectedQty = 2m });
 
         addResp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await addResp.Content.ReadFromJsonAsync<ErrorResponse>();
+        body!.Message.ToLower().Should().Contain("already");
     }
 
     [Fact]
@@ -194,6 +202,8 @@ public class ValidationTests(WebApplicationFactory<Program> factory)
             new { ItemId = itemB, ExpectedQty = 0m });
 
         addResp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await addResp.Content.ReadFromJsonAsync<ErrorResponse>();
+        body!.Message.Should().Contain("ExpectedQty");
     }
 }
 

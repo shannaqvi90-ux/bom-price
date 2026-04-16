@@ -25,21 +25,14 @@ const columns: ColumnDef<RequisitionListItem>[] = [
     cell: (info) => <StatusBadge status={info.getValue() as RequisitionListItem["status"]} />,
   },
   {
-    accessorKey: "itemDescription",
-    header: "Item",
+    accessorKey: "itemCount",
+    header: "Items",
     cell: (info) => {
-      const v = info.getValue() as string;
-      return <span title={v}>{v.length > 40 ? `${v.slice(0, 40)}…` : v}</span>;
+      const count = info.getValue() as number;
+      return <span>{count} {count === 1 ? "item" : "items"}</span>;
     },
-    enableSorting: false,
   },
   { accessorKey: "customerName", header: "Customer" },
-  {
-    id: "qty",
-    header: "Qty",
-    accessorFn: (row) => `${row.expectedQty} ${row.currencyCode}`,
-    enableSorting: false,
-  },
   { accessorKey: "branchName", header: "Branch" },
   {
     accessorKey: "createdAt",

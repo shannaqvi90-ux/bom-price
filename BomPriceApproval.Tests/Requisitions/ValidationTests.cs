@@ -19,9 +19,9 @@ public class ValidationTests(WebApplicationFactory<Program> factory)
         return body!.AccessToken;
     }
 
-    private async Task<int> CreateActiveFinishedGoodAsync(string token)
+    private async Task<int> CreateActiveFinishedGoodAsync(string adminToken)
     {
-        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
         var code = $"FG-{Guid.NewGuid():N}".Substring(0, 10);
         var resp = await _client.PostAsJsonAsync("/api/items",
             new { Code = code, Description = "Test FG", Type = "FinishedGood", LastPurchasePrice = (decimal?)null });
@@ -39,10 +39,10 @@ public class ValidationTests(WebApplicationFactory<Program> factory)
     [Fact]
     public async Task Create_DuplicateItemIds_Returns400()
     {
-        var spToken = await LoginAsync("ali@test.com", "Test@1234");
-        var itemId = await CreateActiveFinishedGoodAsync(spToken);
+        var sp = await LoginAsync("ali@test.com", "Test@1234");
+        var itemId = await CreateActiveFinishedGoodAsync(sp);
 
-        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", spToken);
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", sp);
         var customerId = await GetCustomerIdAsync();
 
         var resp = await _client.PostAsJsonAsync("/api/requisitions", new
@@ -60,10 +60,13 @@ public class ValidationTests(WebApplicationFactory<Program> factory)
         var body = await resp.Content.ReadFromJsonAsync<ErrorResponse>();
         body!.Message.Should().Contain("Duplicate");
     }
-
-    private record LoginResponse(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId);
-    private record ItemDto(int Id, string Code, string Description, string Type, int BranchId, bool IsActive, decimal? LastPurchasePrice);
-    private record CustomerDto(int Id, string Code, string Name);
-    private record ErrorResponse(string Message);
-    private record CreatedRequisition(int Id, string RefNo);
 }
+
+public record LoginResponse(string AccessToken, string RefreshToken);
+public record ItemDto(int Id, string Code, string Description, string Type);
+public record CustomerDto(int Id, string Name);
+public record ErrorResponse(string Message);
+public record CreatedRequisition(int Id, string RefNo);
+public record RequisitionItemDetailDto(int Id, int ItemId);
+public record RequisitionDetailDto(int Id, string RefNo, string Status, List<RequisitionItemDetailDto> Items);
+public record ProcessDto(int Id, string Name);

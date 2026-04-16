@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -132,5 +133,40 @@ describe("NewRequisitionPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /create/i }));
 
     await waitFor(() => expect(screen.getByText(/boom/i)).toBeInTheDocument());
+  });
+
+  it("excludes already-selected items from the second row's picker", async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.includes("/customers")) return Promise.resolve({ data: [{ id: 1, name: "ACME" }] });
+      if (url.includes("/items"))
+        return Promise.resolve({
+          data: [
+            { id: 10, code: "A", description: "Item A", type: "FinishedGood", isActive: true },
+            { id: 20, code: "B", description: "Item B", type: "FinishedGood", isActive: true },
+          ],
+        });
+      if (url.includes("/exchange-rates/active")) return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: [] });
+    });
+
+    const user = userEvent.setup();
+    render(wrap(<NewRequisitionPage />));
+    await waitFor(() => expect(screen.getByRole("button", { name: /Add Item/i })).toBeInTheDocument());
+
+    // Add a second row
+    await user.click(screen.getByRole("button", { name: /Add Item/i }));
+
+    // Select Item A in row 0
+    const pickers = screen.getAllByPlaceholderText(/Search items/i);
+    await user.click(pickers[0]);
+    await user.click(screen.getByText("Item A"));
+
+    // Open row 1's picker — Item A should no longer appear inside its dropdown list
+    await user.click(pickers[1]);
+    // Row 1's dropdown should only show Item B (not Item A which is already selected in row 0)
+    const dropdownItems = screen.queryAllByRole("listitem");
+    const dropdownTexts = dropdownItems.map((el) => el.textContent);
+    expect(dropdownTexts).not.toContain("Item A");
+    expect(dropdownTexts).toContain("Item B");
   });
 });

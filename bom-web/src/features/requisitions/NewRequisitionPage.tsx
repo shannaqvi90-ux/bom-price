@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useForm, Controller, useFieldArray } from "react-hook-form";
+import { useForm, Controller, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useNavigate } from "react-router-dom";
@@ -27,7 +27,18 @@ const schema = z.object({
     .object({ id: z.number() })
     .nullable()
     .refine((v) => v !== null, { message: "Customer is required" }),
-  items: z.array(itemRowSchema).min(1, "At least one item is required"),
+  items: z
+    .array(itemRowSchema)
+    .min(1, "At least one item is required")
+    .refine(
+      (arr) => {
+        const ids = arr
+          .map((r) => r.item?.id)
+          .filter((v): v is number => typeof v === "number");
+        return new Set(ids).size === ids.length;
+      },
+      { message: "Duplicate items not allowed" },
+    ),
   currencyCode: z.string().min(1, "Currency is required"),
 });
 
@@ -56,6 +67,18 @@ export default function NewRequisitionPage() {
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
+
+  const watchedItems = useWatch({ control, name: "items" });
+
+  const availableItemsFor = (rowIndex: number): Item[] => {
+    const base = itemsQ.data ?? [];
+    const takenIds = new Set(
+      (watchedItems ?? [])
+        .map((row, i) => (i !== rowIndex ? row?.item?.id : undefined))
+        .filter((v): v is number => typeof v === "number"),
+    );
+    return base.filter((it) => !takenIds.has(it.id));
+  };
 
   const isLoadingLookups = customersQ.isLoading || itemsQ.isLoading || ratesQ.isLoading;
   const isErrorLookups = customersQ.isError || itemsQ.isError || ratesQ.isError;
@@ -131,7 +154,7 @@ export default function NewRequisitionPage() {
                         render={({ field: f }) => (
                           <SearchableSelect<Item>
                             id={`item-${index}`}
-                            options={itemsQ.data ?? []}
+                            options={availableItemsFor(index)}
                             value={f.value as Item | null}
                             onChange={f.onChange}
                             getLabel={(i) => i.description}

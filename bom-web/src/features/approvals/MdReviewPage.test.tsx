@@ -5,6 +5,16 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import MdReviewPage from "./MdReviewPage";
 import { api } from "@/api/axios";
+import { notify } from "@/lib/notify";
+
+vi.mock("@/lib/notify", () => ({
+  notify: {
+    error: vi.fn(),
+    success: vi.fn(),
+    info: vi.fn(),
+    fromApiError: vi.fn(),
+  },
+}));
 
 vi.mock("@/api/axios", () => ({
   api: {
@@ -151,9 +161,9 @@ describe("MdReviewPage", () => {
 
     await user.click(screen.getByRole("button", { name: /^reject$/i }));
 
-    expect(
-      screen.getByText(/Notes are required when rejecting/i),
-    ).toBeInTheDocument();
+    expect(notify.error).toHaveBeenCalledWith(
+      expect.stringContaining("Notes are required"),
+    );
     expect(mockedApi.post).not.toHaveBeenCalled();
   });
 

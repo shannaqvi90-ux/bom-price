@@ -1,7 +1,7 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useState } from "react";
-import { extractApiError } from "@/lib/apiError";
+import { notify } from "@/lib/notify";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
@@ -39,7 +39,6 @@ export default function MdReviewPage() {
   const [pageState, setPageState] = useState<PageState>({ kind: "reviewing" });
   const [salesPrices, setSalesPrices] = useState<Record<number, string>>({});
   const [notes, setNotes] = useState("");
-  const [validationError, setValidationError] = useState<string | null>(null);
   const [showBom, setShowBom] = useState(false);
 
   const httpStatus = (error as { response?: { status?: number } } | null)
@@ -91,13 +90,12 @@ export default function MdReviewPage() {
   });
 
   async function handleApprove() {
-    setValidationError(null);
     const items = data!.items.map((item) => {
       const price = Number(salesPrices[item.requisitionItemId] ?? "");
       return { requisitionItemId: item.requisitionItemId, salesPricePerKgAed: price };
     });
     if (items.some((i) => !Number.isFinite(i.salesPricePerKgAed) || i.salesPricePerKgAed <= 0)) {
-      setValidationError("Enter a valid sales price for all items.");
+      notify.error("Enter a valid sales price for all items.");
       return;
     }
     try {
@@ -105,16 +103,16 @@ export default function MdReviewPage() {
         requisitionId,
         payload: { items, notes: notes || undefined },
       });
+      notify.success("Quotation approved");
       setPageState({ kind: "approved" });
     } catch (e) {
-      setValidationError(extractApiError(e, "Failed to approve."));
+      notify.fromApiError(e, "Failed to approve.");
     }
   }
 
   async function handleReject() {
-    setValidationError(null);
     if (notes.trim().length === 0) {
-      setValidationError("Notes are required when rejecting.");
+      notify.error("Notes are required when rejecting.");
       return;
     }
     try {
@@ -122,9 +120,10 @@ export default function MdReviewPage() {
         requisitionId,
         payload: { notes: notes.trim() },
       });
+      notify.success("Quotation rejected");
       navigate(`/requisitions/${requisitionId}`);
     } catch (e) {
-      setValidationError(extractApiError(e, "Failed to reject."));
+      notify.fromApiError(e, "Failed to reject.");
     }
   }
 
@@ -275,9 +274,6 @@ export default function MdReviewPage() {
                 />
               </div>
 
-              {validationError && (
-                <p className="text-sm text-destructive">{validationError}</p>
-              )}
 
               <div className="flex gap-2">
                 <Button

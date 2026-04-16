@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { RequisitionTimeline } from "./components/RequisitionTimeline";
 import { useRequisition } from "./requisitionsApi";
-import { useStartCosting } from "@/features/costing/costingApi";
 import { useAuthStore } from "@/store/authStore";
 import { formatRelative } from "@/utils/date";
 import type { RequisitionDetail, RequisitionStatus, UserRole } from "@/types/api";
@@ -23,21 +22,14 @@ function actionButtonFor(
   role: UserRole | undefined,
   status: RequisitionStatus,
 ): { label: string; path: string } | null {
-  if (role === "BomCreator" && status === "BomPending") {
+  if (role === "BomCreator" && status === "BomPending")
     return { label: "Start BOM", path: "bom" };
-  }
-  if (role === "BomCreator" && status === "BomInProgress") {
+  if (role === "BomCreator" && status === "BomInProgress")
     return { label: "Continue BOM", path: "bom" };
-  }
-  if (role === "Accountant" && status === "CostingPending") {
-    return { label: "Start Costing", path: "costing" };
-  }
-  if (role === "Accountant" && status === "CostingInProgress") {
-    return { label: "Continue Costing", path: "costing" };
-  }
-  if (role === "ManagingDirector" && status === "MdReview") {
+  if (role === "Accountant" && (status === "CostingPending" || status === "CostingInProgress"))
+    return { label: status === "CostingPending" ? "Start Costing" : "Continue Costing", path: "costing" };
+  if (role === "ManagingDirector" && status === "MdReview")
     return { label: "Review & Approve", path: "approval" };
-  }
   return null;
 }
 
@@ -47,7 +39,6 @@ export default function RequisitionDetailPage() {
   const { data, isLoading, error } = useRequisition(numericId);
   const role = useAuthStore((s) => s.user?.role);
   const navigate = useNavigate();
-  const startCosting = useStartCosting();
 
   const httpStatus = (error as { response?: { status?: number } } | null)?.response?.status;
 
@@ -108,23 +99,12 @@ export default function RequisitionDetailPage() {
             <span className="text-xs text-muted-foreground">{formatRelative(r.createdAt)}</span>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            {r.itemDescription} — {r.customerName}
+            {r.items.length} {r.items.length === 1 ? "item" : "items"} — {r.customerName}
           </p>
         </div>
         {action && (
-          <Button
-            disabled={startCosting.isPending}
-            onClick={() => {
-              if (action.label === "Start Costing") {
-                startCosting.mutate(numericId, {
-                  onSuccess: () => navigate(`/requisitions/${id}/costing`),
-                });
-              } else {
-                navigate(`/requisitions/${id}/${action.path}`);
-              }
-            }}
-          >
-            {startCosting.isPending ? "Starting…" : action.label}
+          <Button onClick={() => navigate(`/requisitions/${id}/${action.path}`)}>
+            {action.label}
           </Button>
         )}
       </div>
@@ -157,7 +137,7 @@ export default function RequisitionDetailPage() {
           <Card>
             <CardHeader><CardTitle>Quotation</CardTitle></CardHeader>
             <CardContent>
-              <LabeledValue label="Expected Qty" value={`${r.expectedQty} ${r.currencyCode}`} />
+              <LabeledValue label="Currency" value={r.currencyCode} />
               {r.exchangeRateSnapshot !== null && (
                 <LabeledValue label="Exchange rate" value={r.exchangeRateSnapshot} />
               )}
@@ -167,31 +147,10 @@ export default function RequisitionDetailPage() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>BOM</CardTitle></CardHeader>
-            <CardContent>
-              {r.bom ? (
-                <>
-                  <LabeledValue label="Total cost / kg" value={r.bom.totalCostPerKg} />
-                  <LabeledValue label="Has cost" value={r.bom.hasCost ? "Yes" : "No"} />
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">BOM not yet created.</p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
             <CardHeader><CardTitle>Approval</CardTitle></CardHeader>
             <CardContent>
               {r.approval ? (
-                <>
-                  <LabeledValue label="Sales price (AED)" value={r.approval.salesPriceAed} />
-                  {r.approval.salesPriceForeign !== null && (
-                    <LabeledValue label="Sales price (foreign)" value={r.approval.salesPriceForeign} />
-                  )}
-                  <LabeledValue label="Profit margin" value={`${r.approval.profitMarginPct}%`} />
-                  <LabeledValue label="Approved" value={r.approval.isApproved ? "Yes" : "No"} />
-                </>
+                <LabeledValue label="Approved" value={r.approval.isApproved ? "Yes" : "No"} />
               ) : (
                 <p className="text-sm text-muted-foreground">Not yet submitted for approval.</p>
               )}
@@ -199,6 +158,30 @@ export default function RequisitionDetailPage() {
           </Card>
         </div>
       </div>
+
+      <Card>
+        <CardHeader><CardTitle>Items</CardTitle></CardHeader>
+        <CardContent>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-muted-foreground">
+                <th className="pb-2 font-medium">#</th>
+                <th className="pb-2 font-medium">Item</th>
+                <th className="pb-2 text-right font-medium">Expected Qty</th>
+              </tr>
+            </thead>
+            <tbody>
+              {r.items.map((ri, i) => (
+                <tr key={ri.id} className="border-b last:border-0">
+                  <td className="py-2">{i + 1}</td>
+                  <td className="py-2">{ri.itemDescription}</td>
+                  <td className="py-2 text-right font-mono">{ri.expectedQty.toLocaleString()} kg</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
     </div>
   );
 }

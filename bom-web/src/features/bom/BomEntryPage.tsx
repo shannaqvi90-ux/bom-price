@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Check, X } from "lucide-react";
-import { extractApiError } from "@/lib/apiError";
+import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
@@ -84,7 +84,6 @@ export default function BomEntryPage() {
   const hasAutoStartedRef = useRef(false);
   const [startError, setStartError] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<{ processName: string } | null>(null);
   const [pendingDuplicate, setPendingDuplicate] = useState<LocalLine | null>(null);
 
@@ -262,10 +261,12 @@ export default function BomEntryPage() {
   // ── Submit ─────────────────────────────────────────────────────────────────
 
   function handleSubmit() {
-    setSubmitError(null);
     submitBom.mutate(requisitionId, {
-      onSuccess: () => navigate(`/requisitions/${requisitionId}`),
-      onError: (err) => setSubmitError(extractApiError(err)),
+      onSuccess: () => {
+        notify.success("BOM submitted for costing");
+        navigate(`/requisitions/${requisitionId}`);
+      },
+      onError: (err) => notify.fromApiError(err, "Failed to submit BOM"),
     });
   }
 
@@ -572,14 +573,13 @@ export default function BomEntryPage() {
 
           {/* Submit All button */}
           {!isReadOnly && (
-            <div className="flex flex-col items-end gap-1">
+            <div className="flex justify-end">
               <Button
                 onClick={handleSubmit}
                 disabled={!allItemsReady || submitBom.isPending}
               >
                 {submitBom.isPending ? "Submitting…" : "Submit All"}
               </Button>
-              {submitError && <span className="text-xs text-destructive">{submitError}</span>}
             </div>
           )}
         </div>

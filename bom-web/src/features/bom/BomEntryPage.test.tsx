@@ -9,6 +9,15 @@ import type { BomReviewResponse, RequisitionDetail } from "@/types/api";
 
 vi.mock("@/api/axios", () => ({ api: { get: vi.fn(), post: vi.fn(), put: vi.fn() } }));
 
+vi.mock("@/lib/notify", () => ({
+  notify: {
+    error: vi.fn(),
+    success: vi.fn(),
+    info: vi.fn(),
+    fromApiError: vi.fn(),
+  },
+}));
+
 import { api } from "@/api/axios";
 import BomEntryPage from "./BomEntryPage";
 

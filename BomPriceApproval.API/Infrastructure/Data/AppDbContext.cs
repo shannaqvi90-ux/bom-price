@@ -13,10 +13,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Process> Processes => Set<Process>();
     public DbSet<ExchangeRate> ExchangeRates => Set<ExchangeRate>();
     public DbSet<QuotationRequest> QuotationRequests => Set<QuotationRequest>();
+    public DbSet<RequisitionItem> RequisitionItems => Set<RequisitionItem>();
     public DbSet<BomHeader> BomHeaders => Set<BomHeader>();
     public DbSet<BomLine> BomLines => Set<BomLine>();
     public DbSet<BomCost> BomCosts => Set<BomCost>();
     public DbSet<QuotationApproval> QuotationApprovals => Set<QuotationApproval>();
+    public DbSet<ApprovalItem> ApprovalItems => Set<ApprovalItem>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<CostingDraft> CostingDrafts => Set<CostingDraft>();
     public DbSet<BomCostLine> BomCostLines => Set<BomCostLine>();
@@ -45,6 +47,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasForeignKey(c => c.CreatedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // RequisitionItem → QuotationRequest (many:1)
+        mb.Entity<QuotationRequest>()
+            .HasMany(q => q.Items)
+            .WithOne(ri => ri.QuotationRequest)
+            .HasForeignKey(ri => ri.QuotationRequestId);
+
+        // BomHeader → RequisitionItem (1:1)
+        mb.Entity<BomHeader>()
+            .HasOne(b => b.RequisitionItem)
+            .WithOne(ri => ri.BomHeader)
+            .HasForeignKey<BomHeader>(b => b.RequisitionItemId);
+
         mb.Entity<BomHeader>()
             .HasOne(b => b.CreatedBy)
             .WithMany()
@@ -67,6 +81,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasForeignKey(e => e.SetByUserId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // QuotationApproval → QuotationRequest (1:1)
         mb.Entity<QuotationApproval>()
             .HasOne(a => a.QuotationRequest)
             .WithOne(q => q.Approval)
@@ -78,25 +93,36 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasForeignKey(a => a.ApprovedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // ApprovalItem → QuotationApproval (many:1)
+        mb.Entity<QuotationApproval>()
+            .HasMany(a => a.Items)
+            .WithOne(ai => ai.QuotationApproval)
+            .HasForeignKey(ai => ai.QuotationApprovalId);
+
+        // ApprovalItem → RequisitionItem (1:1)
+        mb.Entity<ApprovalItem>()
+            .HasOne(a => a.RequisitionItem)
+            .WithOne(ri => ri.ApprovalItem)
+            .HasForeignKey<ApprovalItem>(a => a.RequisitionItemId);
+
         mb.Entity<BomLine>()
             .HasOne(l => l.RawMaterial)
             .WithMany()
             .HasForeignKey(l => l.RawMaterialItemId);
 
         // Decimal precision
+        mb.Entity<RequisitionItem>().Property(ri => ri.ExpectedQty).HasPrecision(18, 4);
         mb.Entity<BomLine>().Property(b => b.QtyPerKg).HasPrecision(18, 6);
         mb.Entity<BomLine>().Property(b => b.WastagePct).HasPrecision(18, 4);
         mb.Entity<BomCost>().Property(b => b.RawMaterialCostTotal).HasPrecision(18, 4);
         mb.Entity<BomCost>().Property(b => b.LandedCostValue).HasPrecision(18, 4);
         mb.Entity<BomCost>().Property(b => b.FohAmount).HasPrecision(18, 4);
-        mb.Entity<BomCost>().Property(b => b.TotalCostPerKg).HasPrecision(18, 4);
-        mb.Entity<QuotationApproval>().Property(a => a.SalesPricePerKgAed).HasPrecision(18, 4);
-        mb.Entity<QuotationApproval>().Property(a => a.SalesPricePerKgForeign).HasPrecision(18, 4);
-        mb.Entity<QuotationApproval>().Property(a => a.ProfitMarginPct).HasPrecision(18, 4);
-        mb.Entity<QuotationApproval>().Property(a => a.MaterialCostPct).HasPrecision(18, 4);
-        mb.Entity<QuotationApproval>().Property(a => a.OtherCostPct).HasPrecision(18, 4);
+        mb.Entity<ApprovalItem>().Property(a => a.SalesPricePerKgAed).HasPrecision(18, 4);
+        mb.Entity<ApprovalItem>().Property(a => a.SalesPricePerKgForeign).HasPrecision(18, 4);
+        mb.Entity<ApprovalItem>().Property(a => a.ProfitMarginPct).HasPrecision(18, 4);
+        mb.Entity<ApprovalItem>().Property(a => a.MaterialCostPct).HasPrecision(18, 4);
+        mb.Entity<ApprovalItem>().Property(a => a.OtherCostPct).HasPrecision(18, 4);
         mb.Entity<ExchangeRate>().Property(e => e.RateToAed).HasPrecision(18, 6);
-        mb.Entity<QuotationRequest>().Property(q => q.ExpectedQty).HasPrecision(18, 4);
         mb.Entity<QuotationRequest>().Property(q => q.ExchangeRateSnapshot).HasPrecision(18, 6);
         mb.Entity<BomHeader>().Property(b => b.TotalCostPerKg).HasPrecision(18, 4);
         mb.Entity<Item>().Property(i => i.LastPurchasePrice).HasPrecision(18, 4);
@@ -109,7 +135,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .OnDelete(DeleteBehavior.Cascade);
         mb.Entity<CostingDraft>().HasIndex(d => d.BomHeaderId).IsUnique();
 
-        // BomCostLine — many per BomHeader and per BomLine (permanent history)
+        // BomCostLine — many per BomHeader and per BomLine
         mb.Entity<BomCostLine>()
             .HasOne(l => l.BomHeader)
             .WithMany()

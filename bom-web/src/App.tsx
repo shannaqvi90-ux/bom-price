@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
+import { Toaster } from "sonner";
 import LoginPage from "@/features/auth/LoginPage";
 import { AppShell } from "@/components/layout/AppShell";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
@@ -131,5 +132,10 @@ const router = createBrowserRouter([
 ]);
 
 export default function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <>
+      <RouterProvider router={router} />
+      <Toaster position="top-right" richColors closeButton />
+    </>
+  );
 }

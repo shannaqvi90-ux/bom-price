@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
+import { notify } from "@/lib/notify";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -11,6 +12,15 @@ vi.mock("@/api/axios", () => ({
     get: vi.fn(),
     post: vi.fn(),
     put: vi.fn(),
+  },
+}));
+
+vi.mock("@/lib/notify", () => ({
+  notify: {
+    error: vi.fn(),
+    success: vi.fn(),
+    info: vi.fn(),
+    fromApiError: vi.fn(),
   },
 }));
 
@@ -214,21 +224,24 @@ describe("CostingEntryPage", () => {
     expect(await screen.findByText("Requisition Detail")).toBeInTheDocument();
   });
 
-  it("shows inline message when submit fails with missing exchange rate", async () => {
+  it("calls notify.fromApiError when submit fails with missing exchange rate", async () => {
     const costing = makeCostingReview({
       lastCost: { costPerKg: 5, currencyCode: "SAR", updatedAt: new Date().toISOString() },
     });
     costing.items[0].costStatus = "InProgress" as never;
     defaultGetHandler(costing);
-    mockedApi.post.mockRejectedValue({
+    const apiError = {
       response: { status: 400, data: { message: "No exchange rate found for SAR. Contact admin." } },
-    });
+    };
+    mockedApi.post.mockRejectedValue(apiError);
     const user = userEvent.setup();
     renderPage();
     await screen.findByLabelText(/Cost per kg for HDPE Granules/i);
     const btn = screen.getByRole("button", { name: /Submit Costing/i });
     await user.click(btn);
-    expect(await screen.findByText(/No exchange rate found for SAR/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect((notify.fromApiError as Mock)).toHaveBeenCalledWith(apiError, "Failed to submit costing.");
+    });
   });
 
   it("enables submit when all costs are greater than 0", async () => {

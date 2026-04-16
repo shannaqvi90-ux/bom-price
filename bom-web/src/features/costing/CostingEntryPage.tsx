@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
-import { extractApiError } from "@/lib/apiError";
+import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/Button";
 import { useActiveExchangeRates } from "@/api/lookups";
 import { useRequisition } from "@/features/requisitions/requisitionsApi";
@@ -76,7 +76,6 @@ export default function CostingEntryPage() {
   const [landedCostValue, setLandedCostValue] = useState<number>(0);
   const [fohAmount, setFohAmount] = useState<number>(0);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const debounceRef = useRef<number | undefined>(undefined);
   const hasAutoStartedRef = useRef(false);
@@ -252,7 +251,6 @@ export default function CostingEntryPage() {
 
   function handleSubmitItem() {
     if (!selectedItemId) return;
-    setSubmitError(null);
     submitCostingItem.mutate(
       {
         requisitionId,
@@ -271,6 +269,7 @@ export default function CostingEntryPage() {
       {
         onSuccess: () => {
           refetchCosting();
+          notify.success("Costing submitted");
           // If there are more items to cost, stay on page; otherwise navigate back
           const remaining = costingReview?.items.filter(
             (i) => i.requisitionItemId !== selectedItemId && i.costStatus !== "Submitted",
@@ -279,9 +278,7 @@ export default function CostingEntryPage() {
             navigate(`/requisitions/${requisitionId}`);
           }
         },
-        onError: (err: unknown) => {
-          setSubmitError(extractApiError(err, "Failed to submit costing."));
-        },
+        onError: (err: unknown) => notify.fromApiError(err, "Failed to submit costing."),
       },
     );
   }
@@ -502,7 +499,6 @@ export default function CostingEntryPage() {
                         >
                           {submitCostingItem.isPending ? "Submitting…" : "Submit Costing"}
                         </Button>
-                        {submitError && <span className="text-xs text-destructive">{submitError}</span>}
                       </div>
                     )}
                   </div>

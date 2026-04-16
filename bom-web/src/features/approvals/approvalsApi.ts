@@ -6,8 +6,13 @@ export const approvalKeys = {
   review: (requisitionId: number) => ["approval", "review", requisitionId] as const,
 };
 
-export interface ApprovePayload {
+export interface ApproveItemPayload {
+  requisitionItemId: number;
   salesPricePerKgAed: number;
+}
+
+export interface ApprovePayload {
+  items: ApproveItemPayload[];
   notes?: string;
 }
 

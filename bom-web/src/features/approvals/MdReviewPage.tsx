@@ -14,7 +14,7 @@ import {
 
 type PageState =
   | { kind: "reviewing" }
-  | { kind: "approved"; salesPrice: number; marginPct: number };
+  | { kind: "approved" };
 
 function LabeledRow({ label, value }: { label: string; value: string }) {
   return (
@@ -36,7 +36,7 @@ export default function MdReviewPage() {
   const { data: bom } = useBom(requisitionId);
 
   const [pageState, setPageState] = useState<PageState>({ kind: "reviewing" });
-  const [salesPriceInput, setSalesPriceInput] = useState("");
+  const [salesPrices, setSalesPrices] = useState<Record<number, string>>({});
   const [notes, setNotes] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [showBom, setShowBom] = useState(false);
@@ -84,26 +84,27 @@ export default function MdReviewPage() {
     return <p className="text-sm text-muted-foreground">Loading…</p>;
   }
 
-  const salesPrice = Number(salesPriceInput);
-  const hasValidPrice = Number.isFinite(salesPrice) && salesPrice > 0;
-  const marginPct =
-    hasValidPrice && salesPrice > 0
-      ? ((salesPrice - data.totalCostPerKg) / salesPrice) * 100
-      : 0;
-  const marginIsPositive = marginPct > 0;
+  const allPricesValid = data.items.every((item) => {
+    const price = Number(salesPrices[item.requisitionItemId] ?? "");
+    return Number.isFinite(price) && price > 0;
+  });
 
   async function handleApprove() {
     setValidationError(null);
-    if (!hasValidPrice) {
-      setValidationError("Enter a sales price greater than zero.");
+    const items = data!.items.map((item) => {
+      const price = Number(salesPrices[item.requisitionItemId] ?? "");
+      return { requisitionItemId: item.requisitionItemId, salesPricePerKgAed: price };
+    });
+    if (items.some((i) => !Number.isFinite(i.salesPricePerKgAed) || i.salesPricePerKgAed <= 0)) {
+      setValidationError("Enter a valid sales price for all items.");
       return;
     }
     try {
       await approve.mutateAsync({
         requisitionId,
-        payload: { salesPricePerKgAed: salesPrice, notes: notes || undefined },
+        payload: { items, notes: notes || undefined },
       });
-      setPageState({ kind: "approved", salesPrice, marginPct });
+      setPageState({ kind: "approved" });
     } catch (e) {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data
@@ -139,7 +140,7 @@ export default function MdReviewPage() {
     const url = URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${data.refNo}-Quotation.pdf`;
+    a.download = `${data!.refNo}-Quotation.pdf`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -157,7 +158,8 @@ export default function MdReviewPage() {
         <div>
           <h1 className="font-mono text-2xl font-semibold">{data.refNo}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {data.itemDescription} — {data.customerName}
+            {data.customerName} · {data.currencyCode}
+            {data.exchangeRate !== null && ` · Rate: ${data.exchangeRate}`}
           </p>
         </div>
         <Button variant="outline" onClick={() => setShowBom(true)}>
@@ -165,136 +167,141 @@ export default function MdReviewPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Cost Breakdown</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <LabeledRow
-              label="Raw Material"
-              value={`${data.rawMaterialCostPerKg.toFixed(4)} AED/kg`}
-            />
-            <LabeledRow
-              label="Landed Cost"
-              value={`${data.landedCostPerKg.toFixed(4)} AED/kg`}
-            />
-            <LabeledRow label="FOH" value={`${data.fohPerKg.toFixed(4)} AED/kg`} />
-            <div className="mt-2 flex justify-between gap-4 border-t pt-2 text-sm font-semibold">
-              <span>Total Cost/kg</span>
-              <span className="font-mono">{data.totalCostPerKg.toFixed(4)} AED</span>
-            </div>
-            <div className="mt-4 space-y-1 text-xs text-muted-foreground">
-              <div>Expected qty: {data.expectedQty} kg</div>
-              <div>Currency: {data.currencyCode}</div>
-              {data.exchangeRate !== null && (
-                <div>Exchange rate: {data.exchangeRate}</div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Per-item cost breakdown */}
+      <div className="space-y-4">
+        {data.items.map((item) => {
+          const priceStr = salesPrices[item.requisitionItemId] ?? "";
+          const price = Number(priceStr);
+          const hasValidPrice = Number.isFinite(price) && price > 0;
+          const marginPct = hasValidPrice
+            ? ((price - item.totalCostPerKg) / price) * 100
+            : 0;
 
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {pageState.kind === "approved" ? "Approved" : "Your Decision"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {pageState.kind === "approved" ? (
-              <div className="space-y-4">
-                <div className="rounded-md bg-green-50 p-3 text-sm text-green-800">
-                  Quotation approved ✓
-                </div>
-                <LabeledRow
-                  label="Sales Price"
-                  value={`${pageState.salesPrice.toFixed(4)} AED/kg`}
-                />
-                <LabeledRow
-                  label="Profit Margin"
-                  value={`${pageState.marginPct.toFixed(2)}%`}
-                />
-                <Button onClick={handleDownloadPdf} className="w-full">
-                  Download PDF
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <label
-                    className="mb-1 block text-xs text-muted-foreground"
-                    htmlFor="sales-price"
-                  >
-                    Sales Price (AED/kg)
-                  </label>
-                  <input
-                    id="sales-price"
-                    type="number"
-                    step="0.0001"
-                    min="0"
-                    value={salesPriceInput}
-                    onChange={(e) => setSalesPriceInput(e.target.value)}
-                    className="w-full rounded-md border px-3 py-2 text-sm"
-                    placeholder="0.0000"
-                  />
-                </div>
-
-                {hasValidPrice && (
-                  <div
-                    data-testid="margin-pill"
-                    className={`rounded-md p-3 text-center text-sm font-semibold ${
-                      marginIsPositive
-                        ? "bg-green-50 text-green-800"
-                        : "bg-red-50 text-red-800"
-                    }`}
-                  >
-                    Profit Margin: {marginPct.toFixed(2)}%
+          return (
+            <Card key={item.requisitionItemId}>
+              <CardHeader>
+                <CardTitle className="text-base">
+                  {item.itemDescription}
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    {item.expectedQty.toLocaleString()} kg
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <div>
+                    <LabeledRow label="Raw Material" value={`${item.rawMaterialCostPerKg.toFixed(4)} /kg`} />
+                    <LabeledRow label="Landed Cost" value={`${item.landedCostPerKg.toFixed(4)} /kg`} />
+                    <LabeledRow label="FOH" value={`${item.fohPerKg.toFixed(4)} /kg`} />
+                    <div className="mt-2 flex justify-between gap-4 border-t pt-2 text-sm font-semibold">
+                      <span>Total Cost/kg</span>
+                      <span className="font-mono">{item.totalCostPerKg.toFixed(4)}</span>
+                    </div>
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      Material {item.materialCostPct.toFixed(1)}% · Landed {item.landedCostPct.toFixed(1)}% · FOH {item.fohPct.toFixed(1)}%
+                    </div>
                   </div>
-                )}
 
-                <div>
-                  <label
-                    className="mb-1 block text-xs text-muted-foreground"
-                    htmlFor="notes"
-                  >
-                    Notes (required when rejecting)
-                  </label>
-                  <textarea
-                    id="notes"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="w-full rounded-md border px-3 py-2 text-sm"
-                    rows={3}
-                  />
+                  {pageState.kind === "reviewing" && (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="mb-1 block text-xs text-muted-foreground">
+                          Sales Price (AED/kg)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.0001"
+                          min="0"
+                          value={priceStr}
+                          onChange={(e) =>
+                            setSalesPrices((prev) => ({
+                              ...prev,
+                              [item.requisitionItemId]: e.target.value,
+                            }))
+                          }
+                          className="w-full rounded-md border px-3 py-2 text-sm"
+                          placeholder="0.0000"
+                        />
+                      </div>
+                      {hasValidPrice && (
+                        <div
+                          className={`rounded-md p-2 text-center text-sm font-semibold ${
+                            marginPct > 0
+                              ? "bg-green-50 text-green-800"
+                              : "bg-red-50 text-red-800"
+                          }`}
+                        >
+                          Margin: {marginPct.toFixed(2)}%
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-
-                {validationError && (
-                  <p className="text-sm text-destructive">{validationError}</p>
-                )}
-
-                <div className="flex gap-2">
-                  <Button
-                    onClick={handleApprove}
-                    disabled={approve.isPending || !hasValidPrice}
-                    className="flex-1 bg-green-700 hover:bg-green-800"
-                  >
-                    {approve.isPending ? "Approving…" : "Approve"}
-                  </Button>
-                  <Button
-                    onClick={handleReject}
-                    disabled={reject.isPending}
-                    variant="destructive"
-                    className="flex-1"
-                  >
-                    {reject.isPending ? "Rejecting…" : "Reject"}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
+      {/* Decision panel */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            {pageState.kind === "approved" ? "Approved" : "Your Decision"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {pageState.kind === "approved" ? (
+            <div className="space-y-4">
+              <div className="rounded-md bg-green-50 p-3 text-sm text-green-800">
+                Quotation approved
+              </div>
+              <Button onClick={handleDownloadPdf} className="w-full">
+                Download PDF
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground" htmlFor="notes">
+                  Notes (required when rejecting)
+                </label>
+                <textarea
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                  rows={3}
+                />
+              </div>
+
+              {validationError && (
+                <p className="text-sm text-destructive">{validationError}</p>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleApprove}
+                  disabled={approve.isPending || !allPricesValid}
+                  className="flex-1 bg-green-700 hover:bg-green-800"
+                >
+                  {approve.isPending ? "Approving…" : "Approve All"}
+                </Button>
+                <Button
+                  onClick={handleReject}
+                  disabled={reject.isPending}
+                  variant="destructive"
+                  className="flex-1"
+                >
+                  {reject.isPending ? "Rejecting…" : "Reject"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* BOM Dialog */}
       <Dialog
         open={showBom}
         onClose={() => setShowBom(false)}
@@ -302,54 +309,53 @@ export default function MdReviewPage() {
         className="max-w-3xl"
       >
         {bom ? (
-          <div className="space-y-4 text-sm">
-            {Array.from(new Set(bom.lines.map((l) => l.processName))).map((proc) => (
-              <div key={proc}>
-                <p className="mb-1 font-semibold text-muted-foreground">{proc}</p>
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b text-left text-muted-foreground">
-                      <th className="pb-1 font-medium">Material</th>
-                      <th className="pb-1 text-right font-medium">Qty/kg</th>
-                      <th className="pb-1 text-right font-medium">Wastage%</th>
-                      <th className="pb-1 text-right font-medium">Cost/kg</th>
-                      <th className="pb-1 text-right font-medium">Contribution</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {bom.lines
-                      .filter((l) => l.processName === proc)
-                      .map((l) => (
-                        <tr key={l.id} className="border-b last:border-0">
-                          <td className="py-1">{l.rawMaterialDescription}</td>
-                          <td className="py-1 text-right font-mono">{l.qtyPerKg.toFixed(4)}</td>
-                          <td className="py-1 text-right font-mono">{l.wastagePct.toFixed(2)}%</td>
-                          <td className="py-1 text-right font-mono">
-                            {l.costPerKg != null
-                              ? `${l.costPerKg.toFixed(4)} ${l.currencyCode}`
-                              : "—"}
-                          </td>
-                          <td className="py-1 text-right font-mono">
-                            {l.contributionAed != null
-                              ? `${l.contributionAed.toFixed(4)} AED`
-                              : "—"}
-                          </td>
+          <div className="space-y-6 text-sm">
+            {bom.items.map((item) => (
+              <div key={item.requisitionItemId}>
+                <p className="mb-2 font-semibold">{item.itemDescription} ({item.expectedQty} kg)</p>
+                {Array.from(new Set(item.lines.map((l) => l.processName))).map((proc) => (
+                  <div key={proc} className="mb-3">
+                    <p className="mb-1 text-xs font-semibold text-muted-foreground">{proc}</p>
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="pb-1 font-medium">Material</th>
+                          <th className="pb-1 text-right font-medium">Qty/kg</th>
+                          <th className="pb-1 text-right font-medium">Wastage%</th>
+                          <th className="pb-1 text-right font-medium">Cost/kg</th>
+                          <th className="pb-1 text-right font-medium">Contribution</th>
                         </tr>
-                      ))}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody>
+                        {item.lines
+                          .filter((l) => l.processName === proc)
+                          .map((l) => (
+                            <tr key={l.id} className="border-b last:border-0">
+                              <td className="py-1">{l.rawMaterialDescription}</td>
+                              <td className="py-1 text-right font-mono">{l.qtyPerKg.toFixed(4)}</td>
+                              <td className="py-1 text-right font-mono">{l.wastagePct.toFixed(2)}%</td>
+                              <td className="py-1 text-right font-mono">
+                                {l.costPerKg != null
+                                  ? `${l.costPerKg.toFixed(4)} ${l.currencyCode}`
+                                  : "—"}
+                              </td>
+                              <td className="py-1 text-right font-mono">
+                                {l.contributionAed != null
+                                  ? `${l.contributionAed.toFixed(4)} AED`
+                                  : "—"}
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+                <div className="flex justify-between gap-4 border-t pt-1 text-xs font-semibold">
+                  <span>Total Cost/kg</span>
+                  <span className="font-mono">{item.totalCostPerKg.toFixed(4)} AED/kg</span>
+                </div>
               </div>
             ))}
-            <div className="mt-2 space-y-1 border-t pt-2 text-sm">
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">Raw Material</span>
-                <span className="font-mono">{data.rawMaterialCostPerKg.toFixed(4)} AED/kg</span>
-              </div>
-              <div className="flex justify-between gap-4 font-semibold">
-                <span>Total Cost/kg</span>
-                <span className="font-mono">{bom.totalCostPerKg.toFixed(4)} AED/kg</span>
-              </div>
-            </div>
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">Loading BOM…</p>

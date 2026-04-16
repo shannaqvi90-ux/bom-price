@@ -15,8 +15,7 @@ public class RequisitionWorkflowTests(WebApplicationFactory<Program> factory)
         var response = await client.PostAsJsonAsync("/api/requisitions", new
         {
             CustomerId = 1,
-            ItemId = 1,
-            ExpectedQty = 1000m,
+            Items = new[] { new { ItemId = 1, ExpectedQty = 1000m } },
             CurrencyCode = "AED"
         });
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);

@@ -18,7 +18,7 @@ public class CostingTests(WebApplicationFactory<Program> factory)
         return body!.AccessToken;
     }
 
-    private async Task<int> CreateRequisitionWithBomInCostingPendingAsync(string quoteCurrency = "AED")
+    private async Task<(int RequisitionId, int RequisitionItemId)> CreateRequisitionWithBomInCostingPendingAsync(string quoteCurrency = "AED")
     {
         // 1. SalesPerson creates items + requisition
         var spToken = await LoginAsync("ali@test.com", "Test@1234");
@@ -37,12 +37,15 @@ public class CostingTests(WebApplicationFactory<Program> factory)
         var reqResp = await _client.PostAsJsonAsync("/api/requisitions", new
         {
             CustomerId = customers!.First().Id,
-            ItemId = fg!.Id,
-            ExpectedQty = 100m,
+            Items = new[] { new { ItemId = fg!.Id, ExpectedQty = 100m } },
             CurrencyCode = quoteCurrency
         });
         var created = await reqResp.Content.ReadFromJsonAsync<CreatedRequisition>();
         var requisitionId = created!.Id;
+
+        // Get requisitionItemId
+        var reqDetail = await _client.GetFromJsonAsync<RequisitionDetailDto>($"/api/requisitions/{requisitionId}");
+        var requisitionItemId = reqDetail!.Items[0].Id;
 
         // 2. Admin creates a process
         var adminToken = await LoginAsync("admin@test.com", "Admin@1234");
@@ -51,38 +54,39 @@ public class CostingTests(WebApplicationFactory<Program> factory)
         var procResp = await _client.PostAsJsonAsync("/api/processes", new { Name = procCode, DisplayOrder = 99 });
         var process = await procResp.Content.ReadFromJsonAsync<ProcessDto>();
 
-        // 3. BomCreator starts + submits BOM → CostingPending
+        // 3. BomCreator starts, saves lines, submits BOM → CostingPending
         var bomToken = await LoginAsync("bob@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bomToken);
-        await _client.PostAsync($"/api/bom/{requisitionId}/start", null);
-        await _client.PostAsJsonAsync($"/api/bom/{requisitionId}/submit", new
+        await _client.PostAsync($"/api/bom/{requisitionId}/items/{requisitionItemId}/start", null);
+        await _client.PutAsJsonAsync($"/api/bom/{requisitionId}/items/{requisitionItemId}/lines", new
         {
             Lines = new[]
             {
                 new { ProcessId = process!.Id, RawMaterialItemId = rm!.Id, QtyPerKg = 0.85m, WastagePct = 2.0m }
             }
         });
+        await _client.PostAsync($"/api/bom/{requisitionId}/submit", null);
 
         _client.DefaultRequestHeaders.Authorization = null;
-        return requisitionId;
+        return (requisitionId, requisitionItemId);
     }
 
-    private async Task<CostingDetailDto> GetCostingAsync(int requisitionId)
+    private async Task<CostingReviewDto> GetCostingAsync(int requisitionId)
     {
         var resp = await _client.GetAsync($"/api/costing/{requisitionId}");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
-        return (await resp.Content.ReadFromJsonAsync<CostingDetailDto>())!;
+        return (await resp.Content.ReadFromJsonAsync<CostingReviewDto>())!;
     }
 
     [Fact]
     public async Task Start_TransitionsCostingPendingToCostingInProgress()
     {
-        var requisitionId = await CreateRequisitionWithBomInCostingPendingAsync();
+        var (requisitionId, requisitionItemId) = await CreateRequisitionWithBomInCostingPendingAsync();
 
         var acctToken = await LoginAsync("sara@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", acctToken);
 
-        var startResp = await _client.PostAsync($"/api/costing/{requisitionId}/start", null);
+        var startResp = await _client.PostAsync($"/api/costing/{requisitionId}/items/{requisitionItemId}/start", null);
         startResp.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         var spToken = await LoginAsync("ali@test.com", "Test@1234");
@@ -94,16 +98,16 @@ public class CostingTests(WebApplicationFactory<Program> factory)
     [Fact]
     public async Task SaveDraft_PersistsAndGetReturnsDraft()
     {
-        var requisitionId = await CreateRequisitionWithBomInCostingPendingAsync();
+        var (requisitionId, requisitionItemId) = await CreateRequisitionWithBomInCostingPendingAsync();
         var acctToken = await LoginAsync("sara@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", acctToken);
-        await _client.PostAsync($"/api/costing/{requisitionId}/start", null);
+        await _client.PostAsync($"/api/costing/{requisitionId}/items/{requisitionItemId}/start", null);
 
-        var detail = await GetCostingAsync(requisitionId);
-        detail.BomLines.Should().HaveCount(1);
-        var bomLineId = detail.BomLines[0].BomLineId;
+        var review = await GetCostingAsync(requisitionId);
+        review.Items.Should().HaveCount(1);
+        var bomLineId = review.Items[0].BomLines[0].BomLineId;
 
-        var draftResp = await _client.PutAsJsonAsync($"/api/costing/{requisitionId}/draft", new
+        var draftResp = await _client.PutAsJsonAsync($"/api/costing/{requisitionId}/items/{requisitionItemId}/draft", new
         {
             Lines = new[] { new { BomLineId = bomLineId, CostPerKg = 1.25m, CurrencyCode = "USD" } },
             LandedCostType = "Percentage",
@@ -120,26 +124,27 @@ public class CostingTests(WebApplicationFactory<Program> factory)
 
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", acctToken);
         var reloaded = await GetCostingAsync(requisitionId);
-        reloaded.Draft.Should().NotBeNull();
-        reloaded.Draft!.Lines.Should().HaveCount(1);
-        reloaded.Draft.Lines[0].CostPerKg.Should().Be(1.25m);
-        reloaded.Draft.Lines[0].CurrencyCode.Should().Be("USD");
-        reloaded.Draft.LandedCostValue.Should().Be(5m);
+        var item = reloaded.Items[0];
+        item.Draft.Should().NotBeNull();
+        item.Draft!.Lines.Should().HaveCount(1);
+        item.Draft.Lines[0].CostPerKg.Should().Be(1.25m);
+        item.Draft.Lines[0].CurrencyCode.Should().Be("USD");
+        item.Draft.LandedCostValue.Should().Be(5m);
     }
 
     [Fact]
     public async Task Submit_ConvertsCurrencyWritesLinesUpsertsLastCostAndMovesToMdReview()
     {
-        var requisitionId = await CreateRequisitionWithBomInCostingPendingAsync(quoteCurrency: "AED");
+        var (requisitionId, requisitionItemId) = await CreateRequisitionWithBomInCostingPendingAsync(quoteCurrency: "AED");
         var acctToken = await LoginAsync("sara@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", acctToken);
-        await _client.PostAsync($"/api/costing/{requisitionId}/start", null);
+        await _client.PostAsync($"/api/costing/{requisitionId}/items/{requisitionItemId}/start", null);
 
-        var detail = await GetCostingAsync(requisitionId);
-        var bomLineId = detail.BomLines[0].BomLineId;
+        var review = await GetCostingAsync(requisitionId);
+        var bomLineId = review.Items[0].BomLines[0].BomLineId;
 
         // Submit with USD cost — seeded USD rate is 3.6725, quote AED = 1.0
-        var submitResp = await _client.PostAsJsonAsync($"/api/costing/{requisitionId}/submit", new
+        var submitResp = await _client.PostAsJsonAsync($"/api/costing/{requisitionId}/items/{requisitionItemId}/submit", new
         {
             RawMaterialCosts = new[] { new { BomLineId = bomLineId, CostPerKg = 1.00m, CurrencyCode = "USD" } },
             LandedCostType = "Percentage",
@@ -154,28 +159,30 @@ public class CostingTests(WebApplicationFactory<Program> factory)
         var req = await _client.GetFromJsonAsync<RequisitionDto>($"/api/requisitions/{requisitionId}");
         req!.Status.Should().Be("MdReview");
 
-        // Verify BomCost aggregate written + ItemLastCost upserted
+        // Verify cost written + ItemLastCost upserted
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", acctToken);
         var afterSubmit = await GetCostingAsync(requisitionId);
-        afterSubmit.RawMaterialCostTotal.Should().BeGreaterThan(0); // conversion happened, BomCostLine written
-        afterSubmit.BomLines[0].LastCost.Should().NotBeNull(); // ItemLastCost upserted
-        afterSubmit.BomLines[0].LastCost!.CostPerKg.Should().Be(1.00m); // original entry cost stored
-        afterSubmit.BomLines[0].LastCost!.CurrencyCode.Should().Be("USD"); // original entry currency stored
+        var item = afterSubmit.Items[0];
+        item.Cost.Should().NotBeNull();
+        item.Cost!.RawMaterialCostTotal.Should().BeGreaterThan(0);
+        item.BomLines[0].LastCost.Should().NotBeNull();
+        item.BomLines[0].LastCost!.CostPerKg.Should().Be(1.00m);
+        item.BomLines[0].LastCost!.CurrencyCode.Should().Be("USD");
     }
 
     [Fact]
     public async Task Submit_ReturnsBadRequest_WhenExchangeRateMissing()
     {
-        var requisitionId = await CreateRequisitionWithBomInCostingPendingAsync(quoteCurrency: "AED");
+        var (requisitionId, requisitionItemId) = await CreateRequisitionWithBomInCostingPendingAsync(quoteCurrency: "AED");
         var acctToken = await LoginAsync("sara@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", acctToken);
-        await _client.PostAsync($"/api/costing/{requisitionId}/start", null);
+        await _client.PostAsync($"/api/costing/{requisitionId}/items/{requisitionItemId}/start", null);
 
-        var detail = await GetCostingAsync(requisitionId);
-        var bomLineId = detail.BomLines[0].BomLineId;
+        var review = await GetCostingAsync(requisitionId);
+        var bomLineId = review.Items[0].BomLines[0].BomLineId;
 
         // SAR rate not seeded → should fail
-        var submitResp = await _client.PostAsJsonAsync($"/api/costing/{requisitionId}/submit", new
+        var submitResp = await _client.PostAsJsonAsync($"/api/costing/{requisitionId}/items/{requisitionItemId}/submit", new
         {
             RawMaterialCosts = new[] { new { BomLineId = bomLineId, CostPerKg = 5.0m, CurrencyCode = "SAR" } },
             LandedCostType = "Percentage",
@@ -189,13 +196,13 @@ public class CostingTests(WebApplicationFactory<Program> factory)
     public async Task Recosting_NewRequisitionDoesNotModifyPreviousBomCostLines()
     {
         // Submit costing on requisition A
-        var reqA = await CreateRequisitionWithBomInCostingPendingAsync();
+        var (reqA, riA) = await CreateRequisitionWithBomInCostingPendingAsync();
         var acctToken = await LoginAsync("sara@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", acctToken);
-        await _client.PostAsync($"/api/costing/{reqA}/start", null);
-        var detailA = await GetCostingAsync(reqA);
-        var bomLineIdA = detailA.BomLines[0].BomLineId;
-        await _client.PostAsJsonAsync($"/api/costing/{reqA}/submit", new
+        await _client.PostAsync($"/api/costing/{reqA}/items/{riA}/start", null);
+        var reviewA = await GetCostingAsync(reqA);
+        var bomLineIdA = reviewA.Items[0].BomLines[0].BomLineId;
+        await _client.PostAsJsonAsync($"/api/costing/{reqA}/items/{riA}/submit", new
         {
             RawMaterialCosts = new[] { new { BomLineId = bomLineIdA, CostPerKg = 2.00m, CurrencyCode = "AED" } },
             LandedCostType = "Percentage",
@@ -206,15 +213,15 @@ public class CostingTests(WebApplicationFactory<Program> factory)
         // Snapshot BomCost aggregate for A
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", acctToken);
         var afterA = await GetCostingAsync(reqA);
-        var totalA = afterA.TotalCostPerKg;
+        var totalA = afterA.Items[0].Cost!.TotalCostPerKg;
 
         // Submit costing on requisition B with a different cost for same raw material
-        var reqB = await CreateRequisitionWithBomInCostingPendingAsync();
+        var (reqB, riB) = await CreateRequisitionWithBomInCostingPendingAsync();
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", acctToken);
-        await _client.PostAsync($"/api/costing/{reqB}/start", null);
-        var detailB = await GetCostingAsync(reqB);
-        var bomLineIdB = detailB.BomLines[0].BomLineId;
-        await _client.PostAsJsonAsync($"/api/costing/{reqB}/submit", new
+        await _client.PostAsync($"/api/costing/{reqB}/items/{riB}/start", null);
+        var reviewB = await GetCostingAsync(reqB);
+        var bomLineIdB = reviewB.Items[0].BomLines[0].BomLineId;
+        await _client.PostAsJsonAsync($"/api/costing/{reqB}/items/{riB}/submit", new
         {
             RawMaterialCosts = new[] { new { BomLineId = bomLineIdB, CostPerKg = 9.99m, CurrencyCode = "AED" } },
             LandedCostType = "Percentage",
@@ -224,7 +231,7 @@ public class CostingTests(WebApplicationFactory<Program> factory)
 
         // Requisition A total must be unchanged
         var reloadedA = await GetCostingAsync(reqA);
-        reloadedA.TotalCostPerKg.Should().Be(totalA);
+        reloadedA.Items[0].Cost!.TotalCostPerKg.Should().Be(totalA);
     }
 
     // ── DTOs ──
@@ -233,6 +240,8 @@ public class CostingTests(WebApplicationFactory<Program> factory)
     private record CustomerDto(int Id, string Code, string Name);
     private record ProcessDto(int Id, string Name, int DisplayOrder, bool IsActive);
     private record CreatedRequisition(int Id, string RefNo);
+    private record RequisitionItemDto(int Id, int ItemId, string ItemDescription, decimal ExpectedQty, int SortOrder);
+    private record RequisitionDetailDto(int Id, string RefNo, string Status, List<RequisitionItemDto> Items);
     private record RequisitionDto(int Id, string RefNo, string Status);
     private record LastCostDto(decimal CostPerKg, string CurrencyCode, DateTime UpdatedAt);
     private record CostingBomLineDto(int BomLineId, int ProcessId, string ProcessName,
@@ -241,7 +250,10 @@ public class CostingTests(WebApplicationFactory<Program> factory)
     private record CostingDraftLineDto(int BomLineId, decimal CostPerKg, string CurrencyCode);
     private record CostingDraftDto(List<CostingDraftLineDto> Lines, string LandedCostType,
         decimal LandedCostValue, decimal FohAmount);
-    private record CostingDetailDto(int Id, decimal RawMaterialCostTotal, string LandedCostType,
-        decimal LandedCostValue, decimal FohAmount, decimal TotalCostPerKg, DateTime? SubmittedAt,
+    private record CostingSummaryDto(int Id, decimal RawMaterialCostTotal, string LandedCostType,
+        decimal LandedCostValue, decimal FohAmount, decimal TotalCostPerKg, DateTime? SubmittedAt);
+    private record CostingItemDto(int RequisitionItemId, int ItemId, string ItemDescription, decimal ExpectedQty,
+        int? BomHeaderId, string CostStatus, CostingSummaryDto? Cost,
         List<CostingBomLineDto> BomLines, CostingDraftDto? Draft);
+    private record CostingReviewDto(int RequisitionId, List<CostingItemDto> Items);
 }

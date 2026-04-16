@@ -35,13 +35,16 @@ public class BomWithCostTests(WebApplicationFactory<Program> factory)
         var reqResp = await _client.PostAsJsonAsync("/api/requisitions", new
         {
             CustomerId = customers!.First().Id,
-            ItemId = finishedGood.Id,
-            ExpectedQty = 100m,
+            Items = new[] { new { ItemId = finishedGood.Id, ExpectedQty = 100m } },
             CurrencyCode = "AED"
         });
         reqResp.StatusCode.Should().Be(HttpStatusCode.Created);
         var created = await reqResp.Content.ReadFromJsonAsync<CreatedRequisition>();
         var requisitionId = created!.Id;
+
+        // Get requisitionItemId
+        var reqDetail = await _client.GetFromJsonAsync<RequisitionDetailDto>($"/api/requisitions/{requisitionId}");
+        var requisitionItemId = reqDetail!.Items[0].Id;
 
         // 2. Admin creates a process
         var adminToken = await LoginAsync("admin@test.com", "Admin@1234");
@@ -53,25 +56,22 @@ public class BomWithCostTests(WebApplicationFactory<Program> factory)
         processResp.StatusCode.Should().Be(HttpStatusCode.Created);
         var process = await processResp.Content.ReadFromJsonAsync<ProcessDto>();
 
-        // 3. BomCreator starts and submits BOM (0.85 kg, 2% wastage)
+        // 3. BomCreator starts, saves lines, and submits BOM
         var bomToken = await LoginAsync("bob@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", bomToken);
 
-        await _client.PostAsync($"/api/bom/{requisitionId}/start", null);
-        var submitBomResp = await _client.PostAsJsonAsync($"/api/bom/{requisitionId}/submit", new
+        await _client.PostAsync($"/api/bom/{requisitionId}/items/{requisitionItemId}/start", null);
+
+        await _client.PutAsJsonAsync($"/api/bom/{requisitionId}/items/{requisitionItemId}/lines", new
         {
             Lines = new[]
             {
-                new
-                {
-                    ProcessId = process!.Id,
-                    RawMaterialItemId = rawMaterial.Id,
-                    QtyPerKg = 0.85m,
-                    WastagePct = 2.0m
-                }
+                new { ProcessId = process!.Id, RawMaterialItemId = rawMaterial.Id, QtyPerKg = 0.85m, WastagePct = 2.0m }
             }
         });
+
+        var submitBomResp = await _client.PostAsync($"/api/bom/{requisitionId}/submit", null);
         submitBomResp.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // 4. Accountant uses the seeded USD rate (3.6725 AED/USD — created by seed data)
@@ -80,15 +80,15 @@ public class BomWithCostTests(WebApplicationFactory<Program> factory)
             new AuthenticationHeaderValue("Bearer", saraToken);
 
         // 5. Accountant starts costing and gets BOM line id
-        var startCostResp = await _client.PostAsync($"/api/costing/{requisitionId}/start", null);
+        var startCostResp = await _client.PostAsync($"/api/costing/{requisitionId}/items/{requisitionItemId}/start", null);
         startCostResp.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-        var bomForCosting = await _client.GetFromJsonAsync<BomDetailDto>($"/api/bom/{requisitionId}");
-        var bomLineId = bomForCosting!.Lines[0].Id;
+        var bomForCosting = await _client.GetFromJsonAsync<BomReviewDto>($"/api/bom/{requisitionId}");
+        var bomLineId = bomForCosting!.Items[0].Lines[0].Id;
 
         // 6. Accountant submits costing at 4.2 USD/kg
         var submitCostResp = await _client.PostAsJsonAsync(
-            $"/api/costing/{requisitionId}/submit", new
+            $"/api/costing/{requisitionId}/items/{requisitionItemId}/submit", new
             {
                 RawMaterialCosts = new[]
                 {
@@ -103,11 +103,13 @@ public class BomWithCostTests(WebApplicationFactory<Program> factory)
         // 7. BomCreator reads BOM — cost columns must reflect frozen rates
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", bomToken);
-        var bomWithCost = await _client.GetFromJsonAsync<BomDetailDto>(
+        var bomWithCost = await _client.GetFromJsonAsync<BomReviewDto>(
             $"/api/bom/{requisitionId}");
 
-        bomWithCost!.Lines.Should().HaveCount(1);
-        var line = bomWithCost.Lines[0];
+        bomWithCost!.Items.Should().HaveCount(1);
+        var item = bomWithCost.Items[0];
+        item.Lines.Should().HaveCount(1);
+        var line = item.Lines[0];
 
         line.CostPerKg.Should().Be(4.2m);
         line.CurrencyCode.Should().Be("USD");
@@ -133,12 +135,15 @@ public class BomWithCostTests(WebApplicationFactory<Program> factory)
         var reqResp = await _client.PostAsJsonAsync("/api/requisitions", new
         {
             CustomerId = customers!.First().Id,
-            ItemId = finishedGood.Id,
-            ExpectedQty = 50m,
+            Items = new[] { new { ItemId = finishedGood.Id, ExpectedQty = 50m } },
             CurrencyCode = "AED"
         });
         var created = await reqResp.Content.ReadFromJsonAsync<CreatedRequisition>();
         var requisitionId = created!.Id;
+
+        // Get requisitionItemId
+        var reqDetail = await _client.GetFromJsonAsync<RequisitionDetailDto>($"/api/requisitions/{requisitionId}");
+        var requisitionItemId = reqDetail!.Items[0].Id;
 
         // Admin creates a process
         var adminToken = await LoginAsync("admin@test.com", "Admin@1234");
@@ -149,29 +154,26 @@ public class BomWithCostTests(WebApplicationFactory<Program> factory)
             new { Name = processCode, DisplayOrder = 99 });
         var process = await processResp.Content.ReadFromJsonAsync<ProcessDto>();
 
-        // BomCreator submits BOM (no costing yet)
+        // BomCreator starts, saves lines, and submits BOM (no costing yet)
         var bomToken = await LoginAsync("bob@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", bomToken);
 
-        await _client.PostAsync($"/api/bom/{requisitionId}/start", null);
-        await _client.PostAsJsonAsync($"/api/bom/{requisitionId}/submit", new
+        await _client.PostAsync($"/api/bom/{requisitionId}/items/{requisitionItemId}/start", null);
+
+        await _client.PutAsJsonAsync($"/api/bom/{requisitionId}/items/{requisitionItemId}/lines", new
         {
             Lines = new[]
             {
-                new
-                {
-                    ProcessId = process!.Id,
-                    RawMaterialItemId = rawMaterial.Id,
-                    QtyPerKg = 1.0m,
-                    WastagePct = 0m
-                }
+                new { ProcessId = process!.Id, RawMaterialItemId = rawMaterial.Id, QtyPerKg = 1.0m, WastagePct = 0m }
             }
         });
 
+        await _client.PostAsync($"/api/bom/{requisitionId}/submit", null);
+
         // GET /api/bom before costing — cost columns must be null
-        var bom = await _client.GetFromJsonAsync<BomDetailDto>($"/api/bom/{requisitionId}");
-        var line = bom!.Lines[0];
+        var bom = await _client.GetFromJsonAsync<BomReviewDto>($"/api/bom/{requisitionId}");
+        var line = bom!.Items[0].Lines[0];
 
         line.CostPerKg.Should().BeNull();
         line.CurrencyCode.Should().BeNull();
@@ -186,13 +188,15 @@ public class BomWithCostTests(WebApplicationFactory<Program> factory)
     private record CustomerDto(int Id, string Code, string Name);
     private record CreatedRequisition(int Id, string RefNo);
     private record ProcessDto(int Id, string Name, int DisplayOrder, bool IsActive);
+    private record RequisitionItemDto(int Id, int ItemId, string ItemDescription, decimal ExpectedQty, int SortOrder);
+    private record RequisitionDetailDto(int Id, string RefNo, string Status, List<RequisitionItemDto> Items);
     private record BomLineDto(
         int Id, int ProcessId, string ProcessName,
         int RawMaterialItemId, string RawMaterialDescription,
         decimal QtyPerKg, decimal WastagePct,
         decimal? CostPerKg, string? CurrencyCode,
         decimal? CostPerKgInAed, decimal? ContributionAed);
-    private record BomDetailDto(int Id, int QuotationRequestId, string RefNo,
-        string ItemDescription, List<BomLineDto> Lines,
-        decimal TotalCostPerKg, DateTime? SubmittedAt);
+    private record BomItemDto(int RequisitionItemId, int ItemId, string ItemDescription, decimal ExpectedQty, int SortOrder,
+        int? BomHeaderId, string BomStatus, List<BomLineDto> Lines, decimal TotalCostPerKg, DateTime? SubmittedAt);
+    private record BomReviewDto(int RequisitionId, string RefNo, string RequisitionStatus, List<BomItemDto> Items);
 }

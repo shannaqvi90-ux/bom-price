@@ -25,7 +25,6 @@ public class BomSaveLinesTests(WebApplicationFactory<Program> factory)
         var spToken = await LoginAsync("ali@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", spToken);
 
-        // Create items needed for this test (idempotent — duplicates are fine as long as creation succeeds)
         var fgCode = $"FG-{Guid.NewGuid():N}".Substring(0, 10);
         var rmCode = $"RM-{Guid.NewGuid():N}".Substring(0, 10);
         var fgResp = await _client.PostAsJsonAsync("/api/items",
@@ -44,13 +43,16 @@ public class BomSaveLinesTests(WebApplicationFactory<Program> factory)
         var reqResp = await _client.PostAsJsonAsync("/api/requisitions", new
         {
             CustomerId = customerId,
-            ItemId = finishedGood.Id,
-            ExpectedQty = 100m,
+            Items = new[] { new { ItemId = finishedGood!.Id, ExpectedQty = 100m } },
             CurrencyCode = "AED"
         });
         reqResp.StatusCode.Should().Be(HttpStatusCode.Created);
         var created = await reqResp.Content.ReadFromJsonAsync<CreatedRequisition>();
         var requisitionId = created!.Id;
+
+        // Get requisitionItemId
+        var reqDetail = await _client.GetFromJsonAsync<RequisitionDetailDto>($"/api/requisitions/{requisitionId}");
+        var requisitionItemId = reqDetail!.Items[0].Id;
 
         // 2. Admin creates a process
         var adminToken = await LoginAsync("admin@test.com", "Admin@1234");
@@ -62,27 +64,28 @@ public class BomSaveLinesTests(WebApplicationFactory<Program> factory)
         processResp.StatusCode.Should().Be(HttpStatusCode.Created);
         var process = await processResp.Content.ReadFromJsonAsync<ProcessDto>();
 
-        // 3. BomCreator starts BOM (→ BomInProgress)
+        // 3. BomCreator starts BOM for item (→ BomInProgress)
         var bomToken = await LoginAsync("bob@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bomToken);
 
-        var startResp = await _client.PostAsync($"/api/bom/{requisitionId}/start", null);
+        var startResp = await _client.PostAsync($"/api/bom/{requisitionId}/items/{requisitionItemId}/start", null);
         startResp.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        // 4. BomCreator saves lines via PUT /lines
-        var saveResp = await _client.PutAsJsonAsync($"/api/bom/{requisitionId}/lines", new
+        // 4. BomCreator saves lines via PUT
+        var saveResp = await _client.PutAsJsonAsync($"/api/bom/{requisitionId}/items/{requisitionItemId}/lines", new
         {
             Lines = new[]
             {
-                new { ProcessId = process!.Id, RawMaterialItemId = rawMaterial.Id, QtyPerKg = 0.85m, WastagePct = 2.0m }
+                new { ProcessId = process!.Id, RawMaterialItemId = rawMaterial!.Id, QtyPerKg = 0.85m, WastagePct = 2.0m }
             }
         });
         saveResp.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // 5. Verify lines persisted and status still BomInProgress
-        var bom = await _client.GetFromJsonAsync<BomDetailDto>($"/api/bom/{requisitionId}");
-        bom!.Lines.Should().HaveCount(1);
-        bom.Lines[0].QtyPerKg.Should().Be(0.85m);
+        var bom = await _client.GetFromJsonAsync<BomReviewDto>($"/api/bom/{requisitionId}");
+        bom!.Items.Should().HaveCount(1);
+        bom.Items[0].Lines.Should().HaveCount(1);
+        bom.Items[0].Lines[0].QtyPerKg.Should().Be(0.85m);
 
         // Requisition should still be BomInProgress (not transitioned)
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", spToken);
@@ -97,7 +100,6 @@ public class BomSaveLinesTests(WebApplicationFactory<Program> factory)
         var spToken = await LoginAsync("ali@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", spToken);
 
-        // Create a FinishedGood item for this test
         var fgCode = $"FG-{Guid.NewGuid():N}".Substring(0, 10);
         var fgResp = await _client.PostAsJsonAsync("/api/items",
             new { Code = fgCode, Description = "Test Finished Good", Type = "FinishedGood", LastPurchasePrice = (decimal?)null });
@@ -109,17 +111,20 @@ public class BomSaveLinesTests(WebApplicationFactory<Program> factory)
         var reqResp = await _client.PostAsJsonAsync("/api/requisitions", new
         {
             CustomerId = customers!.First().Id,
-            ItemId = finishedGood.Id,
-            ExpectedQty = 50m,
+            Items = new[] { new { ItemId = finishedGood!.Id, ExpectedQty = 50m } },
             CurrencyCode = "AED"
         });
         var created = await reqResp.Content.ReadFromJsonAsync<CreatedRequisition>();
 
-        // BomCreator tries to PUT /lines without calling /start first
+        // Get requisitionItemId
+        var reqDetail = await _client.GetFromJsonAsync<RequisitionDetailDto>($"/api/requisitions/{created!.Id}");
+        var requisitionItemId = reqDetail!.Items[0].Id;
+
+        // BomCreator tries to PUT lines without calling /start first
         var bomToken = await LoginAsync("bob@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bomToken);
 
-        var saveResp = await _client.PutAsJsonAsync($"/api/bom/{created!.Id}/lines",
+        var saveResp = await _client.PutAsJsonAsync($"/api/bom/{created.Id}/items/{requisitionItemId}/lines",
             new { Lines = Array.Empty<object>() });
         saveResp.StatusCode.Should().Be(HttpStatusCode.BadRequest); // status is BomPending, not BomInProgress
     }
@@ -129,7 +134,11 @@ public class BomSaveLinesTests(WebApplicationFactory<Program> factory)
     private record CustomerDto(int Id, string Code, string Name);
     private record CreatedRequisition(int Id, string RefNo);
     private record ProcessDto(int Id, string Name, int DisplayOrder, bool IsActive);
-    private record BomLineDto(int Id, int ProcessId, string ProcessName, int RawMaterialItemId, string RawMaterialDescription, decimal QtyPerKg, decimal WastagePct);
-    private record BomDetailDto(int Id, int QuotationRequestId, string RefNo, string ItemDescription, List<BomLineDto> Lines, decimal TotalCostPerKg, DateTime? SubmittedAt);
+    private record RequisitionItemDto(int Id, int ItemId, string ItemDescription, decimal ExpectedQty, int SortOrder);
+    private record RequisitionDetailDto(int Id, string RefNo, string Status, List<RequisitionItemDto> Items);
     private record RequisitionDto(int Id, string RefNo, string Status);
+    private record BomLineDto(int Id, int ProcessId, string ProcessName, int RawMaterialItemId, string RawMaterialDescription, decimal QtyPerKg, decimal WastagePct);
+    private record BomItemDto(int RequisitionItemId, int ItemId, string ItemDescription, decimal ExpectedQty, int SortOrder,
+        int? BomHeaderId, string BomStatus, List<BomLineDto> Lines, decimal TotalCostPerKg, DateTime? SubmittedAt);
+    private record BomReviewDto(int RequisitionId, string RefNo, string RequisitionStatus, List<BomItemDto> Items);
 }

@@ -67,6 +67,3 @@ public record ItemDto(int Id, string Code, string Description, string Type);
 public record CustomerDto(int Id, string Name);
 public record ErrorResponse(string Message);
 public record CreatedRequisition(int Id, string RefNo);
-public record RequisitionItemDetailDto(int Id, int ItemId);
-public record RequisitionDetailDto(int Id, string RefNo, string Status, List<RequisitionItemDetailDto> Items);
-public record ProcessDto(int Id, string Name);

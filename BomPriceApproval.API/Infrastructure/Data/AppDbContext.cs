@@ -110,6 +110,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany()
             .HasForeignKey(l => l.RawMaterialItemId);
 
+        // ─── Validation constraints ──────────────────────────────────────────
+        mb.Entity<RequisitionItem>()
+            .HasIndex(ri => new { ri.QuotationRequestId, ri.ItemId })
+            .IsUnique();
+
+        mb.Entity<RequisitionItem>()
+            .ToTable(t => t.HasCheckConstraint(
+                "ck_requisition_items_expected_qty_positive",
+                "\"ExpectedQty\" > 0"));
+
+        mb.Entity<BomLine>()
+            .ToTable(t => t.HasCheckConstraint(
+                "ck_bom_lines_qty_per_kg_positive",
+                "\"QtyPerKg\" > 0"));
+
+        mb.Entity<ApprovalItem>()
+            .ToTable(t => t.HasCheckConstraint(
+                "ck_approval_items_sales_price_positive",
+                "\"SalesPricePerKgAed\" > 0"));
+
         // Decimal precision
         mb.Entity<RequisitionItem>().Property(ri => ri.ExpectedQty).HasPrecision(18, 4);
         mb.Entity<BomLine>().Property(b => b.QtyPerKg).HasPrecision(18, 6);

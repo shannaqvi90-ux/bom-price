@@ -62,6 +62,28 @@ public class ApprovalsController(AppDbContext db, NotificationService notificati
         if (req.Status != RequisitionStatus.MdReview)
             return BadRequest(new { message = "Requisition is not in MdReview status" });
 
+        if (request.Items is null || request.Items.Count == 0)
+            return BadRequest(new { message = "No items provided for approval." });
+
+        if (request.Items.Any(i => i.SalesPricePerKgAed <= 0))
+            return BadRequest(new { message = "SalesPrice must be greater than 0." });
+
+        var inputIds = request.Items.Select(i => i.RequisitionItemId).ToList();
+        if (inputIds.Count != inputIds.Distinct().Count())
+            return BadRequest(new { message = "Duplicate items in approval request." });
+
+        var requisitionItemIds = req.Items.Select(i => i.Id).ToList();
+        var missingInputs = requisitionItemIds.Except(inputIds).ToList();
+        if (missingInputs.Count > 0)
+            return BadRequest(new { message = $"Missing price for item(s): {string.Join(", ", missingInputs)}" });
+
+        var orphanInputs = inputIds.Except(requisitionItemIds).ToList();
+        if (orphanInputs.Count > 0)
+            return BadRequest(new { message = $"Unknown item(s) in request: {string.Join(", ", orphanInputs)}" });
+
+        if (req.Items.Any(i => i.BomHeader?.Cost is null))
+            return BadRequest(new { message = "All items must have a costed BOM before approval." });
+
         var approval = new QuotationApproval
         {
             QuotationRequestId = req.Id,
@@ -72,12 +94,11 @@ public class ApprovalsController(AppDbContext db, NotificationService notificati
 
         foreach (var input in request.Items)
         {
-            var ri = req.Items.FirstOrDefault(i => i.Id == input.RequisitionItemId);
-            if (ri?.BomHeader?.Cost is null) continue;
+            var ri = req.Items.First(i => i.Id == input.RequisitionItemId);
 
-            var totalCost = ri.BomHeader.TotalCostPerKg;
+            var totalCost = ri.BomHeader!.TotalCostPerKg;
             var profitMargin = (input.SalesPricePerKgAed - totalCost) / input.SalesPricePerKgAed * 100;
-            var matPct = ri.BomHeader.Cost.RawMaterialCostTotal / totalCost * 100;
+            var matPct = ri.BomHeader.Cost!.RawMaterialCostTotal / totalCost * 100;
             var otherPct = 100 - matPct;
 
             decimal? foreignPrice = null;

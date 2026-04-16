@@ -1,7 +1,17 @@
 import { create } from "zustand";
 import * as signalR from "@microsoft/signalr";
 import { api } from "@/api/axios";
+import { notify } from "@/lib/notify";
 import type { Notification } from "@/types/api";
+
+function pathForNotification(n: Notification): string | null {
+  switch (n.referenceType) {
+    case "QuotationRequest":
+      return `/requisitions/${n.referenceId}`;
+    default:
+      return null;
+  }
+}
 
 interface NotificationsState {
   notifications: Notification[];
@@ -12,6 +22,7 @@ interface NotificationsState {
   disconnect: () => Promise<void>;
   setNotifications: (ns: Notification[]) => void;
   prependNotification: (n: Notification) => void;
+  showToastForNotification: (n: Notification) => void;
   markRead: (id: number) => void;
   markAllRead: () => void;
 }
@@ -32,6 +43,7 @@ export const notificationsStore = create<NotificationsState>()((set, get) => ({
 
     connection.on("ReceiveNotification", (n: Notification) => {
       get().prependNotification(n);
+      get().showToastForNotification(n);
     });
 
     set({ _connection: connection });
@@ -61,6 +73,18 @@ export const notificationsStore = create<NotificationsState>()((set, get) => ({
       notifications: [n, ...state.notifications],
       unreadCount: state.unreadCount + 1,
     })),
+
+  showToastForNotification: (n: Notification) => {
+    const path = pathForNotification(n);
+    notify.info(n.message, {
+      action: path
+        ? {
+            label: "View",
+            onClick: () => window.location.assign(path),
+          }
+        : undefined,
+    });
+  },
 
   markRead: (id: number) =>
     set((state) => ({

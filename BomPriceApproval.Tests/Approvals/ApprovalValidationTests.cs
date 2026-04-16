@@ -181,6 +181,31 @@ public class ApprovalValidationTests(WebApplicationFactory<Program> factory)
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
+    [Fact]
+    public async Task Approve_OrphanItemInInput_Returns400()
+    {
+        var (reqId, itemIds) = await BootstrapToMdReviewAsync(itemCount: 1);
+        var md = await LoginAsync("md@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", md);
+
+        // Submit both the real item AND an orphan id that doesn't belong to this requisition
+        var resp = await _client.PostAsJsonAsync(
+            $"/api/approvals/{reqId}/approve",
+            new
+            {
+                Items = new[]
+                {
+                    new { RequisitionItemId = itemIds[0], SalesPricePerKgAed = 10m },
+                    new { RequisitionItemId = 999999, SalesPricePerKgAed = 20m },
+                },
+                Notes = ""
+            });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await resp.Content.ReadFromJsonAsync<ErrorResponse>();
+        body!.Message.ToLower().Should().Contain("unknown");
+    }
+
     // ── Private DTOs (non-colliding with Requisitions namespace records) ──
     private record ApprovalRequisitionItemDto(int Id, int ItemId, string ItemDescription, decimal ExpectedQty, int SortOrder);
     private record ApprovalRequisitionDetailDto(int Id, string RefNo, string Status, List<ApprovalRequisitionItemDto> Items);

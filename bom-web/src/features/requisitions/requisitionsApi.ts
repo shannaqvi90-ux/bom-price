@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/axios";
 import type {
+  AddRequisitionItemRequest,
   CreateRequisitionRequest,
   RequisitionDetail,
   RequisitionListItem,
@@ -41,6 +42,41 @@ export function useCreateRequisition() {
       api.post<CreateResponse>("/requisitions", body).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: requisitionKeys.all });
+    },
+  });
+}
+
+export function useAddRequisitionItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      requisitionId,
+      body,
+    }: {
+      requisitionId: number;
+      body: AddRequisitionItemRequest;
+    }) =>
+      api
+        .post<{ id: number }>(`/requisitions/${requisitionId}/items`, body)
+        .then((r) => r.data),
+    onSuccess: (_d, { requisitionId }) => {
+      qc.invalidateQueries({ queryKey: requisitionKeys.detail(requisitionId) });
+    },
+  });
+}
+
+export function useRemoveRequisitionItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      requisitionId,
+      requisitionItemId,
+    }: {
+      requisitionId: number;
+      requisitionItemId: number;
+    }) => api.delete(`/requisitions/${requisitionId}/items/${requisitionItemId}`),
+    onSuccess: (_d, { requisitionId }) => {
+      qc.invalidateQueries({ queryKey: requisitionKeys.detail(requisitionId) });
     },
   });
 }

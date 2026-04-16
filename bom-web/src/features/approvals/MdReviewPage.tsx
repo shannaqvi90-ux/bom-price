@@ -1,6 +1,7 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useState } from "react";
+import { extractApiError } from "@/lib/apiError";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
@@ -106,10 +107,7 @@ export default function MdReviewPage() {
       });
       setPageState({ kind: "approved" });
     } catch (e) {
-      const msg =
-        (e as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message ?? "Failed to approve.";
-      setValidationError(msg);
+      setValidationError(extractApiError(e, "Failed to approve."));
     }
   }
 
@@ -126,10 +124,7 @@ export default function MdReviewPage() {
       });
       navigate(`/requisitions/${requisitionId}`);
     } catch (e) {
-      const msg =
-        (e as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message ?? "Failed to reject.";
-      setValidationError(msg);
+      setValidationError(extractApiError(e, "Failed to reject."));
     }
   }
 
@@ -231,7 +226,12 @@ export default function MdReviewPage() {
                               : "bg-red-50 text-red-800"
                           }`}
                         >
-                          Margin: {marginPct.toFixed(2)}%
+                          <span>Margin: {marginPct.toFixed(2)}%</span>
+                          {marginPct < 0 && (
+                            <span className="ml-2 inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs">
+                              ⚠ Negative margin
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>

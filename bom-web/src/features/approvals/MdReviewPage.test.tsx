@@ -254,6 +254,91 @@ describe("MdReviewPage", () => {
     expect(screen.getByText(/3\.9765 AED/i)).toBeInTheDocument();
   });
 
+  it("shows '⚠ Negative margin' badge when price < totalCost but keeps Approve enabled", async () => {
+    mockedApi.get.mockImplementation((url: string) => {
+      if (url.includes("/approvals/"))
+        return Promise.resolve({
+          data: {
+            refNo: "REQ-0001",
+            customerName: "ACME",
+            currencyCode: "AED",
+            exchangeRate: null,
+            items: [
+              {
+                requisitionItemId: 1,
+                itemDescription: "Widget",
+                expectedQty: 100,
+                rawMaterialCostPerKg: 4,
+                landedCostPerKg: 0.5,
+                fohPerKg: 0.5,
+                totalCostPerKg: 5,
+                materialCostPct: 80,
+                landedCostPct: 10,
+                fohPct: 10,
+              },
+            ],
+          },
+        });
+      if (url.includes("/bom/"))
+        return Promise.resolve({
+          data: { refNo: "REQ-0001", requisitionStatus: "MdReview", items: [] },
+        });
+      return Promise.resolve({ data: [] });
+    });
+
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
+
+    const priceInput = screen.getByPlaceholderText("0.0000");
+    await user.type(priceInput, "1");
+
+    expect(screen.getByText(/Negative margin/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Approve All/i })).toBeEnabled();
+  });
+
+  it("does not show the negative-margin badge when price >= totalCost", async () => {
+    mockedApi.get.mockImplementation((url: string) => {
+      if (url.includes("/approvals/"))
+        return Promise.resolve({
+          data: {
+            refNo: "REQ-0001",
+            customerName: "ACME",
+            currencyCode: "AED",
+            exchangeRate: null,
+            items: [
+              {
+                requisitionItemId: 1,
+                itemDescription: "Widget",
+                expectedQty: 100,
+                rawMaterialCostPerKg: 4,
+                landedCostPerKg: 0.5,
+                fohPerKg: 0.5,
+                totalCostPerKg: 5,
+                materialCostPct: 80,
+                landedCostPct: 10,
+                fohPct: 10,
+              },
+            ],
+          },
+        });
+      if (url.includes("/bom/"))
+        return Promise.resolve({
+          data: { refNo: "REQ-0001", requisitionStatus: "MdReview", items: [] },
+        });
+      return Promise.resolve({ data: [] });
+    });
+
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
+
+    const priceInput = screen.getByPlaceholderText("0.0000");
+    await user.type(priceInput, "10");
+
+    expect(screen.queryByText(/Negative margin/i)).toBeNull();
+  });
+
   it("View BOM dialog shows frozen Cost/kg and Contribution with footer totals", async () => {
     const mockBom = {
       requisitionId: 42,

@@ -20,115 +20,92 @@ public class BomController(AppDbContext db, NotificationService notificationServ
     [HttpGet("{requisitionId}")]
     public async Task<IActionResult> Get(int requisitionId)
     {
-        var bom = await db.BomHeaders
-            .Include(b => b.Lines).ThenInclude(l => l.Process)
-            .Include(b => b.Lines).ThenInclude(l => l.RawMaterial)
-            .Include(b => b.QuotationRequest)
-            .Include(b => b.Item)
-            .FirstOrDefaultAsync(b => b.QuotationRequestId == requisitionId);
+        var req = await db.QuotationRequests
+            .Include(q => q.Items).ThenInclude(ri => ri.Item)
+            .Include(q => q.Items).ThenInclude(ri => ri.BomHeader)
+                .ThenInclude(b => b!.Lines).ThenInclude(l => l.Process)
+            .Include(q => q.Items).ThenInclude(ri => ri.BomHeader)
+                .ThenInclude(b => b!.Lines).ThenInclude(l => l.RawMaterial)
+            .FirstOrDefaultAsync(q => q.Id == requisitionId);
 
-        if (bom is null) return NotFound();
-        if (CurrentBranchId.HasValue && bom.QuotationRequest.BranchId != CurrentBranchId)
-            return Forbid();
+        if (req is null) return NotFound();
+        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
 
-        var costLines = await db.BomCostLines
-            .Where(c => c.BomHeaderId == bom.Id)
-            .ToDictionaryAsync(c => c.BomLineId);
+        var bomHeaderIds = req.Items
+            .Where(ri => ri.BomHeader is not null)
+            .Select(ri => ri.BomHeader!.Id).ToList();
+        var costLines = bomHeaderIds.Count > 0
+            ? await db.BomCostLines.Where(c => bomHeaderIds.Contains(c.BomHeaderId)).ToListAsync()
+            : [];
+        var costLinesByBom = costLines.ToLookup(c => c.BomHeaderId);
 
-        return Ok(new BomDetailResponse(
-            bom.Id, bom.QuotationRequestId, bom.QuotationRequest.RefNo,
-            bom.Item.Description,
-            bom.Lines.Select(l =>
+        var items = req.Items.OrderBy(ri => ri.SortOrder).Select(ri =>
+        {
+            var bom = ri.BomHeader;
+            var bomStatus = bom is null ? "NotStarted"
+                : bom.SubmittedAt.HasValue ? "Submitted" : "InProgress";
+
+            var lines = bom?.Lines.Select(l =>
             {
-                costLines.TryGetValue(l.Id, out var cl);
-                decimal? contributionAed = cl is not null
-                    ? cl.CostPerKgInAed * l.QtyPerKg * (1 + l.WastagePct / 100)
-                    : null;
-                return new BomLineResponse(
-                    l.Id, l.ProcessId, l.Process.Name, l.RawMaterialItemId,
-                    l.RawMaterial.Description, l.QtyPerKg, l.WastagePct,
-                    cl?.CostPerKg, cl?.CurrencyCode, cl?.CostPerKgInAed, contributionAed);
-            }).ToList(),
-            bom.TotalCostPerKg, bom.SubmittedAt));
+                var cl = costLinesByBom[bom.Id].FirstOrDefault(c => c.BomLineId == l.Id);
+                decimal? contribution = cl is not null
+                    ? cl.CostPerKgInAed * l.QtyPerKg * (1 + l.WastagePct / 100) : null;
+                return new BomLineResponse(l.Id, l.ProcessId, l.Process.Name,
+                    l.RawMaterialItemId, l.RawMaterial.Description,
+                    l.QtyPerKg, l.WastagePct,
+                    cl?.CostPerKg, cl?.CurrencyCode, cl?.CostPerKgInAed, contribution);
+            }).ToList() ?? [];
+
+            return new BomItemResponse(ri.Id, ri.ItemId, ri.Item.Description,
+                ri.ExpectedQty, ri.SortOrder, bom?.Id, bomStatus,
+                lines, bom?.TotalCostPerKg ?? 0, bom?.SubmittedAt);
+        }).ToList();
+
+        return Ok(new BomReviewResponse(req.Id, req.RefNo, req.Status.ToString(), items));
     }
 
-    [HttpPost("{requisitionId}/start")]
+    [HttpPost("{requisitionId}/items/{requisitionItemId}/start")]
     [Authorize(Roles = "BomCreator")]
-    public async Task<IActionResult> Start(int requisitionId)
+    public async Task<IActionResult> StartItem(int requisitionId, int requisitionItemId)
     {
         var req = await db.QuotationRequests.FindAsync(requisitionId);
         if (req is null) return NotFound();
-        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId)
-            return Forbid();
-        if (req.Status != RequisitionStatus.BomPending)
-            return BadRequest(new { message = "Requisition is not in BomPending status" });
+        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
+        if (req.Status != RequisitionStatus.BomPending && req.Status != RequisitionStatus.BomInProgress)
+            return BadRequest(new { message = "Requisition is not in BomPending or BomInProgress status" });
 
-        req.Status = RequisitionStatus.BomInProgress;
-        req.UpdatedAt = DateTime.UtcNow;
+        var ri = await db.RequisitionItems.Include(r => r.BomHeader)
+            .FirstOrDefaultAsync(r => r.Id == requisitionItemId && r.QuotationRequestId == requisitionId);
+        if (ri is null) return NotFound();
+        if (ri.BomHeader is not null)
+            return BadRequest(new { message = "BOM already started for this item" });
 
-        var bom = new BomHeader { QuotationRequestId = requisitionId, ItemId = req.ItemId, CreatedByUserId = CurrentUserId };
+        if (req.Status == RequisitionStatus.BomPending)
+        {
+            req.Status = RequisitionStatus.BomInProgress;
+            req.UpdatedAt = DateTime.UtcNow;
+        }
+
+        var bom = new BomHeader { RequisitionItemId = requisitionItemId, CreatedByUserId = CurrentUserId };
         db.BomHeaders.Add(bom);
         await db.SaveChangesAsync();
         return Ok(new { bom.Id });
     }
 
-    [HttpPost("{requisitionId}/submit")]
+    [HttpPut("{requisitionId}/items/{requisitionItemId}/lines")]
     [Authorize(Roles = "BomCreator")]
-    public async Task<IActionResult> Submit(int requisitionId, SubmitBomRequest request)
-    {
-        var req = await db.QuotationRequests.Include(q => q.Branch).FirstOrDefaultAsync(q => q.Id == requisitionId);
-        if (req is null) return NotFound();
-        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId)
-            return Forbid();
-        if (req.Status != RequisitionStatus.BomInProgress)
-            return BadRequest(new { message = "BOM can only be submitted when status is BomInProgress" });
-
-        var bom = await db.BomHeaders.Include(b => b.Lines).FirstOrDefaultAsync(b => b.QuotationRequestId == requisitionId);
-        if (bom is null) return BadRequest(new { message = "BOM not started. Call /start first." });
-        if (bom.CreatedByUserId != CurrentUserId)
-            return Forbid();
-
-        // Replace lines
-        db.BomLines.RemoveRange(bom.Lines);
-        bom.Lines = request.Lines.Select(l => new BomLine
-        {
-            ProcessId = l.ProcessId, RawMaterialItemId = l.RawMaterialItemId,
-            QtyPerKg = l.QtyPerKg, WastagePct = l.WastagePct
-        }).ToList();
-
-        bom.SubmittedAt = DateTime.UtcNow;
-        req.Status = RequisitionStatus.CostingPending;
-        req.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
-
-        // Notify accountants in same branch
-        var accountants = await db.Users
-            .Where(u => u.Role == UserRole.Accountant && (u.BranchId == req.BranchId || u.BranchId == null) && u.IsActive)
-            .ToListAsync();
-
-        foreach (var accountant in accountants)
-            await notificationService.SendAsync(accountant.Id,
-                $"BOM ready for costing: {req.RefNo}", req.Id, "QuotationRequest");
-
-        return NoContent();
-    }
-
-    [HttpPut("{requisitionId}/lines")]
-    [Authorize(Roles = "BomCreator")]
-    public async Task<IActionResult> SaveLines(int requisitionId, SaveBomLinesRequest request)
+    public async Task<IActionResult> SaveLines(int requisitionId, int requisitionItemId, SaveBomLinesRequest request)
     {
         var req = await db.QuotationRequests.FindAsync(requisitionId);
         if (req is null) return NotFound();
-        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId)
-            return Forbid();
+        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
         if (req.Status != RequisitionStatus.BomInProgress)
             return BadRequest(new { message = "BOM can only be saved when status is BomInProgress" });
 
         var bom = await db.BomHeaders.Include(b => b.Lines)
-            .FirstOrDefaultAsync(b => b.QuotationRequestId == requisitionId);
+            .FirstOrDefaultAsync(b => b.RequisitionItemId == requisitionItemId);
         if (bom is null) return NotFound();
-        if (bom.CreatedByUserId != CurrentUserId)
-            return Forbid();
+        if (bom.CreatedByUserId != CurrentUserId) return Forbid();
 
         db.BomLines.RemoveRange(bom.Lines);
         bom.Lines = request.Lines.Select(l => new BomLine
@@ -140,6 +117,43 @@ public class BomController(AppDbContext db, NotificationService notificationServ
         }).ToList();
 
         await db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpPost("{requisitionId}/submit")]
+    [Authorize(Roles = "BomCreator")]
+    public async Task<IActionResult> Submit(int requisitionId)
+    {
+        var req = await db.QuotationRequests.Include(q => q.Branch)
+            .Include(q => q.Items).ThenInclude(ri => ri.BomHeader).ThenInclude(b => b!.Lines)
+            .FirstOrDefaultAsync(q => q.Id == requisitionId);
+        if (req is null) return NotFound();
+        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
+        if (req.Status != RequisitionStatus.BomInProgress)
+            return BadRequest(new { message = "BOM can only be submitted when status is BomInProgress" });
+
+        foreach (var ri in req.Items)
+        {
+            if (ri.BomHeader is null || ri.BomHeader.Lines.Count == 0)
+                return BadRequest(new { message = $"Item '{ri.ItemId}' has no BOM lines. All items must have at least one line." });
+        }
+
+        foreach (var ri in req.Items)
+        {
+            ri.BomHeader!.SubmittedAt ??= DateTime.UtcNow;
+        }
+
+        req.Status = RequisitionStatus.CostingPending;
+        req.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        var accountants = await db.Users
+            .Where(u => u.Role == UserRole.Accountant && (u.BranchId == req.BranchId || u.BranchId == null) && u.IsActive)
+            .ToListAsync();
+        foreach (var accountant in accountants)
+            await notificationService.SendAsync(accountant.Id,
+                $"BOM ready for costing: {req.RefNo}", req.Id, "QuotationRequest");
+
         return NoContent();
     }
 }

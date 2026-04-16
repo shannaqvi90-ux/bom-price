@@ -22,14 +22,9 @@ public record SaveCostingDraftRequest(
 public record LastCostInfo(decimal CostPerKg, string CurrencyCode, DateTime UpdatedAt);
 
 public record CostingBomLineResponse(
-    int BomLineId,
-    int ProcessId,
-    string ProcessName,
-    int RawMaterialItemId,
-    string RawMaterialDescription,
-    decimal QtyPerKg,
-    decimal WastagePct,
-    LastCostInfo? LastCost);
+    int BomLineId, int ProcessId, string ProcessName,
+    int RawMaterialItemId, string RawMaterialDescription,
+    decimal QtyPerKg, decimal WastagePct, LastCostInfo? LastCost);
 
 public record CostingDraftResponse(
     List<CostingDraftLineInput> Lines,
@@ -37,13 +32,15 @@ public record CostingDraftResponse(
     decimal LandedCostValue,
     decimal FohAmount);
 
-public record CostingDetailResponse(
-    int Id,
-    decimal RawMaterialCostTotal,
-    string LandedCostType,
-    decimal LandedCostValue,
-    decimal FohAmount,
-    decimal TotalCostPerKg,
-    DateTime? SubmittedAt,
+public record CostingSummary(
+    int Id, decimal RawMaterialCostTotal, string LandedCostType,
+    decimal LandedCostValue, decimal FohAmount, decimal TotalCostPerKg, DateTime? SubmittedAt);
+
+public record CostingItemResponse(
+    int RequisitionItemId, int ItemId, string ItemDescription, decimal ExpectedQty,
+    int? BomHeaderId, string CostStatus,
+    CostingSummary? Cost,
     List<CostingBomLineResponse> BomLines,
     CostingDraftResponse? Draft);
+
+public record CostingReviewResponse(int RequisitionId, List<CostingItemResponse> Items);

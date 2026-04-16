@@ -21,82 +21,101 @@ public class CostingController(AppDbContext db, NotificationService notification
     [HttpGet("{requisitionId}")]
     public async Task<IActionResult> Get(int requisitionId)
     {
-        var bom = await db.BomHeaders
-            .Include(b => b.QuotationRequest)
-            .Include(b => b.Cost)
-            .Include(b => b.Lines).ThenInclude(l => l.Process)
-            .Include(b => b.Lines).ThenInclude(l => l.RawMaterial)
-            .FirstOrDefaultAsync(b => b.QuotationRequestId == requisitionId);
+        var req = await db.QuotationRequests
+            .Include(q => q.Items).ThenInclude(ri => ri.Item)
+            .Include(q => q.Items).ThenInclude(ri => ri.BomHeader).ThenInclude(b => b!.Cost)
+            .Include(q => q.Items).ThenInclude(ri => ri.BomHeader)
+                .ThenInclude(b => b!.Lines).ThenInclude(l => l.Process)
+            .Include(q => q.Items).ThenInclude(ri => ri.BomHeader)
+                .ThenInclude(b => b!.Lines).ThenInclude(l => l.RawMaterial)
+            .FirstOrDefaultAsync(q => q.Id == requisitionId);
 
-        if (bom is null) return NotFound();
-        if (CurrentBranchId.HasValue && bom.QuotationRequest.BranchId != CurrentBranchId)
-            return Forbid();
+        if (req is null) return NotFound();
+        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
 
-        var rawMaterialItemIds = bom.Lines.Select(l => l.RawMaterialItemId).ToList();
-        var lastCosts = await db.ItemLastCosts
-            .Where(c => rawMaterialItemIds.Contains(c.ItemId))
-            .ToDictionaryAsync(c => c.ItemId);
+        var allRawMaterialIds = req.Items
+            .Where(ri => ri.BomHeader is not null)
+            .SelectMany(ri => ri.BomHeader!.Lines.Select(l => l.RawMaterialItemId))
+            .Distinct().ToList();
+        var lastCosts = allRawMaterialIds.Count > 0
+            ? await db.ItemLastCosts.Where(c => allRawMaterialIds.Contains(c.ItemId)).ToDictionaryAsync(c => c.ItemId)
+            : new Dictionary<int, ItemLastCost>();
 
-        var bomLineResponses = bom.Lines.Select(l =>
+        var bomHeaderIds = req.Items
+            .Where(ri => ri.BomHeader is not null)
+            .Select(ri => ri.BomHeader!.Id).ToList();
+        var drafts = bomHeaderIds.Count > 0
+            ? await db.CostingDrafts.Where(d => bomHeaderIds.Contains(d.BomHeaderId)).ToDictionaryAsync(d => d.BomHeaderId)
+            : new Dictionary<int, CostingDraft>();
+
+        var items = req.Items.OrderBy(ri => ri.SortOrder).Select(ri =>
         {
-            LastCostInfo? lastCost = lastCosts.TryGetValue(l.RawMaterialItemId, out var lc)
-                ? new LastCostInfo(lc.CostPerKg, lc.CurrencyCode, lc.UpdatedAt)
+            var bom = ri.BomHeader;
+            if (bom is null)
+                return new CostingItemResponse(ri.Id, ri.ItemId, ri.Item.Description,
+                    ri.ExpectedQty, null, "NotStarted", null, [], null);
+
+            var c = bom.Cost;
+            var costStatus = c is not null ? "Submitted" : "NotStarted";
+
+            CostingSummary? costSummary = c is not null
+                ? new CostingSummary(c.Id, c.RawMaterialCostTotal, c.LandedCostType.ToString(),
+                    c.LandedCostValue, c.FohAmount, c.TotalCostPerKg, c.SubmittedAt)
                 : null;
-            return new CostingBomLineResponse(
-                l.Id, l.ProcessId, l.Process.Name,
-                l.RawMaterialItemId, l.RawMaterial.Description,
-                l.QtyPerKg, l.WastagePct, lastCost);
+
+            var bomLines = bom.Lines.Select(l =>
+            {
+                LastCostInfo? lc = lastCosts.TryGetValue(l.RawMaterialItemId, out var v)
+                    ? new LastCostInfo(v.CostPerKg, v.CurrencyCode, v.UpdatedAt)
+                    : null;
+                return new CostingBomLineResponse(l.Id, l.ProcessId, l.Process.Name,
+                    l.RawMaterialItemId, l.RawMaterial.Description,
+                    l.QtyPerKg, l.WastagePct, lc);
+            }).ToList();
+
+            CostingDraftResponse? draftResp = null;
+            if (drafts.TryGetValue(bom.Id, out var draftRow))
+            {
+                var draftLines = JsonSerializer.Deserialize<List<CostingDraftLineInput>>(draftRow.LinesJson) ?? [];
+                draftResp = new CostingDraftResponse(draftLines, draftRow.LandedCostType, draftRow.LandedCostValue, draftRow.FohAmount);
+            }
+
+            return new CostingItemResponse(ri.Id, ri.ItemId, ri.Item.Description,
+                ri.ExpectedQty, bom.Id, costStatus, costSummary, bomLines, draftResp);
         }).ToList();
 
-        var draftRow = await db.CostingDrafts.FirstOrDefaultAsync(d => d.BomHeaderId == bom.Id);
-        CostingDraftResponse? draft = null;
-        if (draftRow is not null)
-        {
-            var lines = JsonSerializer.Deserialize<List<CostingDraftLineInput>>(draftRow.LinesJson)
-                ?? new List<CostingDraftLineInput>();
-            draft = new CostingDraftResponse(lines, draftRow.LandedCostType, draftRow.LandedCostValue, draftRow.FohAmount);
-        }
-
-        var c = bom.Cost;
-        return Ok(new CostingDetailResponse(
-            c?.Id ?? 0,
-            c?.RawMaterialCostTotal ?? 0m,
-            (c?.LandedCostType ?? LandedCostType.Percentage).ToString(),
-            c?.LandedCostValue ?? 0m,
-            c?.FohAmount ?? 0m,
-            c?.TotalCostPerKg ?? 0m,
-            c?.SubmittedAt,
-            bomLineResponses,
-            draft));
+        return Ok(new CostingReviewResponse(req.Id, items));
     }
 
-    [HttpPost("{requisitionId}/start")]
-    public async Task<IActionResult> Start(int requisitionId)
+    [HttpPost("{requisitionId}/items/{requisitionItemId}/start")]
+    public async Task<IActionResult> StartItem(int requisitionId, int requisitionItemId)
     {
         var req = await db.QuotationRequests.FindAsync(requisitionId);
         if (req is null) return NotFound();
-        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId)
-            return Forbid();
-        if (req.Status != RequisitionStatus.CostingPending)
-            return BadRequest(new { message = "Requisition is not in CostingPending status" });
+        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
+        if (req.Status != RequisitionStatus.CostingPending && req.Status != RequisitionStatus.CostingInProgress)
+            return BadRequest(new { message = "Requisition is not in CostingPending or CostingInProgress status" });
 
-        req.Status = RequisitionStatus.CostingInProgress;
-        req.UpdatedAt = DateTime.UtcNow;
+        if (req.Status == RequisitionStatus.CostingPending)
+        {
+            req.Status = RequisitionStatus.CostingInProgress;
+            req.UpdatedAt = DateTime.UtcNow;
+        }
+
         await db.SaveChangesAsync();
         return NoContent();
     }
 
-    [HttpPut("{requisitionId}/draft")]
-    public async Task<IActionResult> SaveDraft(int requisitionId, SaveCostingDraftRequest request)
+    [HttpPut("{requisitionId}/items/{requisitionItemId}/draft")]
+    public async Task<IActionResult> SaveDraft(int requisitionId, int requisitionItemId, SaveCostingDraftRequest request)
     {
         var req = await db.QuotationRequests.FindAsync(requisitionId);
         if (req is null) return NotFound();
-        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId)
-            return Forbid();
+        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
         if (req.Status != RequisitionStatus.CostingInProgress)
             return BadRequest(new { message = "Draft can only be saved when status is CostingInProgress" });
 
-        var bom = await db.BomHeaders.FirstOrDefaultAsync(b => b.QuotationRequestId == requisitionId);
+        var bom = await db.BomHeaders.FirstOrDefaultAsync(b => b.RequisitionItemId == requisitionItemId);
         if (bom is null) return NotFound();
 
         var linesJson = JsonSerializer.Serialize(request.Lines);
@@ -116,35 +135,31 @@ public class CostingController(AppDbContext db, NotificationService notification
         return NoContent();
     }
 
-    [HttpPost("{requisitionId}/submit")]
-    public async Task<IActionResult> Submit(int requisitionId, SubmitCostingRequest request)
+    [HttpPost("{requisitionId}/items/{requisitionItemId}/submit")]
+    public async Task<IActionResult> SubmitItem(int requisitionId, int requisitionItemId, SubmitCostingRequest request)
     {
         var req = await db.QuotationRequests.FirstOrDefaultAsync(q => q.Id == requisitionId);
         if (req is null) return NotFound();
-        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId)
-            return Forbid();
+        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
         if (req.Status != RequisitionStatus.CostingInProgress)
             return BadRequest(new { message = "Costing can only be submitted when status is CostingInProgress" });
 
         var bom = await db.BomHeaders
             .Include(b => b.Lines)
             .Include(b => b.Cost)
-            .FirstOrDefaultAsync(b => b.QuotationRequestId == requisitionId);
-        if (bom is null) return BadRequest(new { message = "No BOM found for this requisition" });
+            .FirstOrDefaultAsync(b => b.RequisitionItemId == requisitionItemId);
+        if (bom is null) return BadRequest(new { message = "No BOM found for this item" });
 
         var quoteCurrency = (req.CurrencyCode ?? "AED").ToUpperInvariant();
 
-        // Build currency → rate-to-AED map (1.0 for AED)
         var usedCurrencies = request.RawMaterialCosts
             .Select(r => (r.CurrencyCode ?? "AED").ToUpperInvariant())
             .Append(quoteCurrency)
-            .Distinct()
-            .ToList();
+            .Distinct().ToList();
 
         var rates = (await db.ExchangeRates
             .Where(e => e.IsActive && usedCurrencies.Contains(e.CurrencyCode))
-            .OrderByDescending(e => e.EffectiveDate)
-            .ToListAsync())
+            .OrderByDescending(e => e.EffectiveDate).ToListAsync())
             .GroupBy(e => e.CurrencyCode.ToUpperInvariant())
             .ToDictionary(g => g.Key, g => g.First().RateToAed);
 
@@ -160,7 +175,6 @@ public class CostingController(AppDbContext db, NotificationService notification
         try { quoteRateToAed = RateToAed(quoteCurrency); }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
 
-        // Calculate raw material cost total in quote currency + prepare BomCostLine rows
         decimal rawMaterialTotal = 0;
         var newCostLines = new List<BomCostLine>();
         foreach (var rc in request.RawMaterialCosts)
@@ -187,14 +201,11 @@ public class CostingController(AppDbContext db, NotificationService notification
             });
         }
 
-        // Calculate landed cost (already in quote currency)
         decimal landedCost = request.LandedCostType == LandedCostType.Percentage
             ? rawMaterialTotal * request.LandedCostValue / 100
             : request.LandedCostValue;
-
         decimal totalCost = rawMaterialTotal + landedCost + request.FohAmount;
 
-        // Replace prior BomCost aggregate and BomCostLine rows for this BomHeader
         if (bom.Cost is not null) db.BomCosts.Remove(bom.Cost);
         var existingLines = await db.BomCostLines.Where(l => l.BomHeaderId == bom.Id).ToListAsync();
         if (existingLines.Count > 0) db.BomCostLines.RemoveRange(existingLines);
@@ -211,17 +222,13 @@ public class CostingController(AppDbContext db, NotificationService notification
             SubmittedByUserId = CurrentUserId
         };
         db.BomCosts.Add(cost);
-
         bom.TotalCostPerKg = totalCost;
 
-        // Upsert ItemLastCost for each raw material (stores original entry cost + currency)
         var rawItemIds = newCostLines
             .Select(l => bom.Lines.First(bl => bl.Id == l.BomLineId).RawMaterialItemId)
-            .Distinct()
-            .ToList();
+            .Distinct().ToList();
         var existingLastCosts = await db.ItemLastCosts
-            .Where(l => rawItemIds.Contains(l.ItemId))
-            .ToDictionaryAsync(l => l.ItemId);
+            .Where(l => rawItemIds.Contains(l.ItemId)).ToDictionaryAsync(l => l.ItemId);
 
         foreach (var costLine in newCostLines)
         {
@@ -238,30 +245,40 @@ public class CostingController(AppDbContext db, NotificationService notification
             {
                 var newEntry = new ItemLastCost
                 {
-                    ItemId = itemId,
-                    CostPerKg = costLine.CostPerKg,
+                    ItemId = itemId, CostPerKg = costLine.CostPerKg,
                     CurrencyCode = costLine.CurrencyCode,
-                    UpdatedAt = DateTime.UtcNow,
-                    UpdatedByUserId = CurrentUserId
+                    UpdatedAt = DateTime.UtcNow, UpdatedByUserId = CurrentUserId
                 };
                 db.ItemLastCosts.Add(newEntry);
                 existingLastCosts[itemId] = newEntry;
             }
         }
 
-        // Delete draft
         var draft = await db.CostingDrafts.FirstOrDefaultAsync(d => d.BomHeaderId == bom.Id);
         if (draft is not null) db.CostingDrafts.Remove(draft);
 
-        req.Status = RequisitionStatus.MdReview;
+        var allItemIds = await db.RequisitionItems
+            .Where(ri => ri.QuotationRequestId == requisitionId)
+            .Select(ri => ri.Id).ToListAsync();
+        var costCount = await db.BomCosts
+            .CountAsync(c => allItemIds.Contains(c.BomHeader.RequisitionItemId));
+        var allSubmitted = (costCount + 1) >= allItemIds.Count;
+
+        if (allSubmitted)
+        {
+            req.Status = RequisitionStatus.MdReview;
+        }
+
         req.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        // Notify active MDs
-        var mds = await db.Users.Where(u => u.Role == UserRole.ManagingDirector && u.IsActive).ToListAsync();
-        foreach (var md in mds)
-            await notificationService.SendAsync(md.Id,
-                $"Costing complete, ready for approval: {req.RefNo}", req.Id, "QuotationRequest");
+        if (allSubmitted)
+        {
+            var mds = await db.Users.Where(u => u.Role == UserRole.ManagingDirector && u.IsActive).ToListAsync();
+            foreach (var md in mds)
+                await notificationService.SendAsync(md.Id,
+                    $"Costing complete, ready for approval: {req.RefNo}", req.Id, "QuotationRequest");
+        }
 
         return NoContent();
     }

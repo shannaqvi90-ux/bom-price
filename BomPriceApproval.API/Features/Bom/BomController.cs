@@ -107,6 +107,22 @@ public class BomController(AppDbContext db, NotificationService notificationServ
         if (bom is null) return NotFound();
         if (bom.CreatedByUserId != CurrentUserId) return Forbid();
 
+        if (request.Lines.Any(l => l.QtyPerKg <= 0))
+            return BadRequest(new { message = "QtyPerKg must be greater than 0." });
+
+        if (request.Lines.Any(l => l.WastagePct < 0))
+            return BadRequest(new { message = "WastagePct cannot be negative." });
+
+        var processIds = request.Lines.Select(l => l.ProcessId).Distinct().ToList();
+        var validProcessCount = await db.Processes.CountAsync(p => processIds.Contains(p.Id));
+        if (validProcessCount != processIds.Count)
+            return BadRequest(new { message = "One or more ProcessIds are invalid." });
+
+        var rawMatIds = request.Lines.Select(l => l.RawMaterialItemId).Distinct().ToList();
+        var validRawMatCount = await db.Items.CountAsync(i => rawMatIds.Contains(i.Id) && i.IsActive);
+        if (validRawMatCount != rawMatIds.Count)
+            return BadRequest(new { message = "One or more RawMaterialItemIds are invalid or inactive." });
+
         db.BomLines.RemoveRange(bom.Lines);
         bom.Lines = request.Lines.Select(l => new BomLine
         {

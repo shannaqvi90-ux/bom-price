@@ -20,10 +20,7 @@ public class PdfService
     {
         QuestPDF.Settings.License = LicenseType.Community;
 
-        var displayPrice = req.CurrencyCode == "AED"
-            ? approval.SalesPricePerKgAed
-            : approval.SalesPricePerKgForeign ?? approval.SalesPricePerKgAed;
-        var totalPrice = displayPrice * req.ExpectedQty;
+        var approvalItemMap = approval.Items.ToDictionary(ai => ai.RequisitionItemId);
 
         return Document.Create(container =>
         {
@@ -124,6 +121,7 @@ public class PdfService
                     });
 
                     // Items table
+                    decimal grandTotal = 0;
                     col.Item().PaddingTop(22).Column(c =>
                     {
                         SectionHeader(c, "QUOTATION DETAILS");
@@ -148,13 +146,25 @@ public class PdfService
                             TableHeader(t, $"Unit Price ({req.CurrencyCode})");
                             TableHeader(t, $"Total ({req.CurrencyCode})");
 
-                            // Data row
-                            TableCell(t, "1");
-                            TableCell(t, req.Item.Description);
-                            TableCell(t, req.ExpectedQty.ToString("N0"), alignRight: true);
-                            TableCell(t, "kg");
-                            TableCell(t, displayPrice.ToString("N4"), alignRight: true);
-                            TableCell(t, totalPrice.ToString("N2"), alignRight: true, bold: true);
+                            // Data rows
+                            var rowNum = 0;
+                            foreach (var ri in req.Items.OrderBy(i => i.SortOrder))
+                            {
+                                rowNum++;
+                                if (!approvalItemMap.TryGetValue(ri.Id, out var ai)) continue;
+                                var unitPrice = req.CurrencyCode == "AED"
+                                    ? ai.SalesPricePerKgAed
+                                    : ai.SalesPricePerKgForeign ?? ai.SalesPricePerKgAed;
+                                var lineTotal = unitPrice * ri.ExpectedQty;
+                                grandTotal += lineTotal;
+
+                                TableCell(t, rowNum.ToString());
+                                TableCell(t, ri.Item.Description);
+                                TableCell(t, ri.ExpectedQty.ToString("N0"), alignRight: true);
+                                TableCell(t, "kg");
+                                TableCell(t, unitPrice.ToString("N4"), alignRight: true);
+                                TableCell(t, lineTotal.ToString("N2"), alignRight: true, bold: true);
+                            }
                         });
                     });
 
@@ -171,7 +181,7 @@ public class PdfService
                             .Text($"TOTAL AMOUNT ({req.CurrencyCode})")
                             .Bold().FontSize(10).FontColor(White);
                         t.Cell().Background(Navy).Padding(10).AlignRight()
-                            .Text(totalPrice.ToString("N2"))
+                            .Text(grandTotal.ToString("N2"))
                             .Bold().FontSize(14).FontColor(White);
                     });
 

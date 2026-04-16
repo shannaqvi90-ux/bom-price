@@ -152,38 +152,30 @@ items: z.array(z.object({
 
 Item-picker dropdown: filter out items already selected in the form so duplicates cannot be added in the first place.
 
-### `RequisitionDetailPage` — Add-Item Dialog (state-based)
+### `BomEntryPage` (state-based) — mostly already correct
 
-On Add Item click:
-- Qty input: inline red helper text `"Qty must be > 0"` when ≤ 0.
-- Confirm button: disabled when qty invalid OR item already in requisition.
-- Item dropdown: filter out items already in the requisition.
+Current code already has: `min="0"` on qty/wastage inputs, early-return in `confirmAddLine` when `qty <= 0`, Submit disabled until every item has lines. **The only change** is replacing inline error extraction on submit with the shared `extractApiError` helper.
 
-### `BomEntryPage` (state-based)
+### `CostingEntryPage` (state-based) — mostly already correct
 
-Per BOM line row:
-- Qty input: red border + helper text `"Qty must be > 0"` when ≤ 0.
-- Wastage input: `min="0"` attribute + red helper if a user bypasses it.
+Current code already has: `min="0"` on cost inputs, `canSubmit` requires `costPerKg > 0` on every BOM line, inline 400-message extraction on submit error. **The only change** is replacing inline error extraction with the shared `extractApiError` helper.
 
-Submit-for-Costing button: disabled if any item has 0 lines OR any line has invalid qty.
+Note: the existing frontend requires `costPerKg > 0` (strict), while the backend allows `>= 0` (relaxed, for free/provided materials). This inconsistency is **out of scope** — flag for a future UX change if free materials become a real use case.
 
-### `CostingEntryPage` (state-based)
+### `MdReviewPage` (state-based) — mostly already correct
 
-Per line-cost input:
-- `min="0"` — allow 0 but block negatives. Red helper on negative.
+Current code already has: `min="0"` on price inputs, `allPricesValid` guard that requires every price > 0, Approve button disabled on `!allPricesValid`, red background box for negative margins. **Changes:**
+- Replace inline error extraction with the shared `extractApiError` helper.
+- Add a small `⚠ Negative margin` badge adjacent to the existing red margin box, for clearer semantics (Decision 3: soft warning, never block).
 
-Submit-Costing button: disabled until every BOM line on the currently-selected item has a cost entered.
+### Not in scope — `RequisitionDetailPage`
 
-### `MdReviewPage` (state-based) — soft-warning page
+The `useAddRequisitionItem` / `useRemoveRequisitionItem` hooks exist in `requisitionsApi.ts` but are **not wired to any UI**. This spec does not add that UI. When the add-item dialog is eventually built, it must include:
+- Qty > 0 guard with inline helper text
+- Item picker filtered to exclude items already in the requisition
+- Confirm disabled when qty invalid
 
-Per-item price input:
-- Red helper + disabled Submit when `price ≤ 0` on any item.
-- Disabled Submit when any item has no price entered.
-
-**Soft warning** (no block): when `price < totalCost`:
-- Margin displayed in red.
-- `⚠ Negative margin` badge visible next to the item row.
-- Submit **stays enabled** (per Decision 3).
+That work belongs to a separate UX-polish sub-project (sub-project C).
 
 ### Cross-cutting
 
@@ -247,7 +239,7 @@ No separate migration test. Testcontainers runs migrations on every test startup
 - `BomPriceApproval.API/Infrastructure/Data/Migrations/*_AddRequisitionValidationConstraints.cs` (generated)
 - `BomPriceApproval.API/Features/Requisitions/RequisitionsController.cs` (guards in Create + AddItem)
 - `BomPriceApproval.API/Features/Bom/BomController.cs` (guards in SaveLines)
-- `BomPriceApproval.API/Features/Costing/CostingController.cs` (guards in Submit)
+- `BomPriceApproval.API/Features/Costing/CostingController.cs` (guards in Submit + fix silent skip)
 - `BomPriceApproval.API/Features/Approvals/ApprovalsController.cs` (guards in Approve — fixes latent bug)
 
 ### Backend Tests
@@ -257,18 +249,15 @@ No separate migration test. Testcontainers runs migrations on every test startup
 - `BomPriceApproval.Tests/Costing/CostingTests.cs` (extend)
 
 ### Frontend
-- `bom-web/src/features/requisitions/NewRequisitionPage.tsx` (extend zod schema + picker filter)
-- `bom-web/src/features/requisitions/RequisitionDetailPage.tsx` (add-item dialog guards)
-- `bom-web/src/features/bom/BomEntryPage.tsx` (line validation, disabled submit)
-- `bom-web/src/features/costing/CostingEntryPage.tsx` (cost validation, disabled submit)
-- `bom-web/src/features/approvals/MdReviewPage.tsx` (price validation + negative-margin badge)
-- `bom-web/src/lib/apiError.ts` (new, small helper `showApiError(err)` that extracts `.response.data.message` and displays a toast)
-- Each feature's mutation call sites: add `onError: showApiError` where missing.
+- `bom-web/src/lib/apiError.ts` (new, tiny `extractApiError(err, fallback): string` helper)
+- `bom-web/src/features/requisitions/NewRequisitionPage.tsx` (extend zod schema with dedupe refinement + picker filter)
+- `bom-web/src/features/bom/BomEntryPage.tsx` (use `extractApiError` on submit error)
+- `bom-web/src/features/costing/CostingEntryPage.tsx` (use `extractApiError` on submit error)
+- `bom-web/src/features/approvals/MdReviewPage.tsx` (use `extractApiError` + add negative-margin badge)
 
 ### Frontend Tests
+- `bom-web/src/lib/apiError.test.ts` (new — unit tests for the helper)
 - `bom-web/src/features/requisitions/NewRequisitionPage.test.tsx` (extend)
-- `bom-web/src/features/bom/BomEntryPage.test.tsx` (extend)
-- `bom-web/src/features/costing/CostingEntryPage.test.tsx` (extend)
-- `bom-web/src/features/approvals/MdReviewPage.test.tsx` (extend)
+- `bom-web/src/features/approvals/MdReviewPage.test.tsx` (extend — badge visibility)
 
-Estimated net additions: ~300 lines backend + ~250 lines frontend + ~400 lines tests.
+Estimated net additions: ~300 lines backend + ~80 lines frontend + ~450 lines tests.

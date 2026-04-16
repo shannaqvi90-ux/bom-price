@@ -319,7 +319,7 @@ public class CostingTests(WebApplicationFactory<Program> factory)
             });
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await resp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Requisitions.ErrorResponse>();
+        var body = await resp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Shared.ErrorResponse>();
         body!.Message.ToLower().Should().Contain("cost");
     }
 
@@ -342,7 +342,7 @@ public class CostingTests(WebApplicationFactory<Program> factory)
             });
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await resp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Requisitions.ErrorResponse>();
+        var body = await resp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Shared.ErrorResponse>();
         body!.Message.ToLower().Should().Contain("unknown");
     }
 
@@ -366,7 +366,7 @@ public class CostingTests(WebApplicationFactory<Program> factory)
             });
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await resp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Requisitions.ErrorResponse>();
+        var body = await resp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Shared.ErrorResponse>();
         body!.Message.Should().Contain("Missing cost");
     }
 

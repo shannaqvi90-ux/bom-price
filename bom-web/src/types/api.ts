@@ -50,25 +50,23 @@ export interface RequisitionListItem {
   id: number;
   refNo: string;
   status: RequisitionStatus;
-  itemDescription: string;
+  itemCount: number;
   customerName: string;
-  expectedQty: number;
   currencyCode: string;
   branchName: string;
   salesPersonName: string;
   createdAt: string;
 }
 
-export interface BomSummary {
+export interface RequisitionItemDto {
   id: number;
-  totalCostPerKg: number;
-  hasCost: boolean;
+  itemId: number;
+  itemDescription: string;
+  expectedQty: number;
+  sortOrder: number;
 }
 
 export interface ApprovalSummary {
-  salesPriceAed: number;
-  salesPriceForeign: number | null;
-  profitMarginPct: number;
   isApproved: boolean;
 }
 
@@ -76,14 +74,11 @@ export interface RequisitionDetail {
   id: number;
   refNo: string;
   status: RequisitionStatus;
-  itemId: number;
-  itemDescription: string;
   customerId: number;
   customerName: string;
   customerEmail: string;
   customerPhone: string;
   customerAddress: string;
-  expectedQty: number;
   currencyCode: string;
   exchangeRateSnapshot: number | null;
   branchId: number;
@@ -92,15 +87,24 @@ export interface RequisitionDetail {
   salesPersonName: string;
   createdAt: string;
   updatedAt: string;
-  bom: BomSummary | null;
+  items: RequisitionItemDto[];
   approval: ApprovalSummary | null;
+}
+
+export interface RequisitionItemInput {
+  itemId: number;
+  expectedQty: number;
 }
 
 export interface CreateRequisitionRequest {
   customerId: number;
+  items: RequisitionItemInput[];
+  currencyCode: string;
+}
+
+export interface AddRequisitionItemRequest {
   itemId: number;
   expectedQty: number;
-  currencyCode: string;
 }
 
 export interface Customer {
@@ -211,14 +215,24 @@ export interface BomLine {
   contributionAed: number | null;
 }
 
-export interface BomDetail {
-  id: number;
-  quotationRequestId: number;
-  refNo: string;
+export interface BomItemResponse {
+  requisitionItemId: number;
+  itemId: number;
   itemDescription: string;
+  expectedQty: number;
+  sortOrder: number;
+  bomHeaderId: number | null;
+  bomStatus: "NotStarted" | "InProgress" | "Submitted";
   lines: BomLine[];
   totalCostPerKg: number;
   submittedAt: string | null;
+}
+
+export interface BomReviewResponse {
+  requisitionId: number;
+  refNo: string;
+  requisitionStatus: string;
+  items: BomItemResponse[];
 }
 
 // ─── Costing Entry ────────────────────────────────────────────────────────────
@@ -255,7 +269,7 @@ export interface CostingDraft {
   fohAmount: number;
 }
 
-export interface CostingDetail {
+export interface CostingSummary {
   id: number;
   rawMaterialCostTotal: number;
   landedCostType: string;
@@ -263,19 +277,31 @@ export interface CostingDetail {
   fohAmount: number;
   totalCostPerKg: number;
   submittedAt: string | null;
+}
+
+export interface CostingItemResponse {
+  requisitionItemId: number;
+  itemId: number;
+  itemDescription: string;
+  expectedQty: number;
+  bomHeaderId: number | null;
+  costStatus: "NotStarted" | "Submitted";
+  cost: CostingSummary | null;
   bomLines: CostingBomLine[];
   draft: CostingDraft | null;
 }
 
+export interface CostingReviewResponse {
+  requisitionId: number;
+  items: CostingItemResponse[];
+}
+
 // ─── MD Review ───────────────────────────────────────────────────────────────
 
-export interface MdReviewDetail {
-  refNo: string;
+export interface MdReviewItemDetail {
+  requisitionItemId: number;
   itemDescription: string;
-  customerName: string;
   expectedQty: number;
-  currencyCode: string;
-  exchangeRate: number | null;
   rawMaterialCostPerKg: number;
   landedCostPerKg: number;
   fohPerKg: number;
@@ -283,6 +309,14 @@ export interface MdReviewDetail {
   materialCostPct: number;
   landedCostPct: number;
   fohPct: number;
+}
+
+export interface MdReviewDetail {
+  refNo: string;
+  customerName: string;
+  currencyCode: string;
+  exchangeRate: number | null;
+  items: MdReviewItemDetail[];
 }
 
 // ─── Notifications ────────────────────────────────────────────────────────────────

@@ -16,6 +16,17 @@ vi.mock("@/api/axios", () => ({
   api: { get: vi.fn(), post: vi.fn() },
 }));
 
+vi.mock("@/lib/notify", () => ({
+  notify: {
+    error: vi.fn(),
+    success: vi.fn(),
+    info: vi.fn(),
+    fromApiError: vi.fn(),
+  },
+}));
+
+import { notify } from "@/lib/notify";
+
 import { api } from "@/api/axios";
 import NewRequisitionPage from "./NewRequisitionPage";
 
@@ -46,6 +57,8 @@ describe("NewRequisitionPage", () => {
     vi.mocked(api.get).mockReset();
     vi.mocked(api.post).mockReset();
     mockNavigate.mockReset();
+    vi.mocked(notify.fromApiError).mockReset();
+    vi.mocked(notify.success).mockReset();
     useAuthStore.getState().setSession({
       accessToken: "at",
       refreshToken: "rt",
@@ -115,11 +128,10 @@ describe("NewRequisitionPage", () => {
     );
   });
 
-  it("shows a server error message when submission fails", async () => {
+  it("calls notify.fromApiError when submission fails", async () => {
     mockLookups();
-    vi.mocked(api.post).mockRejectedValueOnce({
-      response: { data: { message: "Boom" } },
-    });
+    const err = { response: { data: { message: "Boom" } } };
+    vi.mocked(api.post).mockRejectedValueOnce(err);
     render(wrap(<NewRequisitionPage />));
     await waitFor(() => expect(screen.getByLabelText(/customer/i)).toBeInTheDocument());
 
@@ -132,7 +144,9 @@ describe("NewRequisitionPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /create/i }));
 
-    await waitFor(() => expect(screen.getByText(/boom/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(vi.mocked(notify.fromApiError)).toHaveBeenCalledWith(err, "Failed to create requisition"),
+    );
   });
 
   it("excludes already-selected items from the second row's picker", async () => {

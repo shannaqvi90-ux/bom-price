@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useForm, Controller, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { useCustomers, useItems, useActiveExchangeRates } from "@/api/lookups";
 import { useCreateRequisition } from "./requisitionsApi";
-import { extractApiError } from "@/lib/apiError";
+import { notify } from "@/lib/notify";
 import type { Customer, Item } from "@/types/api";
 
 const itemRowSchema = z.object({
@@ -51,7 +50,6 @@ export default function NewRequisitionPage() {
   const itemsQ = useItems();
   const ratesQ = useActiveExchangeRates();
   const create = useCreateRequisition();
-  const [serverError, setServerError] = useState<string | null>(null);
 
   const {
     control,
@@ -88,7 +86,6 @@ export default function NewRequisitionPage() {
   const uniqueCurrencies = Array.from(new Set(currencies)).map((code) => ({ code }));
 
   const onSubmit = handleSubmit(async (values) => {
-    setServerError(null);
     try {
       const created = await create.mutateAsync({
         customerId: values.customer!.id,
@@ -98,9 +95,10 @@ export default function NewRequisitionPage() {
         })),
         currencyCode: values.currencyCode,
       });
+      notify.success("Requisition created");
       navigate(`/requisitions/${created.id}`, { replace: true });
     } catch (e) {
-      setServerError(extractApiError(e, "Failed to create requisition"));
+      notify.fromApiError(e, "Failed to create requisition");
     }
   });
 
@@ -230,10 +228,6 @@ export default function NewRequisitionPage() {
                   <p className="text-xs text-destructive">{errors.currencyCode.message}</p>
                 )}
               </div>
-
-              {serverError && (
-                <p className="text-sm text-destructive">{serverError}</p>
-              )}
 
               <Button type="submit" disabled={isSubmitting || create.isPending}>
                 {create.isPending ? "Creating…" : "Create"}

@@ -273,6 +273,27 @@ describe("BomEntryPage", () => {
     });
   });
 
+  it("renders field error message when server rejects Lines[0].QtyPerKg", async () => {
+    setupMocks(mockRequisitionBomInProgress, mockBomWithLines);
+    vi.mocked(api.post).mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: "QtyPerKg must be greater than 0.",
+          errors: { "Lines[0].QtyPerKg": ["Must be greater than 0."] },
+        },
+      },
+    });
+
+    render(wrap(<BomEntryPage />));
+
+    await screen.findByText("HDPE Granules");
+    await userEvent.click(screen.getByRole("button", { name: /submit all/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Must be greater than 0.")).toBeInTheDocument();
+    });
+  });
+
   it("fires auto-save PUT /lines after removing a line", async () => {
     setupMocks(mockRequisitionBomInProgress, mockBomWithLines);
     vi.mocked(api.put).mockResolvedValue({ data: {} });

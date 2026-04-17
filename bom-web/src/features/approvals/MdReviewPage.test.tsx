@@ -148,6 +148,37 @@ describe("MdReviewPage", () => {
     expect(screen.getByText(/Quotation approved/i)).toBeInTheDocument();
   });
 
+  it("renders field error when server rejects Items[0].SalesPricePerKgAed", async () => {
+    mockedApi.get.mockImplementation((url: string) =>
+      Promise.resolve({ data: url.includes("/bom/") ? null : baseReview }),
+    );
+    mockedApi.post.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: "SalesPrice must be greater than 0.",
+          errors: { "Items[0].SalesPricePerKgAed": ["Must be greater than 0."] },
+        },
+      },
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByText("REQ-0042")).toBeInTheDocument(),
+    );
+
+    // Enter a valid price so the client-side check passes
+    const priceInput = screen.getByPlaceholderText("0.0000");
+    await user.type(priceInput, "5");
+
+    const approveButton = screen.getByRole("button", { name: /Approve All/i });
+    await user.click(approveButton);
+
+    await waitFor(() =>
+      expect(screen.getByText("Must be greater than 0.")).toBeInTheDocument(),
+    );
+  });
+
   it("reject with empty notes shows validation error and does not fire mutation", async () => {
     mockedApi.get
       .mockResolvedValueOnce({ data: baseReview })

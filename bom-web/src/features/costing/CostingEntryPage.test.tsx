@@ -244,6 +244,34 @@ describe("CostingEntryPage", () => {
     });
   });
 
+  it("renders field error and border-destructive when server rejects RawMaterialCosts[0].CostPerKg", async () => {
+    const costing = makeCostingReview({
+      lastCost: { costPerKg: 1.25, currencyCode: "AED", updatedAt: new Date().toISOString() },
+    });
+    costing.items[0].costStatus = "InProgress" as never;
+    defaultGetHandler(costing);
+    mockedApi.post.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: "CostPerKg cannot be negative.",
+          errors: { "RawMaterialCosts[0].CostPerKg": ["Cannot be negative."] },
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByLabelText(/Cost per kg for HDPE Granules/i);
+    const btn = screen.getByRole("button", { name: /Submit Costing/i });
+    await user.click(btn);
+
+    await waitFor(() => {
+      expect(screen.getByText("Cannot be negative.")).toBeInTheDocument();
+    });
+
+    const costInput = screen.getByLabelText(/Cost per kg for HDPE Granules/i) as HTMLInputElement;
+    expect(costInput.className.includes("border-destructive")).toBe(true);
+  });
+
   it("enables submit when all costs are greater than 0", async () => {
     const costing = makeCostingReview({
       lastCost: { costPerKg: 1.25, currencyCode: "AED", updatedAt: new Date().toISOString() },

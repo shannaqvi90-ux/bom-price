@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { notify } from "@/lib/notify";
+import { extractFieldErrors } from "@/lib/apiError";
 import { Button } from "@/components/ui/Button";
 import { useActiveExchangeRates } from "@/api/lookups";
 import { useRequisition } from "@/features/requisitions/requisitionsApi";
@@ -77,6 +78,7 @@ export default function CostingEntryPage() {
   const [fohAmount, setFohAmount] = useState<number>(0);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [hydrated, setHydrated] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const debounceRef = useRef<number | undefined>(undefined);
   const hasAutoStartedRef = useRef(false);
 
@@ -251,6 +253,7 @@ export default function CostingEntryPage() {
 
   function handleSubmitItem() {
     if (!selectedItemId) return;
+    setFieldErrors({});
     submitCostingItem.mutate(
       {
         requisitionId,
@@ -278,7 +281,10 @@ export default function CostingEntryPage() {
             navigate(`/requisitions/${requisitionId}`);
           }
         },
-        onError: (err: unknown) => notify.fromApiError(err, "Failed to submit costing."),
+        onError: (err: unknown) => {
+          setFieldErrors(extractFieldErrors(err));
+          notify.fromApiError(err, "Failed to submit costing.");
+        },
       },
     );
   }
@@ -375,28 +381,38 @@ export default function CostingEntryPage() {
                           <span>Last Price</span>
                         </div>
                         {sectionLines.map((line) => {
+                          const overallIdx = lines.findIndex((l) => l.bomLineId === line.bomLineId);
+                          const costErr = fieldErrors[`rawMaterialCosts.${overallIdx}.costPerKg`];
+                          const bomLineErr = fieldErrors[`rawMaterialCosts.${overallIdx}.bomLineId`];
                           const ageDays = line.lastCost ? daysSince(line.lastCost.updatedAt) : null;
                           const stale = ageDays !== null && ageDays > STALE_DAYS;
                           return (
                             <div
                               key={line.bomLineId}
-                              className="grid grid-cols-[2fr_80px_80px_120px_90px_2fr] gap-2 px-4 py-2 text-sm border-b border-border items-center"
+                              className="grid grid-cols-[2fr_80px_80px_120px_90px_2fr] gap-2 px-4 py-2 text-sm border-b border-border items-start"
                             >
-                              <span>{line.rawMaterialDescription}</span>
+                              <span>
+                                {line.rawMaterialDescription}
+                                {bomLineErr && <p className="text-xs text-destructive">{bomLineErr}</p>}
+                              </span>
                               <span className="font-mono text-muted-foreground">{line.qtyPerKg.toFixed(4)}</span>
                               <span className="font-mono text-muted-foreground">{line.wastagePct.toFixed(2)}%</span>
-                              <input
-                                type="number"
-                                step="0.0001"
-                                min="0"
-                                disabled={!canEditItem}
-                                value={line.costPerKg || ""}
-                                onChange={(e) =>
-                                  updateLine(line.bomLineId, { costPerKg: parseFloat(e.target.value) || 0 })
-                                }
-                                className="h-9 rounded-md border border-input bg-background px-2 text-sm font-mono"
-                                aria-label={`Cost per kg for ${line.rawMaterialDescription}`}
-                              />
+                              <div>
+                                <input
+                                  type="number"
+                                  step="0.0001"
+                                  min="0"
+                                  disabled={!canEditItem}
+                                  value={line.costPerKg || ""}
+                                  onChange={(e) => {
+                                    setFieldErrors({});
+                                    updateLine(line.bomLineId, { costPerKg: parseFloat(e.target.value) || 0 });
+                                  }}
+                                  className={`h-9 rounded-md border bg-background px-2 text-sm font-mono ${costErr ? "border-destructive" : "border-input"}`}
+                                  aria-label={`Cost per kg for ${line.rawMaterialDescription}`}
+                                />
+                                {costErr && <p className="text-xs text-destructive">{costErr}</p>}
+                              </div>
                               <select
                                 disabled={!canEditItem}
                                 value={line.currencyCode}

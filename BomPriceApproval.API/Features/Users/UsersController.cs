@@ -39,8 +39,22 @@ public class UsersController(AppDbContext db) : ControllerBase
     {
         var user = await db.Users.FindAsync(id);
         if (user is null) return NotFound();
+
+        var oldRole = user.Role;
+        var oldBranchId = user.BranchId;
+
         user.Name = req.Name; user.Email = req.Email;
         user.Role = req.Role; user.BranchId = req.BranchId; user.IsActive = req.IsActive;
+
+        if (user.Role != oldRole || user.BranchId != oldBranchId)
+        {
+            var activeTokens = await db.RefreshTokens
+                .Where(rt => rt.UserId == user.Id && !rt.IsRevoked)
+                .ToListAsync();
+            foreach (var rt in activeTokens)
+                rt.IsRevoked = true;
+        }
+
         await db.SaveChangesAsync();
         return NoContent();
     }

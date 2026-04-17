@@ -2,6 +2,7 @@ using System.Security.Claims;
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Domain.Enums;
 using BomPriceApproval.API.Infrastructure.Data;
+using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -46,7 +47,10 @@ public class ItemsController(AppDbContext db) : ControllerBase
     public async Task<IActionResult> Create(CreateItemRequest req)
     {
         if (CurrentBranchId is null)
-            return BadRequest(new { message = "A branch-assigned user is required to create items." });
+            return Validation
+                .Detail("A branch-assigned user is required to create items.")
+                .Field("BranchId", "A branch-assigned user is required.")
+                .Return();
 
         var item = new Item
         {

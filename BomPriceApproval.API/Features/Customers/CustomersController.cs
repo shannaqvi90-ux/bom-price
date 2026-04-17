@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Infrastructure.Data;
+using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -48,7 +49,10 @@ public class CustomersController(AppDbContext db) : ControllerBase
     public async Task<IActionResult> Create(CreateCustomerRequest req)
     {
         if (string.IsNullOrWhiteSpace(req.Code))
-            return BadRequest(new { message = "Customer code is required." });
+            return Validation
+                .Detail("Customer code is required.")
+                .Field("Code", "Customer code is required.")
+                .Return();
 
         if (await db.Customers.AnyAsync(c => c.Code == req.Code))
             return Conflict(new { message = $"Customer with code '{req.Code}' already exists." });

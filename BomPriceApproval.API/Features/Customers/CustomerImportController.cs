@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using BomPriceApproval.API.Infrastructure.Services;
+using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -22,11 +23,12 @@ public class CustomerImportController(CustomerImportService importService) : Con
     [HttpPost]
     public async Task<IActionResult> Import([FromForm] IFormFile file)
     {
-        if (file.Length == 0) return BadRequest(new { message = "File is empty" });
+        if (file.Length == 0)
+            return Validation.Detail("File is empty").Field("File", "File is empty.").Return();
 
         var ext = Path.GetExtension(file.FileName).ToLower();
         if (ext is not (".xlsx" or ".csv"))
-            return BadRequest(new { message = "Only .xlsx and .csv files are supported" });
+            return Validation.Detail("Only .xlsx and .csv files are supported").Field("File", "Only .xlsx and .csv files are supported.").Return();
 
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         using var stream = file.OpenReadStream();

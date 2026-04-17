@@ -1,5 +1,7 @@
-import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, Navigate, RouterProvider, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import { Toaster } from "sonner";
+import { setAppNavigate } from "@/lib/navigator";
 import LoginPage from "@/features/auth/LoginPage";
 import { AppShell } from "@/components/layout/AppShell";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
@@ -16,12 +18,19 @@ import NotificationsPage from "@/features/notifications/NotificationsPage";
 import ExchangeRatesPage from "@/features/exchange-rates/ExchangeRatesPage";
 import UsersPage from "@/features/users/UsersPage";
 
+function NavigatorBridge() {
+  const n = useNavigate();
+  useEffect(() => { setAppNavigate(n); }, [n]);
+  return null;
+}
+
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   {
     path: "/",
     element: (
       <ProtectedRoute>
+        <NavigatorBridge />
         <AppShell />
       </ProtectedRoute>
     ),

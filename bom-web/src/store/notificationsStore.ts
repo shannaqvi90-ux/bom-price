@@ -2,6 +2,7 @@ import { create } from "zustand";
 import * as signalR from "@microsoft/signalr";
 import { api } from "@/api/axios";
 import { notify } from "@/lib/notify";
+import { getAppNavigate } from "@/lib/navigator";
 import type { Notification } from "@/types/api";
 
 function pathForNotification(n: Notification): string | null {
@@ -80,7 +81,11 @@ export const notificationsStore = create<NotificationsState>()((set, get) => ({
       action: path
         ? {
             label: "View",
-            onClick: () => window.location.assign(path),
+            onClick: () => {
+              const navigate = getAppNavigate();
+              if (navigate) navigate(path);
+              else window.location.assign(path);
+            },
           }
         : undefined,
     });

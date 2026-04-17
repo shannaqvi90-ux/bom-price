@@ -33,18 +33,22 @@ const baseReview = {
   customerName: "ACME",
   currencyCode: "USD",
   exchangeRate: 3.672,
+  readyForReview: true,
   items: [
     {
       requisitionItemId: 1,
       itemDescription: "HDPE Pipe 20mm",
       expectedQty: 5000,
-      rawMaterialCostPerKg: 2.45,
-      landedCostPerKg: 0.32,
-      fohPerKg: 0.18,
-      totalCostPerKg: 2.95,
-      materialCostPct: 83.05,
-      landedCostPct: 10.85,
-      fohPct: 6.1,
+      costStatus: "Submitted",
+      cost: {
+        rawMaterialCostPerKg: 2.45,
+        landedCostPerKg: 0.32,
+        fohPerKg: 0.18,
+        totalCostPerKg: 2.95,
+        materialCostPct: 83.05,
+        landedCostPct: 10.85,
+        fohPct: 6.1,
+      },
     },
   ],
 };
@@ -234,7 +238,7 @@ describe("MdReviewPage", () => {
     renderPage();
     await waitFor(() =>
       expect(
-        screen.getByText(/not found or not ready for review/i),
+        screen.getByText(/Requisition not found\./i),
       ).toBeInTheDocument(),
     );
   });
@@ -304,18 +308,22 @@ describe("MdReviewPage", () => {
             customerName: "ACME",
             currencyCode: "AED",
             exchangeRate: null,
+            readyForReview: true,
             items: [
               {
                 requisitionItemId: 1,
                 itemDescription: "Widget",
                 expectedQty: 100,
-                rawMaterialCostPerKg: 4,
-                landedCostPerKg: 0.5,
-                fohPerKg: 0.5,
-                totalCostPerKg: 5,
-                materialCostPct: 80,
-                landedCostPct: 10,
-                fohPct: 10,
+                costStatus: "Submitted",
+                cost: {
+                  rawMaterialCostPerKg: 4,
+                  landedCostPerKg: 0.5,
+                  fohPerKg: 0.5,
+                  totalCostPerKg: 5,
+                  materialCostPct: 80,
+                  landedCostPct: 10,
+                  fohPct: 10,
+                },
               },
             ],
           },
@@ -347,18 +355,22 @@ describe("MdReviewPage", () => {
             customerName: "ACME",
             currencyCode: "AED",
             exchangeRate: null,
+            readyForReview: true,
             items: [
               {
                 requisitionItemId: 1,
                 itemDescription: "Widget",
                 expectedQty: 100,
-                rawMaterialCostPerKg: 4,
-                landedCostPerKg: 0.5,
-                fohPerKg: 0.5,
-                totalCostPerKg: 5,
-                materialCostPct: 80,
-                landedCostPct: 10,
-                fohPct: 10,
+                costStatus: "Submitted",
+                cost: {
+                  rawMaterialCostPerKg: 4,
+                  landedCostPerKg: 0.5,
+                  fohPerKg: 0.5,
+                  totalCostPerKg: 5,
+                  materialCostPct: 80,
+                  landedCostPct: 10,
+                  fohPct: 10,
+                },
               },
             ],
           },
@@ -378,6 +390,62 @@ describe("MdReviewPage", () => {
     await user.type(priceInput, "10");
 
     expect(screen.queryByText(/Negative margin/i)).toBeNull();
+  });
+
+  it("shows partial-costing banner and disables Approve when readyForReview is false", async () => {
+    mockedApi.get.mockImplementation((url: string) => {
+      if (url.includes("/approvals/"))
+        return Promise.resolve({
+          data: {
+            refNo: "REQ-0010",
+            customerName: "ACME",
+            currencyCode: "AED",
+            exchangeRate: null,
+            readyForReview: false,
+            items: [
+              {
+                requisitionItemId: 1,
+                itemDescription: "Widget A",
+                expectedQty: 100,
+                costStatus: "Submitted",
+                cost: {
+                  rawMaterialCostPerKg: 4,
+                  landedCostPerKg: 0.5,
+                  fohPerKg: 0.5,
+                  totalCostPerKg: 5,
+                  materialCostPct: 80,
+                  landedCostPct: 10,
+                  fohPct: 10,
+                },
+              },
+              {
+                requisitionItemId: 2,
+                itemDescription: "Widget B",
+                expectedQty: 200,
+                costStatus: "NotStarted",
+                cost: null,
+              },
+            ],
+          },
+        });
+      return Promise.resolve({ data: null });
+    });
+
+    const user = userEvent.setup();
+    renderPage(10);
+    await waitFor(() => expect(screen.getByText("REQ-0010")).toBeInTheDocument());
+
+    // Banner text
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /1 item awaiting costing before approval can be done/i,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Widget B");
+
+    // Approve button is disabled even after entering a price for the costed item
+    const priceInput = screen.getByPlaceholderText("0.0000");
+    await user.type(priceInput, "7");
+
+    expect(screen.getByRole("button", { name: /Approve All/i })).toBeDisabled();
   });
 
   it("View BOM dialog shows frozen Cost/kg and Contribution with footer totals", async () => {

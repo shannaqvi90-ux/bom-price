@@ -352,7 +352,7 @@ export default function CostingEntryPage() {
 
               {selectedItem.bomLines.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No BOM lines. BOM must be submitted first.</p>
-              ) : selectedItem.costStatus === "NotStarted" && !isReadOnly ? (
+              ) : selectedItem.costStatus === "NotStarted" && !isReadOnly && requisition.status === "CostingPending" ? (
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">Click "Start Costing" to begin entering costs for this item.</p>
                   <Button

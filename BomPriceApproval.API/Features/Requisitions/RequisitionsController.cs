@@ -114,6 +114,15 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
             return builder.Return();
         }
 
+        var customerExists = await db.Customers.AnyAsync(c =>
+            c.Id == req.CustomerId &&
+            (!CurrentBranchId.HasValue || c.SalesPersonId == CurrentUserId));
+        if (!customerExists)
+            return Validation
+                .Detail("Customer not found.")
+                .Field("CustomerId", "Unknown customer.")
+                .Return();
+
         decimal? rateSnapshot = null;
         if (req.CurrencyCode != "AED")
         {

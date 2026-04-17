@@ -191,6 +191,32 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
+}
+else
+{
+    app.UseExceptionHandler(exceptionHandlerApp =>
+    {
+        exceptionHandlerApp.Run(async context =>
+        {
+            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+            var feature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+            logger.LogError(feature?.Error, "Unhandled exception for {Path}", context.Request.Path);
+
+            context.Response.StatusCode = 500;
+            context.Response.ContentType = "application/problem+json";
+            await context.Response.WriteAsJsonAsync(new Microsoft.AspNetCore.Mvc.ProblemDetails
+            {
+                Title = "Internal Server Error",
+                Detail = "An unexpected error occurred.",
+                Status = 500
+            });
+        });
+    });
+}
+
 app.UseSwagger();
 app.UseSwaggerUI();
 app.UseCors();

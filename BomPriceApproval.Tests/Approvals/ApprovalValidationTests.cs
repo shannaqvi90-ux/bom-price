@@ -122,8 +122,8 @@ public class ApprovalValidationTests(WebApplicationFactory<Program> factory)
             new { Items = new[] { new { RequisitionItemId = itemIds[0], SalesPricePerKgAed = 0m } }, Notes = "" });
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await resp.Content.ReadFromJsonAsync<ErrorResponse>();
-        body!.Message.Should().Contain("SalesPrice");
+        var body = await resp.Content.ReadFromJsonAsync<ValidationProblemResponse>();
+        body!.Detail.Should().Contain("SalesPrice");
     }
 
     [Fact]
@@ -138,8 +138,8 @@ public class ApprovalValidationTests(WebApplicationFactory<Program> factory)
             new { Items = new[] { new { RequisitionItemId = itemIds[0], SalesPricePerKgAed = 10m } }, Notes = "" });
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await resp.Content.ReadFromJsonAsync<ErrorResponse>();
-        body!.Message.ToLower().Should().Contain("missing");
+        var body = await resp.Content.ReadFromJsonAsync<ValidationProblemResponse>();
+        body!.Detail.ToLower().Should().Contain("missing");
     }
 
     [Fact]
@@ -162,8 +162,8 @@ public class ApprovalValidationTests(WebApplicationFactory<Program> factory)
             });
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await resp.Content.ReadFromJsonAsync<ErrorResponse>();
-        body!.Message.ToLower().Should().Contain("duplicate");
+        var body = await resp.Content.ReadFromJsonAsync<ValidationProblemResponse>();
+        body!.Detail.ToLower().Should().Contain("duplicate");
     }
 
     [Fact]
@@ -202,8 +202,25 @@ public class ApprovalValidationTests(WebApplicationFactory<Program> factory)
             });
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await resp.Content.ReadFromJsonAsync<ErrorResponse>();
-        body!.Message.ToLower().Should().Contain("unknown");
+        var body = await resp.Content.ReadFromJsonAsync<ValidationProblemResponse>();
+        body!.Detail.ToLower().Should().Contain("unknown");
+    }
+
+    [Fact]
+    public async Task Approve_ZeroPrice_EmitsPerFieldError()
+    {
+        var (reqId, itemIds) = await BootstrapToMdReviewAsync(itemCount: 1);
+        var md = await LoginAsync("md@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", md);
+
+        var resp = await _client.PostAsJsonAsync(
+            $"/api/approvals/{reqId}/approve",
+            new { Items = new[] { new { RequisitionItemId = itemIds[0], SalesPricePerKgAed = 0m } }, Notes = "" });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await resp.Content.ReadFromJsonAsync<ValidationProblemResponse>();
+        body!.Errors.Should().ContainKey("Items[0].SalesPricePerKgAed");
+        body.Errors["Items[0].SalesPricePerKgAed"][0].Should().Contain("greater than 0");
     }
 
     // ── Private DTOs (non-colliding with Requisitions namespace records) ──

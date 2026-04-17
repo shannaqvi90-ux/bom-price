@@ -3,6 +3,7 @@ using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Domain.Enums;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Services;
+using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -60,29 +61,56 @@ public class ApprovalsController(AppDbContext db, NotificationService notificati
 
         if (req is null) return NotFound();
         if (req.Status != RequisitionStatus.MdReview)
-            return BadRequest(new { message = "Requisition is not in MdReview status" });
+            return Validation
+                .Detail("Requisition is not in MdReview status")
+                .Field("Status", "Requisition is not in MdReview status.")
+                .Return();
 
         if (request.Items is null || request.Items.Count == 0)
-            return BadRequest(new { message = "No items provided for approval." });
+            return Validation
+                .Detail("No items provided for approval.")
+                .Field("Items", "No items provided for approval.")
+                .Return();
 
         if (request.Items.Any(i => i.SalesPricePerKgAed <= 0))
-            return BadRequest(new { message = "SalesPrice must be greater than 0." });
+        {
+            var builder = Validation.Detail("SalesPrice must be greater than 0.");
+            for (int i = 0; i < request.Items.Count; i++)
+                if (request.Items[i].SalesPricePerKgAed <= 0)
+                    builder.Field($"Items[{i}].SalesPricePerKgAed", "Must be greater than 0.");
+            return builder.Return();
+        }
 
         var inputIds = request.Items.Select(i => i.RequisitionItemId).ToList();
         if (inputIds.Count != inputIds.Distinct().Count())
-            return BadRequest(new { message = "Duplicate items in approval request." });
+            return Validation
+                .Detail("Duplicate items in approval request.")
+                .Field("Items", "Duplicate items in request.")
+                .Return();
 
         var requisitionItemIds = req.Items.Select(i => i.Id).ToList();
         var missingInputs = requisitionItemIds.Except(inputIds).ToList();
         if (missingInputs.Count > 0)
-            return BadRequest(new { message = $"Missing price for item(s): {string.Join(", ", missingInputs)}" });
+            return Validation
+                .Detail($"Missing price for item(s): {string.Join(", ", missingInputs)}")
+                .Field("Items", "Missing price for one or more items.")
+                .Return();
 
-        var orphanInputs = inputIds.Except(requisitionItemIds).ToList();
-        if (orphanInputs.Count > 0)
-            return BadRequest(new { message = $"Unknown item(s) in request: {string.Join(", ", orphanInputs)}" });
+        var orphanInputSet = inputIds.Except(requisitionItemIds).ToHashSet();
+        if (orphanInputSet.Count > 0)
+        {
+            var builder = Validation.Detail($"Unknown item(s) in request: {string.Join(", ", orphanInputSet)}");
+            for (int i = 0; i < request.Items.Count; i++)
+                if (orphanInputSet.Contains(request.Items[i].RequisitionItemId))
+                    builder.Field($"Items[{i}].RequisitionItemId", "Unknown item.");
+            return builder.Return();
+        }
 
         if (req.Items.Any(i => i.BomHeader?.Cost is null))
-            return BadRequest(new { message = "All items must have a costed BOM before approval." });
+            return Validation
+                .Detail("All items must have a costed BOM before approval.")
+                .Field("Items", "One or more items have no costed BOM.")
+                .Return();
 
         var approval = new QuotationApproval
         {
@@ -151,7 +179,10 @@ public class ApprovalsController(AppDbContext db, NotificationService notificati
 
         if (req is null) return NotFound();
         if (req.Status != RequisitionStatus.MdReview)
-            return BadRequest(new { message = "Requisition is not in MdReview status" });
+            return Validation
+                .Detail("Requisition is not in MdReview status")
+                .Field("Status", "Requisition is not in MdReview status.")
+                .Return();
 
         var approval = new QuotationApproval
         {

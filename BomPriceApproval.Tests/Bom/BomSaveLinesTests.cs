@@ -190,8 +190,8 @@ public class BomSaveLinesTests(WebApplicationFactory<Program> factory)
             });
 
         saveResp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await saveResp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Shared.ErrorResponse>();
-        body!.Message.Should().Contain("QtyPerKg");
+        var body = await saveResp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Shared.ValidationProblemResponse>();
+        body!.Detail.Should().Contain("QtyPerKg");
     }
 
     [Fact]
@@ -255,8 +255,8 @@ public class BomSaveLinesTests(WebApplicationFactory<Program> factory)
             });
 
         saveResp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await saveResp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Shared.ErrorResponse>();
-        body!.Message.ToLower().Should().Contain("wastage");
+        var body = await saveResp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Shared.ValidationProblemResponse>();
+        body!.Detail.ToLower().Should().Contain("wastage");
     }
 
     private record LoginResponse(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId);

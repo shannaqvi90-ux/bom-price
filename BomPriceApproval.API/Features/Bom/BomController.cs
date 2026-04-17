@@ -3,6 +3,7 @@ using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Domain.Enums;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Services;
+using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -72,13 +73,17 @@ public class BomController(AppDbContext db, NotificationService notificationServ
         if (req is null) return NotFound();
         if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
         if (req.Status != RequisitionStatus.BomPending && req.Status != RequisitionStatus.BomInProgress)
-            return BadRequest(new { message = "Requisition is not in BomPending or BomInProgress status" });
+            return Validation.Detail("Requisition is not in BomPending or BomInProgress status")
+                .Field("Status", "Must be BomPending or BomInProgress.")
+                .Return();
 
         var ri = await db.RequisitionItems.Include(r => r.BomHeader)
             .FirstOrDefaultAsync(r => r.Id == requisitionItemId && r.QuotationRequestId == requisitionId);
         if (ri is null) return NotFound();
         if (ri.BomHeader is not null)
-            return BadRequest(new { message = "BOM already started for this item" });
+            return Validation.Detail("BOM already started for this item")
+                .Field("RequisitionItemId", "BOM already started for this item.")
+                .Return();
 
         if (req.Status == RequisitionStatus.BomPending)
         {
@@ -100,7 +105,9 @@ public class BomController(AppDbContext db, NotificationService notificationServ
         if (req is null) return NotFound();
         if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
         if (req.Status != RequisitionStatus.BomInProgress)
-            return BadRequest(new { message = "BOM can only be saved when status is BomInProgress" });
+            return Validation.Detail("BOM can only be saved when status is BomInProgress")
+                .Field("Status", "Must be BomInProgress.")
+                .Return();
 
         var bom = await db.BomHeaders.Include(b => b.Lines)
             .FirstOrDefaultAsync(b => b.RequisitionItemId == requisitionItemId);
@@ -108,20 +115,52 @@ public class BomController(AppDbContext db, NotificationService notificationServ
         if (bom.CreatedByUserId != CurrentUserId) return Forbid();
 
         if (request.Lines.Any(l => l.QtyPerKg <= 0))
-            return BadRequest(new { message = "QtyPerKg must be greater than 0." });
+        {
+            var builder = Validation.Detail("QtyPerKg must be greater than 0.");
+            for (int i = 0; i < request.Lines.Count; i++)
+                if (request.Lines[i].QtyPerKg <= 0)
+                    builder.Field($"Lines[{i}].QtyPerKg", "Must be greater than 0.");
+            return builder.Return();
+        }
 
         if (request.Lines.Any(l => l.WastagePct < 0))
-            return BadRequest(new { message = "WastagePct cannot be negative." });
+        {
+            var builder = Validation.Detail("WastagePct cannot be negative.");
+            for (int i = 0; i < request.Lines.Count; i++)
+                if (request.Lines[i].WastagePct < 0)
+                    builder.Field($"Lines[{i}].WastagePct", "Cannot be negative.");
+            return builder.Return();
+        }
 
         var processIds = request.Lines.Select(l => l.ProcessId).Distinct().ToList();
-        var validProcessCount = await db.Processes.CountAsync(p => processIds.Contains(p.Id));
-        if (validProcessCount != processIds.Count)
-            return BadRequest(new { message = "One or more ProcessIds are invalid." });
+        var validProcessIds = await db.Processes
+            .Where(p => processIds.Contains(p.Id))
+            .Select(p => p.Id)
+            .ToListAsync();
+        var invalidProcessIds = processIds.Except(validProcessIds).ToHashSet();
+        if (invalidProcessIds.Count > 0)
+        {
+            var builder = Validation.Detail("One or more ProcessIds are invalid.");
+            for (int i = 0; i < request.Lines.Count; i++)
+                if (invalidProcessIds.Contains(request.Lines[i].ProcessId))
+                    builder.Field($"Lines[{i}].ProcessId", "Invalid ProcessId.");
+            return builder.Return();
+        }
 
         var rawMatIds = request.Lines.Select(l => l.RawMaterialItemId).Distinct().ToList();
-        var validRawMatCount = await db.Items.CountAsync(i => rawMatIds.Contains(i.Id) && i.IsActive);
-        if (validRawMatCount != rawMatIds.Count)
-            return BadRequest(new { message = "One or more RawMaterialItemIds are invalid or inactive." });
+        var validRawMatIds = await db.Items
+            .Where(i => rawMatIds.Contains(i.Id) && i.IsActive)
+            .Select(i => i.Id)
+            .ToListAsync();
+        var invalidRawMatIds = rawMatIds.Except(validRawMatIds).ToHashSet();
+        if (invalidRawMatIds.Count > 0)
+        {
+            var builder = Validation.Detail("One or more RawMaterialItemIds are invalid or inactive.");
+            for (int i = 0; i < request.Lines.Count; i++)
+                if (invalidRawMatIds.Contains(request.Lines[i].RawMaterialItemId))
+                    builder.Field($"Lines[{i}].RawMaterialItemId", "Invalid or inactive.");
+            return builder.Return();
+        }
 
         db.BomLines.RemoveRange(bom.Lines);
         bom.Lines = request.Lines.Select(l => new BomLine
@@ -146,12 +185,16 @@ public class BomController(AppDbContext db, NotificationService notificationServ
         if (req is null) return NotFound();
         if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
         if (req.Status != RequisitionStatus.BomInProgress)
-            return BadRequest(new { message = "BOM can only be submitted when status is BomInProgress" });
+            return Validation.Detail("BOM can only be submitted when status is BomInProgress")
+                .Field("Status", "Must be BomInProgress.")
+                .Return();
 
         foreach (var ri in req.Items)
         {
             if (ri.BomHeader is null || ri.BomHeader.Lines.Count == 0)
-                return BadRequest(new { message = $"Item '{ri.ItemId}' has no BOM lines. All items must have at least one line." });
+                return Validation.Detail($"Item '{ri.ItemId}' has no BOM lines. All items must have at least one line.")
+                    .Field($"Items[{ri.ItemId}].BomLines", "Must have at least one BOM line.")
+                    .Return();
         }
 
         foreach (var ri in req.Items)

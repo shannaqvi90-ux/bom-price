@@ -2,6 +2,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useState } from "react";
 import { notify } from "@/lib/notify";
+import { extractFieldErrors } from "@/lib/apiError";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
@@ -38,6 +39,7 @@ export default function MdReviewPage() {
 
   const [pageState, setPageState] = useState<PageState>({ kind: "reviewing" });
   const [salesPrices, setSalesPrices] = useState<Record<number, string>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState("");
   const [showBom, setShowBom] = useState(false);
 
@@ -90,6 +92,7 @@ export default function MdReviewPage() {
   });
 
   async function handleApprove() {
+    setFieldErrors({});
     const items = data!.items.map((item) => {
       const price = Number(salesPrices[item.requisitionItemId] ?? "");
       return { requisitionItemId: item.requisitionItemId, salesPricePerKgAed: price };
@@ -106,6 +109,7 @@ export default function MdReviewPage() {
       notify.success("Quotation approved");
       setPageState({ kind: "approved" });
     } catch (e) {
+      setFieldErrors(extractFieldErrors(e));
       notify.fromApiError(e, "Failed to approve.");
     }
   }
@@ -163,13 +167,14 @@ export default function MdReviewPage() {
 
       {/* Per-item cost breakdown */}
       <div className="space-y-4">
-        {data.items.map((item) => {
+        {data.items.map((item, idx) => {
           const priceStr = salesPrices[item.requisitionItemId] ?? "";
           const price = Number(priceStr);
           const hasValidPrice = Number.isFinite(price) && price > 0;
           const marginPct = hasValidPrice
             ? ((price - item.totalCostPerKg) / price) * 100
             : 0;
+          const priceErr = fieldErrors[`items.${idx}.salesPricePerKgAed`];
 
           return (
             <Card key={item.requisitionItemId}>
@@ -207,15 +212,18 @@ export default function MdReviewPage() {
                           step="0.0001"
                           min="0"
                           value={priceStr}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            setFieldErrors({});
                             setSalesPrices((prev) => ({
                               ...prev,
                               [item.requisitionItemId]: e.target.value,
-                            }))
-                          }
-                          className="w-full rounded-md border px-3 py-2 text-sm"
+                            }));
+                          }}
+                          className={`w-full rounded-md border px-3 py-2 text-sm ${priceErr ? "border-destructive" : ""}`}
                           placeholder="0.0000"
+                          aria-label="Sales Price (AED/kg)"
                         />
+                        {priceErr && <p className="text-xs text-destructive">{priceErr}</p>}
                       </div>
                       {hasValidPrice && (
                         <div

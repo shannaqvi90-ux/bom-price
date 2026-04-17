@@ -58,8 +58,8 @@ public class ValidationTests(WebApplicationFactory<Program> factory)
         });
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await resp.Content.ReadFromJsonAsync<ErrorResponse>();
-        body!.Message.Should().Contain("Duplicate");
+        var body = await resp.Content.ReadFromJsonAsync<ValidationProblemResponse>();
+        body!.Detail.Should().Contain("Duplicate");
     }
 
     [Fact]
@@ -79,8 +79,8 @@ public class ValidationTests(WebApplicationFactory<Program> factory)
         });
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await resp.Content.ReadFromJsonAsync<ErrorResponse>();
-        body!.Message.Should().Contain("ExpectedQty");
+        var body = await resp.Content.ReadFromJsonAsync<ValidationProblemResponse>();
+        body!.Detail.Should().Contain("ExpectedQty");
     }
 
     [Fact]
@@ -100,8 +100,8 @@ public class ValidationTests(WebApplicationFactory<Program> factory)
         });
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await resp.Content.ReadFromJsonAsync<ErrorResponse>();
-        body!.Message.Should().Contain("ExpectedQty");
+        var body = await resp.Content.ReadFromJsonAsync<ValidationProblemResponse>();
+        body!.Detail.Should().Contain("ExpectedQty");
     }
 
     [Fact]
@@ -119,8 +119,8 @@ public class ValidationTests(WebApplicationFactory<Program> factory)
         });
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await resp.Content.ReadFromJsonAsync<ErrorResponse>();
-        body!.Message.ToLower().Should().Contain("unknown");
+        var body = await resp.Content.ReadFromJsonAsync<ValidationProblemResponse>();
+        body!.Detail.ToLower().Should().Contain("unknown");
     }
 
     [Fact]
@@ -149,8 +149,8 @@ public class ValidationTests(WebApplicationFactory<Program> factory)
         });
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await resp.Content.ReadFromJsonAsync<ErrorResponse>();
-        body!.Message.ToLower().Should().Contain("inactive");
+        var body = await resp.Content.ReadFromJsonAsync<ValidationProblemResponse>();
+        body!.Detail.ToLower().Should().Contain("inactive");
     }
 
     [Fact]
@@ -176,8 +176,8 @@ public class ValidationTests(WebApplicationFactory<Program> factory)
             new { ItemId = itemA, ExpectedQty = 2m });
 
         addResp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await addResp.Content.ReadFromJsonAsync<ErrorResponse>();
-        body!.Message.ToLower().Should().Contain("already");
+        var body = await addResp.Content.ReadFromJsonAsync<ValidationProblemResponse>();
+        body!.Detail.ToLower().Should().Contain("already");
     }
 
     private record RaceTestRequisitionDetailItem(int Id, int ItemId);
@@ -258,8 +258,8 @@ public class ValidationTests(WebApplicationFactory<Program> factory)
             new { ItemId = itemB, ExpectedQty = 0m });
 
         addResp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await addResp.Content.ReadFromJsonAsync<ErrorResponse>();
-        body!.Message.Should().Contain("ExpectedQty");
+        var body = await addResp.Content.ReadFromJsonAsync<ValidationProblemResponse>();
+        body!.Detail.Should().Contain("ExpectedQty");
     }
 
     [Fact]
@@ -289,5 +289,27 @@ public class ValidationTests(WebApplicationFactory<Program> factory)
         var body = await resp.Content.ReadFromJsonAsync<ValidationProblemResponse>();
         body!.Detail.Should().Contain("ExpectedQty");
         body.Errors.Should().ContainKey("Items[0].ExpectedQty");
+    }
+
+    [Fact]
+    public async Task Create_ZeroQty_EmitsPerFieldError()
+    {
+        var sp = await LoginAsync("ali@test.com", "Test@1234");
+        var itemId = await CreateActiveFinishedGoodAsync(sp);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", sp);
+        var customerId = await GetCustomerIdAsync();
+
+        var resp = await _client.PostAsJsonAsync("/api/requisitions", new
+        {
+            CustomerId = customerId,
+            Items = new[] { new { ItemId = itemId, ExpectedQty = 0m } },
+            CurrencyCode = "AED"
+        });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await resp.Content.ReadFromJsonAsync<ValidationProblemResponse>();
+        body!.Errors.Should().ContainKey("Items[0].ExpectedQty");
+        body.Errors["Items[0].ExpectedQty"][0].Should().Contain("greater than 0");
     }
 }

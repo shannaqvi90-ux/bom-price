@@ -3,6 +3,7 @@ using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Domain.Enums;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Services;
+using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -72,17 +73,32 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
     public async Task<IActionResult> Create(CreateRequisitionRequest req)
     {
         if (CurrentBranchId is null)
-            return BadRequest(new { message = "A branch-assigned sales person is required to create requisitions." });
+            return Validation
+                .Detail("A branch-assigned sales person is required to create requisitions.")
+                .Field("BranchId", "A branch-assigned sales person is required.")
+                .Return();
 
         if (req.Items.Count == 0)
-            return BadRequest(new { message = "At least one item is required." });
+            return Validation
+                .Detail("At least one item is required.")
+                .Field("Items", "At least one item is required.")
+                .Return();
 
         if (req.Items.Any(i => i.ExpectedQty <= 0))
-            return BadRequest(new { message = "ExpectedQty must be greater than 0." });
+        {
+            var builder = Validation.Detail("ExpectedQty must be greater than 0.");
+            for (int i = 0; i < req.Items.Count; i++)
+                if (req.Items[i].ExpectedQty <= 0)
+                    builder.Field($"Items[{i}].ExpectedQty", "Must be greater than 0.");
+            return builder.Return();
+        }
 
         var distinctItemIds = req.Items.Select(i => i.ItemId).Distinct().ToList();
         if (distinctItemIds.Count != req.Items.Count)
-            return BadRequest(new { message = "Duplicate items in requisition are not allowed." });
+            return Validation
+                .Detail("Duplicate items in requisition are not allowed.")
+                .Field("Items", "Duplicate items are not allowed.")
+                .Return();
 
         var activeItemIds = await db.Items
             .Where(i => distinctItemIds.Contains(i.Id) && i.IsActive)
@@ -90,7 +106,13 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
             .ToListAsync();
         var missingItems = distinctItemIds.Except(activeItemIds).ToList();
         if (missingItems.Count > 0)
-            return BadRequest(new { message = $"Unknown or inactive items: {string.Join(", ", missingItems)}" });
+        {
+            var builder = Validation.Detail($"Unknown or inactive items: {string.Join(", ", missingItems)}");
+            for (int i = 0; i < req.Items.Count; i++)
+                if (missingItems.Contains(req.Items[i].ItemId))
+                    builder.Field($"Items[{i}].ItemId", "Unknown or inactive.");
+            return builder.Return();
+        }
 
         decimal? rateSnapshot = null;
         if (req.CurrencyCode != "AED")
@@ -98,7 +120,11 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
             var rate = await db.ExchangeRates
                 .Where(e => e.CurrencyCode == req.CurrencyCode && e.IsActive)
                 .OrderByDescending(e => e.EffectiveDate).FirstOrDefaultAsync();
-            if (rate is null) return BadRequest(new { message = $"No active exchange rate for {req.CurrencyCode}" });
+            if (rate is null)
+                return Validation
+                    .Detail($"No active exchange rate for {req.CurrencyCode}")
+                    .Field("CurrencyCode", "No active exchange rate.")
+                    .Return();
             rateSnapshot = rate.RateToAed;
         }
 
@@ -140,17 +166,29 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
         if (q is null) return NotFound();
         if (q.SalesPersonId != CurrentUserId) return Forbid();
         if (q.Status != RequisitionStatus.BomPending)
-            return BadRequest(new { message = "Items can only be added when status is BomPending" });
+            return Validation
+                .Detail("Items can only be added when status is BomPending")
+                .Field("Status", "Items can only be added when status is BomPending.")
+                .Return();
 
         if (req.ExpectedQty <= 0)
-            return BadRequest(new { message = "ExpectedQty must be greater than 0." });
+            return Validation
+                .Detail("ExpectedQty must be greater than 0.")
+                .Field("ExpectedQty", "Must be greater than 0.")
+                .Return();
 
         if (q.Items.Any(i => i.ItemId == req.ItemId))
-            return BadRequest(new { message = "Item already added to this requisition." });
+            return Validation
+                .Detail("Item already added to this requisition.")
+                .Field("ItemId", "Item already added.")
+                .Return();
 
         var itemIsValid = await db.Items.AnyAsync(i => i.Id == req.ItemId && i.IsActive);
         if (!itemIsValid)
-            return BadRequest(new { message = $"Unknown or inactive item: {req.ItemId}" });
+            return Validation
+                .Detail($"Unknown or inactive item: {req.ItemId}")
+                .Field("ItemId", "Unknown or inactive.")
+                .Return();
 
         var maxSort = q.Items.Count > 0 ? q.Items.Max(ri => ri.SortOrder) : 0;
         var ri = new RequisitionItem
@@ -173,10 +211,16 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
         if (q is null) return NotFound();
         if (q.SalesPersonId != CurrentUserId) return Forbid();
         if (q.Status != RequisitionStatus.BomPending)
-            return BadRequest(new { message = "Items can only be removed when status is BomPending" });
+            return Validation
+                .Detail("Items can only be removed when status is BomPending")
+                .Field("Status", "Items can only be removed when status is BomPending.")
+                .Return();
 
         if (q.Items.Count <= 1)
-            return BadRequest(new { message = "Cannot remove the last item" });
+            return Validation
+                .Detail("Cannot remove the last item")
+                .Field("Items", "Cannot remove the last item.")
+                .Return();
 
         var ri = q.Items.FirstOrDefault(i => i.Id == requisitionItemId);
         if (ri is null) return NotFound();

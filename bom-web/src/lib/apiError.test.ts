@@ -24,9 +24,9 @@ describe("extractApiError", () => {
 });
 
 describe("extractFieldErrors", () => {
-  it("extracts first message per field and normalizes PascalCase bracket → lowercase dot", () => {
+  it("extracts first message per field and normalizes PascalCase bracket → camelCase dot", () => {
     const err = { response: { data: { errors: { "Items[0].ExpectedQty": ["Must be > 0."] } } } };
-    expect(extractFieldErrors(err)).toEqual({ "items.0.expectedqty": "Must be > 0." });
+    expect(extractFieldErrors(err)).toEqual({ "items.0.expectedQty": "Must be > 0." });
   });
 
   it("handles multi-field payloads", () => {
@@ -41,8 +41,8 @@ describe("extractFieldErrors", () => {
       },
     };
     expect(extractFieldErrors(err)).toEqual({
-      "items.1.expectedqty": "A",
-      "items.2.itemid": "B",
+      "items.1.expectedQty": "A",
+      "items.2.itemId": "B",
     });
   });
 

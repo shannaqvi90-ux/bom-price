@@ -1,4 +1,5 @@
 import { useForm, Controller, useFieldArray, useWatch } from "react-hook-form";
+import type { Path } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useNavigate } from "react-router-dom";
@@ -10,6 +11,7 @@ import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { useCustomers, useItems, useActiveExchangeRates } from "@/api/lookups";
 import { useCreateRequisition } from "./requisitionsApi";
 import { notify } from "@/lib/notify";
+import { extractFieldErrors } from "@/lib/apiError";
 import type { Customer, Item } from "@/types/api";
 
 const itemRowSchema = z.object({
@@ -55,6 +57,7 @@ export default function NewRequisitionPage() {
     control,
     handleSubmit,
     register,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -98,6 +101,10 @@ export default function NewRequisitionPage() {
       notify.success("Requisition created");
       navigate(`/requisitions/${created.id}`, { replace: true });
     } catch (e) {
+      const fields = extractFieldErrors(e);
+      for (const [key, msg] of Object.entries(fields)) {
+        setError(key as Path<FormValues>, { type: "server", message: msg });
+      }
       notify.fromApiError(e, "Failed to create requisition");
     }
   });

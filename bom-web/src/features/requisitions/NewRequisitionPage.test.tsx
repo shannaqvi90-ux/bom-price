@@ -149,6 +149,49 @@ describe("NewRequisitionPage", () => {
     );
   });
 
+  it("highlights the offending row when the server rejects a field", async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.includes("/customers")) return Promise.resolve({ data: [{ id: 1, name: "ACME" }] });
+      if (url.includes("/items"))
+        return Promise.resolve({
+          data: [{ id: 10, code: "A", description: "Item A", type: "FinishedGood", isActive: true }],
+        });
+      if (url.includes("/exchange-rates/active")) return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: [] });
+    });
+
+    vi.mocked(api.post).mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: "ExpectedQty must be greater than 0.",
+          errors: { "Items[0].ExpectedQty": ["Must be greater than 0."] },
+        },
+      },
+    });
+
+    const user = userEvent.setup();
+    render(wrap(<NewRequisitionPage />));
+    await waitFor(() => expect(screen.getByLabelText(/customer/i)).toBeInTheDocument());
+
+    // Select a customer
+    const customerBox = screen.getByLabelText(/customer/i);
+    fireEvent.focus(customerBox);
+    fireEvent.mouseDown(screen.getByText("ACME"));
+
+    // Select Item A
+    const itemBox = screen.getAllByPlaceholderText(/search items/i)[0];
+    fireEvent.focus(itemBox);
+    fireEvent.mouseDown(screen.getByText("Item A"));
+
+    // Enter valid qty (client passes, server rejects)
+    fireEvent.change(screen.getAllByPlaceholderText(/qty/i)[0], { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Create$/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/Must be greater than 0\./i)).toBeInTheDocument(),
+    );
+  });
+
   it("excludes already-selected items from the second row's picker", async () => {
     vi.mocked(api.get).mockImplementation((url: string) => {
       if (url.includes("/customers")) return Promise.resolve({ data: [{ id: 1, name: "ACME" }] });

@@ -22,7 +22,11 @@ export function extractFieldErrors(err: unknown): Record<string, string> {
 }
 
 function normalizeFieldKey(key: string): string {
+  // "Items[2].ExpectedQty" → "items.2.expectedQty"
+  // Lowercase the first letter of each word segment so paths match RHF camelCase register() calls.
   return key
-    .replace(/\[(\d+)\]/g, ".$1") // "Items[2].ExpectedQty" → "Items.2.ExpectedQty"
-    .toLowerCase(); // → "items.2.expectedqty"
+    .replace(/\[(\d+)\]/g, ".$1") // bracket index → dot index
+    .split(".")
+    .map((seg) => (seg === "" || /^\d+$/.test(seg) ? seg : seg.charAt(0).toLowerCase() + seg.slice(1)))
+    .join(".");
 }

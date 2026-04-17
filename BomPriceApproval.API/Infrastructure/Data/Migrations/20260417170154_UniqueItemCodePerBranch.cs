@@ -24,11 +24,16 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                 );
             ");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_Items_Code_BranchId",
-                table: "Items",
-                columns: new[] { "Code", "BranchId" },
-                unique: true);
+            migrationBuilder.Sql(@"
+                DO $$ BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_indexes
+                        WHERE tablename = 'Items' AND indexname = 'IX_Items_Code_BranchId'
+                    ) THEN
+                        CREATE UNIQUE INDEX ""IX_Items_Code_BranchId"" ON ""Items"" (""Code"", ""BranchId"");
+                    END IF;
+                END $$;
+            ");
         }
 
         /// <inheritdoc />

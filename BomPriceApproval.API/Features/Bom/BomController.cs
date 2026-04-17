@@ -112,7 +112,6 @@ public class BomController(AppDbContext db, NotificationService notificationServ
         var bom = await db.BomHeaders.Include(b => b.Lines)
             .FirstOrDefaultAsync(b => b.RequisitionItemId == requisitionItemId);
         if (bom is null) return NotFound();
-        if (bom.CreatedByUserId != CurrentUserId) return Forbid();
 
         if (request.Lines.Any(l => l.QtyPerKg <= 0))
         {

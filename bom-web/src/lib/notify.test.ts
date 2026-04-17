@@ -36,8 +36,8 @@ describe("notify", () => {
     );
   });
 
-  it("fromApiError extracts message and calls error", () => {
-    const err = { response: { data: { message: "Bad request" } } };
+  it("fromApiError extracts detail and calls error", () => {
+    const err = { response: { data: { detail: "Bad request" } } };
     notify.fromApiError(err);
     expect(toast.error).toHaveBeenCalledWith("Bad request", { duration: 6000 });
   });

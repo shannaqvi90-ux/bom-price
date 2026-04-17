@@ -51,7 +51,7 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
             .Include(r => r.Items).ThenInclude(ri => ri.Item)
             .Include(r => r.Customer)
             .Include(r => r.Branch).Include(r => r.SalesPerson)
-            .Include(r => r.Approval)
+            .Include(r => r.Approvals)
             .FirstOrDefaultAsync(r => r.Id == id);
 
         if (q is null) return NotFound();
@@ -65,7 +65,7 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
             q.CreatedAt, q.UpdatedAt,
             q.Items.OrderBy(ri => ri.SortOrder).Select(ri => new RequisitionItemDto(
                 ri.Id, ri.ItemId, ri.Item.Description, ri.ExpectedQty, ri.SortOrder)).ToList(),
-            q.Approval is null ? null : new ApprovalSummary(q.Approval.IsApproved)));
+            q.Approvals.Where(a => !a.IsSuperseded).Select(a => new ApprovalSummary(a.IsApproved)).FirstOrDefault()));
     }
 
     [HttpPost]

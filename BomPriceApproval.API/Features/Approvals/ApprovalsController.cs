@@ -217,12 +217,14 @@ public class ApprovalsController(AppDbContext db, NotificationService notificati
             .Include(q => q.Customer).Include(q => q.Branch)
             .Include(q => q.SalesPerson)
             .Include(q => q.Items).ThenInclude(ri => ri.BomHeader).ThenInclude(b => b!.Cost)
-            .Include(q => q.Approval).ThenInclude(a => a!.Items)
+            .Include(q => q.Approvals).ThenInclude(a => a.Items)
             .FirstOrDefaultAsync(q => q.Id == requisitionId);
 
-        if (req?.Approval is null || !req.Approval.IsApproved) return NotFound();
+        if (req is null) return NotFound();
+        var currentApproval = req.Approvals.FirstOrDefault(a => !a.IsSuperseded);
+        if (currentApproval is null || !currentApproval.IsApproved) return NotFound();
 
-        var pdf = pdfSvc.GenerateQuotation(req, req.Approval);
+        var pdf = pdfSvc.GenerateQuotation(req, currentApproval);
         return File(pdf, "application/pdf", $"{req.RefNo}-Quotation.pdf");
     }
 }

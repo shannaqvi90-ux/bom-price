@@ -18,5 +18,5 @@ public class QuotationRequest
     public User SalesPerson { get; set; } = null!;
     public Customer Customer { get; set; } = null!;
     public ICollection<RequisitionItem> Items { get; set; } = [];
-    public QuotationApproval? Approval { get; set; }
+    public ICollection<QuotationApproval> Approvals { get; set; } = [];
 }

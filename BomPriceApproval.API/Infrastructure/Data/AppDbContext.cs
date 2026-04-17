@@ -81,11 +81,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasForeignKey(e => e.SetByUserId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // QuotationApproval → QuotationRequest (1:1)
+        // QuotationApproval → QuotationRequest (many:1 — superseded rows are kept as history)
         mb.Entity<QuotationApproval>()
             .HasOne(a => a.QuotationRequest)
-            .WithOne(q => q.Approval)
-            .HasForeignKey<QuotationApproval>(a => a.QuotationRequestId);
+            .WithMany(q => q.Approvals)
+            .HasForeignKey(a => a.QuotationRequestId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Fast lookup of the current (non-superseded) approval per requisition
+        mb.Entity<QuotationApproval>()
+            .HasIndex(a => a.QuotationRequestId)
+            .HasFilter("\"IsSuperseded\" = false")
+            .HasDatabaseName("ix_quotation_approvals_current");
 
         mb.Entity<QuotationApproval>()
             .HasOne(a => a.ApprovedBy)

@@ -1,6 +1,8 @@
+using System.IdentityModel.Tokens.Jwt;
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -76,11 +78,26 @@ public class AuthController(AppDbContext db, TokenService tokenService, IConfigu
             token.User.BranchId));
     }
 
+    [Authorize]
     [HttpPost("logout")]
     public async Task<IActionResult> Logout(RefreshRequest req)
     {
+        var jti = User.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+        var expClaim = User.FindFirst(JwtRegisteredClaimNames.Exp)?.Value;
+        if (jti is not null && long.TryParse(expClaim, out var exp))
+        {
+            db.RevokedJtis.Add(new RevokedJti
+            {
+                Jti = jti,
+                ExpiresAt = DateTimeOffset.FromUnixTimeSeconds(exp).UtcDateTime,
+                RevokedAt = DateTime.UtcNow
+            });
+        }
+
         var token = await db.RefreshTokens.FirstOrDefaultAsync(t => t.Token == req.RefreshToken);
-        if (token is not null) { token.IsRevoked = true; await db.SaveChangesAsync(); }
+        if (token is not null) token.IsRevoked = true;
+
+        await db.SaveChangesAsync();
         return NoContent();
     }
 }

@@ -10,10 +10,14 @@ namespace BomPriceApproval.API.Infrastructure.Services;
 public class TokenService(IConfiguration config)
 {
     public string GenerateAccessToken(User user)
+        => GenerateAccessTokenWithJti(user).Token;
+
+    public (string Token, string Jti) GenerateAccessTokenWithJti(User user)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]!));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
         var expiry = DateTime.UtcNow.AddMinutes(int.Parse(config["Jwt:AccessTokenExpiryMinutes"]!));
+        var jti = Guid.NewGuid().ToString("N");
 
         var claims = new[]
         {
@@ -21,7 +25,8 @@ public class TokenService(IConfiguration config)
             new Claim(ClaimTypes.Email, user.Email),
             new Claim(ClaimTypes.Role, user.Role.ToString()),
             new Claim("branchId", user.BranchId?.ToString() ?? ""),
-            new Claim("name", user.Name)
+            new Claim("name", user.Name),
+            new Claim(JwtRegisteredClaimNames.Jti, jti)
         };
 
         var token = new JwtSecurityToken(
@@ -31,7 +36,7 @@ public class TokenService(IConfiguration config)
             expires: expiry,
             signingCredentials: creds);
 
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        return (new JwtSecurityTokenHandler().WriteToken(token), jti);
     }
 
     public string GenerateRefreshToken()

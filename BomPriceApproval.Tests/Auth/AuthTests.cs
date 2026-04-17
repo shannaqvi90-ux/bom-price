@@ -1,14 +1,27 @@
 using System.Diagnostics;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using BomPriceApproval.API.Domain.Entities;
+using BomPriceApproval.API.Infrastructure.Data;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BomPriceApproval.Tests.Auth;
 
 public class AuthTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
 {
     private readonly HttpClient _client = factory.CreateClient();
+
+    private async Task<(string AccessToken, string RefreshToken)> LoginAsync(string email, string password)
+    {
+        var resp = await _client.PostAsJsonAsync("/api/auth/login", new { Email = email, Password = password });
+        resp.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await resp.Content.ReadFromJsonAsync<LoginResponse>();
+        return (body!.AccessToken, body.RefreshToken);
+    }
 
     [Fact]
     public async Task Login_WithValidCredentials_ReturnsTokens()
@@ -84,6 +97,78 @@ public class AuthTests(WebApplicationFactory<Program> factory) : IClassFixture<W
         delta.Should().BeLessThan(AllowedDeltaMs,
             $"unknown-email mean={meanUnknown:F1} ms, wrong-password mean={meanWrong:F1} ms — " +
             $"a large gap indicates the constant-time BCrypt.Verify guard was removed from the login handler");
+    }
+
+    [Fact]
+    public async Task Logout_Then_AccessToken_Returns401()
+    {
+        var (accessToken, refreshToken) = await LoginAsync("ali@test.com", "Test@1234");
+
+        // Logout with the access token in the Authorization header
+        var logoutClient = factory.CreateClient();
+        logoutClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        var logoutResp = await logoutClient.PostAsJsonAsync("/api/auth/logout", new { RefreshToken = refreshToken });
+        logoutResp.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        // Use the old access token on an authenticated endpoint — must be 401 now
+        var getClient = factory.CreateClient();
+        getClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        var getResp = await getClient.GetAsync("/api/requisitions");
+        getResp.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Logout_DoesNotAffect_OtherUsersTokens()
+    {
+        var (aliToken, aliRefresh) = await LoginAsync("ali@test.com", "Test@1234");
+        var (bobToken, _) = await LoginAsync("bob@test.com", "Test@1234");
+
+        // Ali logs out
+        var logoutClient = factory.CreateClient();
+        logoutClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", aliToken);
+        var logoutResp = await logoutClient.PostAsJsonAsync("/api/auth/logout", new { RefreshToken = aliRefresh });
+        logoutResp.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        // Bob's token should still work
+        var bobClient = factory.CreateClient();
+        bobClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bobToken);
+        var bobResp = await bobClient.GetAsync("/api/requisitions");
+        bobResp.StatusCode.Should().NotBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task ExpiredJti_Cleanup_RemovesExpiredRows()
+    {
+        int insertedId;
+        using (var insertScope = factory.Services.CreateScope())
+        {
+            var db = insertScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var expiredJti = new RevokedJti
+            {
+                Jti = Guid.NewGuid().ToString("N"),
+                ExpiresAt = DateTime.UtcNow.AddMinutes(-1),
+                RevokedAt = DateTime.UtcNow.AddMinutes(-16)
+            };
+            db.RevokedJtis.Add(expiredJti);
+            await db.SaveChangesAsync();
+            insertedId = expiredJti.Id;
+        }
+
+        using (var cleanupScope = factory.Services.CreateScope())
+        {
+            var db = cleanupScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var deleted = await db.RevokedJtis
+                .Where(r => r.ExpiresAt < DateTime.UtcNow)
+                .ExecuteDeleteAsync();
+            deleted.Should().BeGreaterThan(0);
+        }
+
+        using (var verifyScope = factory.Services.CreateScope())
+        {
+            var db = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var stillThere = await db.RevokedJtis.FindAsync(insertedId);
+            stillThere.Should().BeNull();
+        }
     }
 
     private record LoginResponse(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId);

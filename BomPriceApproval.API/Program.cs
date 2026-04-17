@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Domain.Enums;
@@ -7,6 +8,9 @@ using BomPriceApproval.API.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+
+// Preserve jti and exp claims under their standard short names after validation
+JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,6 +24,7 @@ builder.Services.AddScoped<PdfService>();
 builder.Services.AddScoped<ItemImportService>();
 builder.Services.AddScoped<CustomerImportService>();
 builder.Services.AddScoped<PurchaseLedgerService>();
+builder.Services.AddHostedService<RevokedJtiCleanupService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt =>
@@ -40,6 +45,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 if (!string.IsNullOrEmpty(token) && ctx.HttpContext.Request.Path.StartsWithSegments("/hubs"))
                     ctx.Token = token;
                 return Task.CompletedTask;
+            },
+            OnTokenValidated = async ctx =>
+            {
+                var jti = ctx.Principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+                if (jti is null) return;
+                var db = ctx.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+                var revoked = await db.RevokedJtis.AnyAsync(r => r.Jti == jti);
+                if (revoked) ctx.Fail("Token revoked");
             }
         };
     });

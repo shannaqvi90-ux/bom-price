@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Check, X } from "lucide-react";
 import { notify } from "@/lib/notify";
+import { extractFieldErrors } from "@/lib/apiError";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
@@ -86,6 +87,7 @@ export default function BomEntryPage() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [duplicateWarning, setDuplicateWarning] = useState<{ processName: string } | null>(null);
   const [pendingDuplicate, setPendingDuplicate] = useState<LocalLine | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Auto-select first item when bom loads
   useEffect(() => {
@@ -168,6 +170,7 @@ export default function BomEntryPage() {
 
   function doSave(newLines: LocalLine[], prevLines: LocalLine[]) {
     if (!selectedItemId) return;
+    setFieldErrors({});
     setSaveStatus("saving");
     saveBomItemLines.mutate(
       {
@@ -261,12 +264,16 @@ export default function BomEntryPage() {
   // ── Submit ─────────────────────────────────────────────────────────────────
 
   function handleSubmit() {
+    setFieldErrors({});
     submitBom.mutate(requisitionId, {
       onSuccess: () => {
         notify.success("BOM submitted for costing");
         navigate(`/requisitions/${requisitionId}`);
       },
-      onError: (err) => notify.fromApiError(err, "Failed to submit BOM"),
+      onError: (err) => {
+        setFieldErrors(extractFieldErrors(err));
+        notify.fromApiError(err, "Failed to submit BOM");
+      },
     });
   }
 
@@ -410,26 +417,44 @@ export default function BomEntryPage() {
                           </div>
                         )}
 
-                        {sectionLines.map((line) => (
-                          <div
-                            key={line.localId}
-                            className="grid grid-cols-[1fr_100px_90px_32px] gap-2 px-4 py-2 text-sm border-b border-border items-center"
-                          >
-                            <span>{line.rawMaterialDescription}</span>
-                            <span className="font-mono">{line.qtyPerKg.toFixed(4)}</span>
-                            <span className="font-mono">{line.wastagePct.toFixed(2)}%</span>
-                            {canEdit && (
-                              <button
-                                type="button"
-                                onClick={() => removeLine(line.localId)}
-                                className="text-destructive hover:opacity-70"
-                                aria-label="Remove line"
-                              >
-                                <X className="h-4 w-4" />
-                              </button>
-                            )}
-                          </div>
-                        ))}
+                        {sectionLines.map((line) => {
+                          const overallIdx = lines.findIndex((l) => l.localId === line.localId);
+                          const qtyErr = fieldErrors[`lines.${overallIdx}.qtyPerKg`];
+                          const wasteErr = fieldErrors[`lines.${overallIdx}.wastagePct`];
+                          const procErr = fieldErrors[`lines.${overallIdx}.processId`];
+                          const rmErr = fieldErrors[`lines.${overallIdx}.rawMaterialItemId`];
+                          return (
+                            <div
+                              key={line.localId}
+                              className="grid grid-cols-[1fr_100px_90px_32px] gap-2 px-4 py-2 text-sm border-b border-border items-start"
+                            >
+                              <div>
+                                <span>{line.rawMaterialDescription}</span>
+                                {(procErr || rmErr) && (
+                                  <p className="text-xs text-destructive">{procErr ?? rmErr}</p>
+                                )}
+                              </div>
+                              <div>
+                                <span className={`font-mono ${qtyErr ? "text-destructive" : ""}`}>{line.qtyPerKg.toFixed(4)}</span>
+                                {qtyErr && <p className="text-xs text-destructive">{qtyErr}</p>}
+                              </div>
+                              <div>
+                                <span className={`font-mono ${wasteErr ? "text-destructive" : ""}`}>{line.wastagePct.toFixed(2)}%</span>
+                                {wasteErr && <p className="text-xs text-destructive">{wasteErr}</p>}
+                              </div>
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeLine(line.localId)}
+                                  className="text-destructive hover:opacity-70"
+                                  aria-label="Remove line"
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
 
                         {isAdding && (
                           <div className="grid grid-cols-[1fr_100px_90px_64px] gap-2 px-4 py-2 border-b border-border items-center bg-muted/20">

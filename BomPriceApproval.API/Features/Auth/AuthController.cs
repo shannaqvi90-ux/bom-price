@@ -10,6 +10,10 @@ namespace BomPriceApproval.API.Features.Auth;
 [Route("api/auth")]
 public class AuthController(AppDbContext db, TokenService tokenService, IConfiguration config) : ControllerBase
 {
+    // Computed once at class load; used to absorb timing when the email is not found,
+    // preventing user enumeration via response-time difference (~3 ms vs ~93 ms).
+    private static readonly string DummyHash = BCrypt.Net.BCrypt.HashPassword("never-matches-anything");
+
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest req)
     {
@@ -17,7 +21,13 @@ public class AuthController(AppDbContext db, TokenService tokenService, IConfigu
             .Include(u => u.RefreshTokens)
             .FirstOrDefaultAsync(u => u.Email == req.Email && u.IsActive);
 
-        if (user is null || !BCrypt.Net.BCrypt.Verify(req.Password, user.PasswordHash))
+        if (user is null)
+        {
+            BCrypt.Net.BCrypt.Verify(req.Password, DummyHash); // constant-time; result discarded
+            return Unauthorized(new { message = "Invalid credentials" });
+        }
+
+        if (!BCrypt.Net.BCrypt.Verify(req.Password, user.PasswordHash))
             return Unauthorized(new { message = "Invalid credentials" });
 
         var accessToken = tokenService.GenerateAccessToken(user);

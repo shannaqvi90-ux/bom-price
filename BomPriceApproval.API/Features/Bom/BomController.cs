@@ -189,11 +189,13 @@ public class BomController(AppDbContext db, NotificationService notificationServ
                 .Field("Status", "Must be BomInProgress.")
                 .Return();
 
-        foreach (var ri in req.Items)
+        var itemList = req.Items.ToList();
+        for (int i = 0; i < itemList.Count; i++)
         {
+            var ri = itemList[i];
             if (ri.BomHeader is null || ri.BomHeader.Lines.Count == 0)
                 return Validation.Detail($"Item '{ri.ItemId}' has no BOM lines. All items must have at least one line.")
-                    .Field($"Items[{ri.ItemId}].BomLines", "Must have at least one BOM line.")
+                    .Field($"Items[{i}].BomLines", "Must have at least one BOM line.")
                     .Return();
         }
 

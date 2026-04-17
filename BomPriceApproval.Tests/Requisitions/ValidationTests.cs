@@ -261,4 +261,33 @@ public class ValidationTests(WebApplicationFactory<Program> factory)
         var body = await addResp.Content.ReadFromJsonAsync<ErrorResponse>();
         body!.Message.Should().Contain("ExpectedQty");
     }
+
+    [Fact]
+    public async Task ValidationProblemDetails_ShapeAndContentType_AreCorrect()
+    {
+        // This test indirectly verifies the Validation fluent builder by triggering
+        // the existing zero-qty check (will be migrated to the builder in Task 2).
+        // Before Task 2: the current response is { message: "..." } → this test FAILS.
+        // After Task 2: the response is a full ProblemDetails → this test PASSES.
+
+        var sp = await LoginAsync("ali@test.com", "Test@1234");
+        var itemId = await CreateActiveFinishedGoodAsync(sp);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", sp);
+        var customerId = await GetCustomerIdAsync();
+
+        var resp = await _client.PostAsJsonAsync("/api/requisitions", new
+        {
+            CustomerId = customerId,
+            Items = new[] { new { ItemId = itemId, ExpectedQty = 0m } },
+            CurrencyCode = "AED"
+        });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        resp.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
+
+        var body = await resp.Content.ReadFromJsonAsync<ValidationProblemResponse>();
+        body!.Detail.Should().Contain("ExpectedQty");
+        body.Errors.Should().ContainKey("Items[0].ExpectedQty");
+    }
 }

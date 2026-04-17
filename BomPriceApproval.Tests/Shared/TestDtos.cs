@@ -5,3 +5,4 @@ public record ItemDto(int Id, string Code, string Description, string Type);
 public record CustomerDto(int Id, string Name);
 public record ErrorResponse(string Message);
 public record CreatedRequisition(int Id, string RefNo);
+public record ValidationProblemResponse(string Detail, Dictionary<string, string[]> Errors);

@@ -1,7 +1,9 @@
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Services;
+using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace BomPriceApproval.API.Features.Auth;
@@ -15,6 +17,7 @@ public class AuthController(AppDbContext db, TokenService tokenService, IConfigu
     private static readonly string DummyHash = BCrypt.Net.BCrypt.HashPassword("never-matches-anything");
 
     [HttpPost("login")]
+    [EnableRateLimiting("login")]
     public async Task<IActionResult> Login(LoginRequest req)
     {
         var user = await db.Users
@@ -27,8 +30,25 @@ public class AuthController(AppDbContext db, TokenService tokenService, IConfigu
             return Unauthorized(new { message = "Invalid credentials" });
         }
 
+        if (user.LockedUntil is not null && user.LockedUntil > DateTime.UtcNow)
+        {
+            return Validation
+                .Detail("Account temporarily locked due to too many failed login attempts. Try again later.")
+                .Field("Email", "Account locked.")
+                .Return();
+        }
+
         if (!BCrypt.Net.BCrypt.Verify(req.Password, user.PasswordHash))
+        {
+            user.FailedLoginAttempts++;
+            if (user.FailedLoginAttempts >= 5)
+                user.LockedUntil = DateTime.UtcNow.AddMinutes(15);
+            await db.SaveChangesAsync();
             return Unauthorized(new { message = "Invalid credentials" });
+        }
+
+        user.FailedLoginAttempts = 0;
+        user.LockedUntil = null;
 
         var accessToken = tokenService.GenerateAccessToken(user);
         var refreshTokenValue = tokenService.GenerateRefreshToken();

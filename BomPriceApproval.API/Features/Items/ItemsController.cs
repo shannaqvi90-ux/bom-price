@@ -6,6 +6,7 @@ using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace BomPriceApproval.API.Features.Items;
 
@@ -52,6 +53,15 @@ public class ItemsController(AppDbContext db) : ControllerBase
                 .Field("BranchId", "A branch-assigned user is required.")
                 .Return();
 
+        var duplicateExists = await db.Items.AnyAsync(i =>
+            i.Code == req.Code &&
+            i.BranchId == CurrentBranchId.Value);
+        if (duplicateExists)
+            return Validation
+                .Detail("An item with this code already exists in the branch.")
+                .Field("Code", "Already exists.")
+                .Return();
+
         var item = new Item
         {
             Code = req.Code, Description = req.Description, Type = req.Type,
@@ -59,7 +69,17 @@ public class ItemsController(AppDbContext db) : ControllerBase
             LastPurchasePrice = req.LastPurchasePrice
         };
         db.Items.Add(item);
-        await db.SaveChangesAsync();
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        {
+            return Validation
+                .Detail("An item with this code already exists in the branch.")
+                .Field("Code", "Already exists.")
+                .Return();
+        }
         return CreatedAtAction(nameof(GetAll),
             new ItemResponse(item.Id, item.Code, item.Description, item.Type.ToString(), item.BranchId, item.IsActive, item.LastPurchasePrice));
     }

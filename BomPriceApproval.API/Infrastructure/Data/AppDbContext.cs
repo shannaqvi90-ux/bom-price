@@ -36,6 +36,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasComputedColumnSql("'REQ-' || LPAD(\"Id\"::text, 4, '0')", stored: true);
 
         mb.Entity<Customer>().HasIndex(c => c.Code).IsUnique();
+
+        mb.Entity<Item>()
+            .HasIndex(i => new { i.Code, i.BranchId })
+            .IsUnique();
         mb.Entity<Customer>()
             .HasOne(c => c.SalesPerson)
             .WithMany()

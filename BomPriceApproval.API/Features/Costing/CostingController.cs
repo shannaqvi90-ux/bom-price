@@ -4,6 +4,7 @@ using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Domain.Enums;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Services;
+using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -94,7 +95,10 @@ public class CostingController(AppDbContext db, NotificationService notification
         if (req is null) return NotFound();
         if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
         if (req.Status != RequisitionStatus.CostingPending && req.Status != RequisitionStatus.CostingInProgress)
-            return BadRequest(new { message = "Requisition is not in CostingPending or CostingInProgress status" });
+            return Validation
+                .Detail("Requisition is not in CostingPending or CostingInProgress status")
+                .Field("Status", "Must be CostingPending or CostingInProgress.")
+                .Return();
 
         if (req.Status == RequisitionStatus.CostingPending)
         {
@@ -113,7 +117,10 @@ public class CostingController(AppDbContext db, NotificationService notification
         if (req is null) return NotFound();
         if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
         if (req.Status != RequisitionStatus.CostingInProgress)
-            return BadRequest(new { message = "Draft can only be saved when status is CostingInProgress" });
+            return Validation
+                .Detail("Draft can only be saved when status is CostingInProgress")
+                .Field("Status", "Must be CostingInProgress.")
+                .Return();
 
         var bom = await db.BomHeaders.FirstOrDefaultAsync(b => b.RequisitionItemId == requisitionItemId);
         if (bom is null) return NotFound();
@@ -142,26 +149,48 @@ public class CostingController(AppDbContext db, NotificationService notification
         if (req is null) return NotFound();
         if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
         if (req.Status != RequisitionStatus.CostingInProgress)
-            return BadRequest(new { message = "Costing can only be submitted when status is CostingInProgress" });
+            return Validation
+                .Detail("Costing can only be submitted when status is CostingInProgress")
+                .Field("Status", "Must be CostingInProgress.")
+                .Return();
 
         var bom = await db.BomHeaders
             .Include(b => b.Lines)
             .Include(b => b.Cost)
             .FirstOrDefaultAsync(b => b.RequisitionItemId == requisitionItemId);
-        if (bom is null) return BadRequest(new { message = "No BOM found for this item" });
+        if (bom is null)
+            return Validation
+                .Detail("No BOM found for this item")
+                .Field("BomHeaderId", "No BOM found for this item.")
+                .Return();
 
         if (request.RawMaterialCosts.Any(rc => rc.CostPerKg < 0))
-            return BadRequest(new { message = "CostPerKg cannot be negative." });
+        {
+            var builder = Validation.Detail("CostPerKg cannot be negative.");
+            for (int i = 0; i < request.RawMaterialCosts.Count; i++)
+                if (request.RawMaterialCosts[i].CostPerKg < 0)
+                    builder.Field($"RawMaterialCosts[{i}].CostPerKg", "Cannot be negative.");
+            return builder.Return();
+        }
 
         var submittedBomLineIds = request.RawMaterialCosts.Select(rc => rc.BomLineId).Distinct().ToList();
         var bomLineIds = bom.Lines.Select(l => l.Id).ToList();
-        var unknownBomLines = submittedBomLineIds.Except(bomLineIds).ToList();
+        var unknownBomLines = submittedBomLineIds.Except(bomLineIds).ToHashSet();
         if (unknownBomLines.Count > 0)
-            return BadRequest(new { message = $"Unknown BOM line(s): {string.Join(", ", unknownBomLines)}" });
+        {
+            var builder = Validation.Detail($"Unknown BOM line(s): {string.Join(", ", unknownBomLines)}");
+            for (int i = 0; i < request.RawMaterialCosts.Count; i++)
+                if (unknownBomLines.Contains(request.RawMaterialCosts[i].BomLineId))
+                    builder.Field($"RawMaterialCosts[{i}].BomLineId", "Unknown BOM line.");
+            return builder.Return();
+        }
 
         var missingBomLines = bomLineIds.Except(submittedBomLineIds).ToList();
         if (missingBomLines.Count > 0)
-            return BadRequest(new { message = $"Missing cost for BOM line(s): {string.Join(", ", missingBomLines)}" });
+            return Validation
+                .Detail($"Missing cost for BOM line(s): {string.Join(", ", missingBomLines)}")
+                .Field("RawMaterialCosts", "Missing cost for one or more BOM lines.")
+                .Return();
 
         var quoteCurrency = (req.CurrencyCode ?? "AED").ToUpperInvariant();
 
@@ -186,7 +215,10 @@ public class CostingController(AppDbContext db, NotificationService notification
 
         decimal quoteRateToAed;
         try { quoteRateToAed = RateToAed(quoteCurrency); }
-        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+        catch (InvalidOperationException ex)
+        {
+            return Validation.Detail(ex.Message).Field("CurrencyCode", ex.Message).Return();
+        }
 
         decimal rawMaterialTotal = 0;
         var newCostLines = new List<BomCostLine>();
@@ -197,7 +229,10 @@ public class CostingController(AppDbContext db, NotificationService notification
             var currency = (rc.CurrencyCode ?? "AED").ToUpperInvariant();
             decimal entryRate;
             try { entryRate = RateToAed(currency); }
-            catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+            catch (InvalidOperationException ex)
+            {
+                return Validation.Detail(ex.Message).Field("CurrencyCode", ex.Message).Return();
+            }
 
             var costInQuote = rc.CostPerKg * entryRate / quoteRateToAed;
             rawMaterialTotal += costInQuote * line.QtyPerKg * (1 + line.WastagePct / 100);

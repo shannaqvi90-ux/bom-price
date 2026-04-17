@@ -319,8 +319,8 @@ public class CostingTests(WebApplicationFactory<Program> factory)
             });
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await resp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Shared.ErrorResponse>();
-        body!.Message.ToLower().Should().Contain("cost");
+        var body = await resp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Shared.ValidationProblemResponse>();
+        body!.Detail.ToLower().Should().Contain("cost");
     }
 
     [Fact]
@@ -342,8 +342,8 @@ public class CostingTests(WebApplicationFactory<Program> factory)
             });
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await resp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Shared.ErrorResponse>();
-        body!.Message.ToLower().Should().Contain("unknown");
+        var body = await resp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Shared.ValidationProblemResponse>();
+        body!.Detail.ToLower().Should().Contain("unknown");
     }
 
     [Fact]
@@ -366,8 +366,8 @@ public class CostingTests(WebApplicationFactory<Program> factory)
             });
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await resp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Shared.ErrorResponse>();
-        body!.Message.Should().Contain("Missing cost");
+        var body = await resp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Shared.ValidationProblemResponse>();
+        body!.Detail.Should().Contain("Missing cost");
     }
 
     // ── DTOs ──

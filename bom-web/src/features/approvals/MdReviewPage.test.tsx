@@ -136,6 +136,12 @@ describe("MdReviewPage", () => {
     const approveButton = screen.getByRole("button", { name: /Approve All/i });
     await user.click(approveButton);
 
+    // Confirmation dialog appears — confirm the approval.
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: /Approve quotation\?/i })).toBeInTheDocument(),
+    );
+    await user.click(screen.getByRole("button", { name: /^Approve$/i }));
+
     await waitFor(() =>
       expect(
         screen.getByRole("button", { name: /Download PDF/i }),
@@ -178,6 +184,12 @@ describe("MdReviewPage", () => {
     const approveButton = screen.getByRole("button", { name: /Approve All/i });
     await user.click(approveButton);
 
+    // Confirm the approval in the dialog — only then the mutation fires.
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: /Approve quotation\?/i })).toBeInTheDocument(),
+    );
+    await user.click(screen.getByRole("button", { name: /^Approve$/i }));
+
     await waitFor(() =>
       expect(screen.getByText("Must be greater than 0.")).toBeInTheDocument(),
     );
@@ -216,6 +228,14 @@ describe("MdReviewPage", () => {
 
     await user.type(screen.getByLabelText(/Notes/i), "Price too high");
     await user.click(screen.getByRole("button", { name: /^reject$/i }));
+
+    // Confirm the rejection in the dialog.
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: /Reject quotation\?/i })).toBeInTheDocument(),
+    );
+    const confirmButtons = screen.getAllByRole("button", { name: /^Reject$/i });
+    // The second Reject button is the one inside the confirm dialog.
+    await user.click(confirmButtons[confirmButtons.length - 1]);
 
     await waitFor(() =>
       expect(screen.getByText(/Requisition Detail Stub/i)).toBeInTheDocument(),

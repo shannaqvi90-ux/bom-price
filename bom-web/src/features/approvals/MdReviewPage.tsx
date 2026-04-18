@@ -6,6 +6,7 @@ import { extractFieldErrors } from "@/lib/apiError";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { api } from "@/api/axios";
 import { useBom } from "@/features/bom/bomApi";
 import {
@@ -42,6 +43,8 @@ export default function MdReviewPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState("");
   const [showBom, setShowBom] = useState(false);
+  const [confirmApprove, setConfirmApprove] = useState(false);
+  const [confirmReject, setConfirmReject] = useState(false);
 
   const httpStatus = (error as { response?: { status?: number } } | null)
     ?.response?.status;
@@ -95,7 +98,7 @@ export default function MdReviewPage() {
 
   const uncostdItems = data.items.filter((item) => item.cost === null);
 
-  async function handleApprove() {
+  function requestApprove() {
     setFieldErrors({});
     const items = data!.items
       .filter((item) => item.cost !== null)
@@ -107,46 +110,68 @@ export default function MdReviewPage() {
       notify.error("Enter a valid sales price for all items.");
       return;
     }
+    setConfirmApprove(true);
+  }
+
+  async function handleApproveConfirmed() {
+    const items = data!.items
+      .filter((item) => item.cost !== null)
+      .map((item) => {
+        const price = Number(salesPrices[item.requisitionItemId] ?? "");
+        return { requisitionItemId: item.requisitionItemId, salesPricePerKgAed: price };
+      });
     try {
       await approve.mutateAsync({
         requisitionId,
         payload: { items, notes: notes || undefined },
       });
+      setConfirmApprove(false);
       notify.success("Quotation approved");
       setPageState({ kind: "approved" });
     } catch (e) {
+      setConfirmApprove(false);
       setFieldErrors(extractFieldErrors(e));
       notify.fromApiError(e, "Failed to approve.");
     }
   }
 
-  async function handleReject() {
+  function requestReject() {
     if (notes.trim().length === 0) {
       notify.error("Notes are required when rejecting.");
       return;
     }
+    setConfirmReject(true);
+  }
+
+  async function handleRejectConfirmed() {
     try {
       await reject.mutateAsync({
         requisitionId,
         payload: { notes: notes.trim() },
       });
+      setConfirmReject(false);
       notify.success("Quotation rejected");
       navigate(`/requisitions/${requisitionId}`);
     } catch (e) {
+      setConfirmReject(false);
       notify.fromApiError(e, "Failed to reject.");
     }
   }
 
   async function handleDownloadPdf() {
-    const response = await api.get(`/approvals/${requisitionId}/pdf`, {
-      responseType: "blob",
-    });
-    const url = URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${data!.refNo}-Quotation.pdf`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const response = await api.get(`/approvals/${requisitionId}/pdf`, {
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${data!.refNo}-Quotation.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      notify.fromApiError(e, "Failed to download PDF.");
+    }
   }
 
   return (
@@ -250,6 +275,8 @@ export default function MdReviewPage() {
                         </div>
                         {hasValidPrice && (
                           <div
+                            role={marginPct < 0 ? "alert" : undefined}
+                            aria-live={marginPct < 0 ? "polite" : undefined}
                             className={`rounded-md p-2 text-center text-sm font-semibold ${
                               marginPct > 0
                                 ? "bg-green-50 text-green-800"
@@ -309,14 +336,14 @@ export default function MdReviewPage() {
 
               <div className="flex gap-2">
                 <Button
-                  onClick={handleApprove}
+                  onClick={requestApprove}
                   disabled={approve.isPending || !allPricesValid || !data.readyForReview}
                   className="flex-1 bg-green-700 hover:bg-green-800"
                 >
                   {approve.isPending ? "Approving…" : "Approve All"}
                 </Button>
                 <Button
-                  onClick={handleReject}
+                  onClick={requestReject}
                   disabled={reject.isPending}
                   variant="destructive"
                   className="flex-1"
@@ -389,6 +416,27 @@ export default function MdReviewPage() {
           <p className="text-sm text-muted-foreground">Loading BOM…</p>
         )}
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmApprove}
+        title="Approve quotation?"
+        message={`This will approve ${data.refNo} and notify the salesperson. The quotation PDF will be generated and emailed. Continue?`}
+        confirmLabel="Approve"
+        isPending={approve.isPending}
+        onConfirm={handleApproveConfirmed}
+        onCancel={() => setConfirmApprove(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmReject}
+        title="Reject quotation?"
+        message={`This will reject ${data.refNo} and notify the salesperson and accountants. Continue?`}
+        confirmLabel="Reject"
+        destructive
+        isPending={reject.isPending}
+        onConfirm={handleRejectConfirmed}
+        onCancel={() => setConfirmReject(false)}
+      />
     </div>
   );
 }

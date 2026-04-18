@@ -351,13 +351,22 @@ public class RequisitionsController(
         await db.SaveChangesAsync();
         await tx.CommitAsync();
 
-        var bomCreators = await db.Users
-            .Where(u => u.Role == UserRole.BomCreator && (u.BranchId == q.BranchId || u.BranchId == null) && u.IsActive)
-            .ToListAsync();
+        try
+        {
+            var bomCreators = await db.Users
+                .Where(u => u.Role == UserRole.BomCreator && (u.BranchId == q.BranchId || u.BranchId == null) && u.IsActive)
+                .ToListAsync();
 
-        foreach (var creator in bomCreators)
-            await notificationService.SendAsync(creator.Id,
-                $"Resubmitted BOM request: {q.RefNo}", q.Id, "QuotationRequest");
+            foreach (var creator in bomCreators)
+                await notificationService.SendAsync(creator.Id,
+                    $"Resubmitted BOM request: {q.RefNo}", q.Id, "QuotationRequest");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Notification dispatch failed after successful commit for {Entity} {Id}",
+                "QuotationRequest", q.Id);
+        }
 
         return Ok(new { q.Id, q.RefNo, Status = q.Status.ToString() });
     }

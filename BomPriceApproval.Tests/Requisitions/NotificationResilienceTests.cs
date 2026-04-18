@@ -56,4 +56,97 @@ public class NotificationResilienceTests(ThrowingNotificationFactory factory)
         var detail = await _client.GetFromJsonAsync<ReqDetail>($"/api/requisitions/{created!.Id}");
         detail!.Status.Should().Be("BomPending");
     }
+
+    private record ProcessMin(int Id);
+    private record RiMin(int Id);
+    private record ReqDetailWithItems(int Id, string Status, List<RiMin> Items);
+    private record CostingBomLineMin(int BomLineId);
+    private record CostingItemMin(int RequisitionItemId, List<CostingBomLineMin> BomLines);
+    private record CostingReview(int RequisitionId, List<CostingItemMin> Items);
+
+    [Fact]
+    public async Task Resubmit_ReturnsOk_EvenIfNotificationThrows()
+    {
+        // Arrange — drive a requisition all the way through to Rejected, then resubmit.
+        var spToken = await LoginAsync("ali@test.com", "Test@1234");
+        var adminToken = await LoginAsync("admin@test.com", "Admin@1234");
+        var bomToken = await LoginAsync("bob@test.com", "Test@1234");
+        var acctToken = await LoginAsync("sara@test.com", "Test@1234");
+        var mdToken = await LoginAsync("md@test.com", "Test@1234");
+
+        UseToken(spToken);
+        var fgCode = $"FG-{Guid.NewGuid():N}".Substring(0, 10);
+        var rmCode = $"RM-{Guid.NewGuid():N}".Substring(0, 10);
+        var fgResp = await _client.PostAsJsonAsync("/api/items",
+            new { Code = fgCode, Description = "FG", Type = "FinishedGood", LastPurchasePrice = (decimal?)null });
+        fgResp.EnsureSuccessStatusCode();
+        var fg = await fgResp.Content.ReadFromJsonAsync<ItemMin>();
+        var rmResp = await _client.PostAsJsonAsync("/api/items",
+            new { Code = rmCode, Description = "RM", Type = "RawMaterial", LastPurchasePrice = 5m });
+        rmResp.EnsureSuccessStatusCode();
+        var rm = await rmResp.Content.ReadFromJsonAsync<ItemMin>();
+
+        var customers = await _client.GetFromJsonAsync<List<CustomerMin>>("/api/customers");
+        var reqResp = await _client.PostAsJsonAsync("/api/requisitions", new
+        {
+            CustomerId = customers!.First().Id,
+            Items = new[] { new { ItemId = fg!.Id, ExpectedQty = 100m } },
+            CurrencyCode = "AED"
+        });
+        reqResp.EnsureSuccessStatusCode();
+        var created = await reqResp.Content.ReadFromJsonAsync<CreatedReq>();
+        var reqId = created!.Id;
+
+        var reqDetail = await _client.GetFromJsonAsync<ReqDetailWithItems>($"/api/requisitions/{reqId}");
+        var riId = reqDetail!.Items[0].Id;
+
+        UseToken(adminToken);
+        var procCode = $"PROC-{Guid.NewGuid():N}".Substring(0, 12);
+        var procResp = await _client.PostAsJsonAsync("/api/processes", new { Name = procCode, DisplayOrder = 99 });
+        procResp.EnsureSuccessStatusCode();
+        var process = await procResp.Content.ReadFromJsonAsync<ProcessMin>();
+
+        UseToken(bomToken);
+        await _client.PostAsync($"/api/bom/{reqId}/items/{riId}/start", null);
+        await _client.PutAsJsonAsync($"/api/bom/{reqId}/items/{riId}/lines", new
+        {
+            Lines = new[]
+            {
+                new { ProcessId = process!.Id, RawMaterialItemId = rm!.Id, QtyPerKg = 0.85m, WastagePct = 2.0m }
+            }
+        });
+        await _client.PostAsync($"/api/bom/{reqId}/submit", null);
+
+        UseToken(acctToken);
+        await _client.PostAsync($"/api/costing/{reqId}/items/{riId}/start", null);
+        var review = await _client.GetFromJsonAsync<CostingReview>($"/api/costing/{reqId}");
+        var bomLineId = review!.Items[0].BomLines[0].BomLineId;
+
+        await _client.PostAsJsonAsync($"/api/costing/{reqId}/items/{riId}/submit", new
+        {
+            RawMaterialCosts = new[] { new { BomLineId = bomLineId, CostPerKg = 1.00m, CurrencyCode = "AED" } },
+            LandedCostType = "Percentage",
+            LandedCostValue = 0m,
+            FohAmount = 0m
+        });
+
+        UseToken(mdToken);
+        var rejectResp = await _client.PostAsJsonAsync($"/api/approvals/{reqId}/reject", new { Notes = "please revise" });
+        rejectResp.EnsureSuccessStatusCode();
+
+        // Act — resubmit with the same single item. This goes through the second notification block.
+        UseToken(spToken);
+        var resubmitResp = await _client.PostAsJsonAsync($"/api/requisitions/{reqId}/resubmit", new
+        {
+            CustomerId = customers.First().Id,
+            Items = new[] { new { ItemId = fg.Id, ExpectedQty = 100m } },
+            CurrencyCode = "AED"
+        });
+
+        // Assert — 200 OK and status back to BomPending.
+        resubmitResp.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var after = await _client.GetFromJsonAsync<ReqDetailWithItems>($"/api/requisitions/{reqId}");
+        after!.Status.Should().Be("BomPending");
+    }
 }

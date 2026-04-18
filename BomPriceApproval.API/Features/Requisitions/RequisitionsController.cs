@@ -67,7 +67,6 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
                 ri.Id, ri.ItemId, ri.Item.Description, ri.ExpectedQty, ri.SortOrder)).ToList(),
             q.Approvals
                 .Where(a => !a.IsSuperseded)
-                .OrderByDescending(a => a.ApprovedAt)
                 .Select(a => new ApprovalSummary(a.IsApproved, a.Notes, a.ApprovedAt))
                 .FirstOrDefault()));
     }

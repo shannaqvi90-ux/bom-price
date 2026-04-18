@@ -103,7 +103,7 @@ describe("EditRequisitionPage", () => {
       data: { id: 1, refNo: "REQ-0001", status: "BomPending" },
     });
     render(wrap(<EditRequisitionPage />));
-    await waitFor(() => expect(screen.getByRole("button", { name: /resubmit for bom/i })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByDisplayValue("HDPE Pipe 20mm")).toBeInTheDocument());
 
     await userEvent.click(screen.getByRole("button", { name: /resubmit for bom/i }));
 

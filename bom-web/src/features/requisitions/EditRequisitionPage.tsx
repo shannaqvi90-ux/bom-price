@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useRef } from "react";
+import type { Item } from "@/types/api";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -66,15 +67,16 @@ export default function EditRequisitionPage() {
   const hydratedRef = useRef(false);
 
   useEffect(() => {
-    if (!detailQ.data || hydratedRef.current) return;
+    if (!detailQ.data || !itemsQ.data || hydratedRef.current) return;
+    const byId = new Map(itemsQ.data.map((i) => [i.id, i]));
     reset({
       items: detailQ.data.items.map((ri) => ({
-        item: { id: ri.itemId },
+        item: byId.get(ri.itemId) ?? { id: ri.itemId, code: "", description: ri.itemDescription, type: "FinishedGood", branchId: 0, isActive: true, lastPurchasePrice: null } as unknown as Item,
         expectedQty: ri.expectedQty,
       })),
     });
     hydratedRef.current = true;
-  }, [detailQ.data, reset]);
+  }, [detailQ.data, itemsQ.data, reset]);
 
   if (detailQ.isLoading || itemsQ.isLoading) {
     return <p className="text-sm text-muted-foreground">Loading…</p>;

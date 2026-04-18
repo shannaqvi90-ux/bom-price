@@ -207,6 +207,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         // Optimistic concurrency via PostgreSQL system xmin column.
         // No migration needed — xmin is always present on every row.
+        //
+        // Note: QuotationRequest is intentionally NOT xmin-guarded — status
+        // transitions in CostingController.SubmitItem use an explicit SELECT
+        // FOR UPDATE (serialisable lock) that provides stronger concurrency
+        // control, and its FromSqlInterpolated("SELECT *") does not surface
+        // the xmin system column to EF.
         mb.Entity<RefreshToken>().UseXminAsConcurrencyToken();
+        mb.Entity<BomHeader>().UseXminAsConcurrencyToken();
+        mb.Entity<QuotationApproval>().UseXminAsConcurrencyToken();
     }
 }

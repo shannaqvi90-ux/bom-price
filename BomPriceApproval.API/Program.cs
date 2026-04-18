@@ -298,6 +298,33 @@ app.Use(async (ctx, next) =>
     await next();
 });
 
+// Map EF Core optimistic-concurrency failures to 409 Conflict for any endpoint
+// that did not handle DbUpdateConcurrencyException itself. Controllers that need
+// a different response (e.g. AuthController.Refresh returning 401) must catch
+// the exception locally before this middleware sees it.
+app.Use(async (ctx, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (DbUpdateConcurrencyException)
+    {
+        if (!ctx.Response.HasStarted)
+        {
+            ctx.Response.Clear();
+            ctx.Response.StatusCode = StatusCodes.Status409Conflict;
+            ctx.Response.ContentType = "application/problem+json";
+            await ctx.Response.WriteAsJsonAsync(new Microsoft.AspNetCore.Mvc.ProblemDetails
+            {
+                Title = "Conflict",
+                Detail = "The resource was modified by another request. Please reload and try again.",
+                Status = StatusCodes.Status409Conflict
+            });
+        }
+    }
+});
+
 app.UseCors();
 app.UseRateLimiter();
 app.UseAuthentication();

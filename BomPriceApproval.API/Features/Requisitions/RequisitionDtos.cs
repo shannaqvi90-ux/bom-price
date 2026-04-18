@@ -24,3 +24,5 @@ public record RequisitionDetail(
     ApprovalSummary? Approval);
 
 public record ApprovalSummary(bool IsApproved, string? Notes, DateTime ApprovedAt);
+
+public record ResubmitRequisitionRequest(List<RequisitionItemInput> Items);

@@ -233,6 +233,114 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
         return NoContent();
     }
 
+    [HttpPost("{id}/resubmit")]
+    [Authorize(Roles = "SalesPerson")]
+    public async Task<IActionResult> Resubmit(int id, ResubmitRequisitionRequest req)
+    {
+        var q = await db.QuotationRequests
+            .Include(r => r.Items)
+            .Include(r => r.Approvals)
+            .FirstOrDefaultAsync(r => r.Id == id);
+
+        if (q is null) return NotFound();
+        if (q.SalesPersonId != CurrentUserId) return Forbid();
+
+        if (q.Status != RequisitionStatus.Rejected)
+            return Validation
+                .Detail("Requisition is not in Rejected status.")
+                .Field("Status", "Only rejected requisitions can be resubmitted.")
+                .Return();
+
+        if (req.Items.Count == 0)
+            return Validation
+                .Detail("At least one item is required.")
+                .Field("Items", "At least one item is required.")
+                .Return();
+
+        if (req.Items.Any(i => i.ExpectedQty <= 0))
+        {
+            var builder = Validation.Detail("ExpectedQty must be greater than 0.");
+            for (int i = 0; i < req.Items.Count; i++)
+                if (req.Items[i].ExpectedQty <= 0)
+                    builder.Field($"Items[{i}].ExpectedQty", "Must be greater than 0.");
+            return builder.Return();
+        }
+
+        var distinctItemIds = req.Items.Select(i => i.ItemId).Distinct().ToList();
+        if (distinctItemIds.Count != req.Items.Count)
+            return Validation
+                .Detail("Duplicate items in requisition are not allowed.")
+                .Field("Items", "Duplicate items are not allowed.")
+                .Return();
+
+        var activeItemIds = await db.Items
+            .Where(i => distinctItemIds.Contains(i.Id) && i.IsActive)
+            .Select(i => i.Id)
+            .ToListAsync();
+        var missingItems = distinctItemIds.Except(activeItemIds).ToList();
+        if (missingItems.Count > 0)
+        {
+            var builder = Validation.Detail($"Unknown or inactive items: {string.Join(", ", missingItems)}");
+            for (int i = 0; i < req.Items.Count; i++)
+                if (missingItems.Contains(req.Items[i].ItemId))
+                    builder.Field($"Items[{i}].ItemId", "Unknown or inactive.");
+            return builder.Return();
+        }
+
+        decimal? rateSnapshot = null;
+        if (q.CurrencyCode != "AED")
+        {
+            var rate = await db.ExchangeRates
+                .Where(e => e.CurrencyCode == q.CurrencyCode && e.IsActive)
+                .OrderByDescending(e => e.EffectiveDate).FirstOrDefaultAsync();
+            if (rate is null)
+                return Validation
+                    .Detail($"No active exchange rate for {q.CurrencyCode}")
+                    .Field("CurrencyCode", "No active exchange rate.")
+                    .Return();
+            rateSnapshot = rate.RateToAed;
+        }
+
+        await using var tx = await db.Database.BeginTransactionAsync();
+
+        var currentApproval = q.Approvals.FirstOrDefault(a => !a.IsSuperseded);
+        if (currentApproval is not null)
+        {
+            currentApproval.IsSuperseded = true;
+            currentApproval.SupersededAt = DateTime.UtcNow;
+        }
+
+        db.RequisitionItems.RemoveRange(q.Items);
+
+        foreach (var (input, i) in req.Items.Select((x, idx) => (x, idx)))
+        {
+            db.RequisitionItems.Add(new RequisitionItem
+            {
+                QuotationRequestId = q.Id,
+                ItemId = input.ItemId,
+                ExpectedQty = input.ExpectedQty,
+                SortOrder = i + 1
+            });
+        }
+
+        q.ExchangeRateSnapshot = rateSnapshot;
+        q.Status = RequisitionStatus.BomPending;
+        q.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+
+        var bomCreators = await db.Users
+            .Where(u => u.Role == UserRole.BomCreator && (u.BranchId == q.BranchId || u.BranchId == null) && u.IsActive)
+            .ToListAsync();
+
+        foreach (var creator in bomCreators)
+            await notificationService.SendAsync(creator.Id,
+                $"Resubmitted BOM request: {q.RefNo}", q.Id, "QuotationRequest");
+
+        return Ok(new { q.Id, q.RefNo, Status = q.Status.ToString() });
+    }
+
     private bool CanAccess(QuotationRequest q) => CurrentRole switch
     {
         "SalesPerson" => q.SalesPersonId == CurrentUserId,

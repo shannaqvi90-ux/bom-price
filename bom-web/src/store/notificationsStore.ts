@@ -51,9 +51,13 @@ export const notificationsStore = create<NotificationsState>()((set, get) => ({
 
     try {
       await connection.start();
-    } catch (err) {
+    } catch {
+      // SignalR has built-in exponential backoff via withAutomaticReconnect();
+      // keep the user-visible signal to a single toast instead of spamming the
+      // console in production builds. Notifications stay reachable via manual
+      // refresh until the socket re-establishes.
       set({ _connection: null });
-      console.error("[SignalR] Failed to connect:", err);
+      notify.error("Notifications unavailable — retrying in background.");
       return;
     }
 

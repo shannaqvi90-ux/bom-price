@@ -259,6 +259,166 @@ public class BomSaveLinesTests(WebApplicationFactory<Program> factory)
         body!.Detail.ToLower().Should().Contain("wastage");
     }
 
+    [Fact]
+    public async Task SaveLines_DifferentBomCreator_SameBranch_Succeeds()
+    {
+        // 1. SalesPerson creates requisition (branch 1)
+        var spToken = await LoginAsync("ali@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", spToken);
+
+        var fgCode = $"FG-{Guid.NewGuid():N}".Substring(0, 10);
+        var rmCode = $"RM-{Guid.NewGuid():N}".Substring(0, 10);
+        var fgResp = await _client.PostAsJsonAsync("/api/items",
+            new { Code = fgCode, Description = "Test Finished Good", Type = "FinishedGood", LastPurchasePrice = (decimal?)null });
+        var finishedGood = await fgResp.Content.ReadFromJsonAsync<ItemDto>();
+
+        var rmResp = await _client.PostAsJsonAsync("/api/items",
+            new { Code = rmCode, Description = "Test Raw Material", Type = "RawMaterial", LastPurchasePrice = (decimal?)null });
+        var rawMaterial = await rmResp.Content.ReadFromJsonAsync<ItemDto>();
+
+        var customers = await _client.GetFromJsonAsync<List<CustomerDto>>("/api/customers");
+        var reqResp = await _client.PostAsJsonAsync("/api/requisitions", new
+        {
+            CustomerId = customers!.First().Id,
+            Items = new[] { new { ItemId = finishedGood!.Id, ExpectedQty = 100m } },
+            CurrencyCode = "AED"
+        });
+        var created = await reqResp.Content.ReadFromJsonAsync<CreatedRequisition>();
+        var reqDetail = await _client.GetFromJsonAsync<RequisitionDetailDto>($"/api/requisitions/{created!.Id}");
+        var requisitionItemId = reqDetail!.Items[0].Id;
+
+        // 2. Admin creates a process
+        var adminToken = await LoginAsync("admin@test.com", "Admin@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var processCode = $"PROC-{Guid.NewGuid():N}".Substring(0, 12);
+        var processResp = await _client.PostAsJsonAsync("/api/processes", new { Name = processCode, DisplayOrder = 99 });
+        var process = await processResp.Content.ReadFromJsonAsync<ProcessDto>();
+
+        // 3. Bob (BomCreator, branch 1) starts the BOM
+        var bobToken = await LoginAsync("bob@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bobToken);
+        var startResp = await _client.PostAsync($"/api/bom/{created.Id}/items/{requisitionItemId}/start", null);
+        startResp.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // 4. Eve (different BomCreator, same branch 1) saves lines — must succeed
+        var eveToken = await LoginAsync("eve@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", eveToken);
+        var saveResp = await _client.PutAsJsonAsync($"/api/bom/{created.Id}/items/{requisitionItemId}/lines", new
+        {
+            Lines = new[]
+            {
+                new { ProcessId = process!.Id, RawMaterialItemId = rawMaterial!.Id, QtyPerKg = 0.9m, WastagePct = 1.0m }
+            }
+        });
+        saveResp.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task SaveLines_DifferentBomCreator_DifferentBranch_Returns403()
+    {
+        // 1. SalesPerson creates requisition (branch 1)
+        var spToken = await LoginAsync("ali@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", spToken);
+
+        var fgCode = $"FG-{Guid.NewGuid():N}".Substring(0, 10);
+        var rmCode = $"RM-{Guid.NewGuid():N}".Substring(0, 10);
+        var fgResp = await _client.PostAsJsonAsync("/api/items",
+            new { Code = fgCode, Description = "Test Finished Good", Type = "FinishedGood", LastPurchasePrice = (decimal?)null });
+        var finishedGood = await fgResp.Content.ReadFromJsonAsync<ItemDto>();
+
+        var rmResp = await _client.PostAsJsonAsync("/api/items",
+            new { Code = rmCode, Description = "Test Raw Material", Type = "RawMaterial", LastPurchasePrice = (decimal?)null });
+
+        var customers = await _client.GetFromJsonAsync<List<CustomerDto>>("/api/customers");
+        var reqResp = await _client.PostAsJsonAsync("/api/requisitions", new
+        {
+            CustomerId = customers!.First().Id,
+            Items = new[] { new { ItemId = finishedGood!.Id, ExpectedQty = 100m } },
+            CurrencyCode = "AED"
+        });
+        var created = await reqResp.Content.ReadFromJsonAsync<CreatedRequisition>();
+        var reqDetail = await _client.GetFromJsonAsync<RequisitionDetailDto>($"/api/requisitions/{created!.Id}");
+        var requisitionItemId = reqDetail!.Items[0].Id;
+
+        // 2. Bob (BomCreator, branch 1) starts the BOM
+        var bobToken = await LoginAsync("bob@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bobToken);
+        await _client.PostAsync($"/api/bom/{created.Id}/items/{requisitionItemId}/start", null);
+
+        // 3. Admin creates a process
+        var adminToken = await LoginAsync("admin@test.com", "Admin@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var processCode = $"PROC-{Guid.NewGuid():N}".Substring(0, 12);
+        var processResp = await _client.PostAsJsonAsync("/api/processes", new { Name = processCode, DisplayOrder = 99 });
+        var process = await processResp.Content.ReadFromJsonAsync<ProcessDto>();
+
+        // 4. Frank (BomCreator, branch 2) tries to save lines — must be 403
+        var frankToken = await LoginAsync("frank@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", frankToken);
+        var saveResp = await _client.PutAsJsonAsync($"/api/bom/{created.Id}/items/{requisitionItemId}/lines", new
+        {
+            Lines = new[]
+            {
+                new { ProcessId = process!.Id, RawMaterialItemId = 1, QtyPerKg = 1.0m, WastagePct = 0m }
+            }
+        });
+        saveResp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Submit_DifferentBomCreator_SameBranch_Succeeds()
+    {
+        // 1. SalesPerson creates requisition (branch 1)
+        var spToken = await LoginAsync("ali@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", spToken);
+
+        var fgCode = $"FG-{Guid.NewGuid():N}".Substring(0, 10);
+        var rmCode = $"RM-{Guid.NewGuid():N}".Substring(0, 10);
+        var fgResp = await _client.PostAsJsonAsync("/api/items",
+            new { Code = fgCode, Description = "Test Finished Good", Type = "FinishedGood", LastPurchasePrice = (decimal?)null });
+        var finishedGood = await fgResp.Content.ReadFromJsonAsync<ItemDto>();
+
+        var rmResp = await _client.PostAsJsonAsync("/api/items",
+            new { Code = rmCode, Description = "Test Raw Material", Type = "RawMaterial", LastPurchasePrice = (decimal?)null });
+        var rawMaterial = await rmResp.Content.ReadFromJsonAsync<ItemDto>();
+
+        var customers = await _client.GetFromJsonAsync<List<CustomerDto>>("/api/customers");
+        var reqResp = await _client.PostAsJsonAsync("/api/requisitions", new
+        {
+            CustomerId = customers!.First().Id,
+            Items = new[] { new { ItemId = finishedGood!.Id, ExpectedQty = 100m } },
+            CurrencyCode = "AED"
+        });
+        var created = await reqResp.Content.ReadFromJsonAsync<CreatedRequisition>();
+        var reqDetail = await _client.GetFromJsonAsync<RequisitionDetailDto>($"/api/requisitions/{created!.Id}");
+        var requisitionItemId = reqDetail!.Items[0].Id;
+
+        // 2. Admin creates a process
+        var adminToken = await LoginAsync("admin@test.com", "Admin@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var processCode = $"PROC-{Guid.NewGuid():N}".Substring(0, 12);
+        var processResp = await _client.PostAsJsonAsync("/api/processes", new { Name = processCode, DisplayOrder = 99 });
+        var process = await processResp.Content.ReadFromJsonAsync<ProcessDto>();
+
+        // 3. Bob (BomCreator, branch 1) starts and saves BOM lines
+        var bobToken = await LoginAsync("bob@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bobToken);
+        await _client.PostAsync($"/api/bom/{created.Id}/items/{requisitionItemId}/start", null);
+        await _client.PutAsJsonAsync($"/api/bom/{created.Id}/items/{requisitionItemId}/lines", new
+        {
+            Lines = new[]
+            {
+                new { ProcessId = process!.Id, RawMaterialItemId = rawMaterial!.Id, QtyPerKg = 1.0m, WastagePct = 0m }
+            }
+        });
+
+        // 4. Eve (different BomCreator, same branch 1) submits the BOM — must succeed
+        var eveToken = await LoginAsync("eve@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", eveToken);
+        var submitResp = await _client.PostAsync($"/api/bom/{created.Id}/submit", null);
+        submitResp.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
     private record LoginResponse(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId);
     private record ItemDto(int Id, string Code, string Description, string Type, int BranchId, bool IsActive, decimal? LastPurchasePrice);
     private record CustomerDto(int Id, string Code, string Name);

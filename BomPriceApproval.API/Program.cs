@@ -197,6 +197,26 @@ using (var scope = app.Services.CreateScope())
         await db.SaveChangesAsync();
     }
 
+    // Seed additional BomCreators (eve + frank) added after initial seed — guard separately
+    if (!db.Users.Any(u => u.Email == "eve@test.com"))
+    {
+        db.Users.AddRange(
+            new User
+            {
+                Name = "Eve BOM", Email = "eve@test.com",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Test@1234"),
+                Role = UserRole.BomCreator, BranchId = 1
+            },
+            new User
+            {
+                Name = "Frank BOM", Email = "frank@test.com",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Test@1234"),
+                Role = UserRole.BomCreator, BranchId = 2
+            }
+        );
+        await db.SaveChangesAsync();
+    }
+
     // Ensure USD exchange rate exists (guard separately in case earlier seed was skipped or failed)
     if (!db.ExchangeRates.Any(e => e.CurrencyCode == "USD" && e.IsActive))
     {

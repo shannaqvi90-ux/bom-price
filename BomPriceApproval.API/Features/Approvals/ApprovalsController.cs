@@ -28,25 +28,31 @@ public class ApprovalsController(AppDbContext db, NotificationService notificati
 
         if (req is null) return NotFound();
 
-        if (req.Items.Any(ri => ri.BomHeader?.Cost is null)) return NotFound();
+        var readyForReview = req.Items.All(ri => ri.BomHeader?.Cost is not null);
 
         var items = req.Items.OrderBy(ri => ri.SortOrder).Select(ri =>
         {
-            var c = ri.BomHeader!.Cost!;
-            var totalCost = ri.BomHeader.TotalCostPerKg;
+            var c = ri.BomHeader?.Cost;
+            if (c is null)
+                return new MdReviewItemDetail(ri.Id, ri.Item.Description, ri.ExpectedQty,
+                    "NotStarted", null);
+
+            var totalCost = ri.BomHeader!.TotalCostPerKg;
             var landedCost = totalCost > 0 ? totalCost - c.RawMaterialCostTotal - c.FohAmount : 0;
 
-            return new MdReviewItemDetail(
-                ri.Id, ri.Item.Description, ri.ExpectedQty,
+            var cost = new MdReviewItemCost(
                 c.RawMaterialCostTotal, landedCost, c.FohAmount, totalCost,
                 totalCost > 0 ? c.RawMaterialCostTotal / totalCost * 100 : 0,
                 totalCost > 0 ? landedCost / totalCost * 100 : 0,
                 totalCost > 0 ? c.FohAmount / totalCost * 100 : 0);
+
+            return new MdReviewItemDetail(ri.Id, ri.Item.Description, ri.ExpectedQty,
+                "Submitted", cost);
         }).ToList();
 
         return Ok(new MdReviewDetail(
             req.RefNo, req.Customer.Name,
-            req.CurrencyCode, req.ExchangeRateSnapshot, items));
+            req.CurrencyCode, req.ExchangeRateSnapshot, readyForReview, items));
     }
 
     [HttpPost("{requisitionId}/approve")]
@@ -126,7 +132,7 @@ public class ApprovalsController(AppDbContext db, NotificationService notificati
 
             var totalCost = ri.BomHeader!.TotalCostPerKg;
             var profitMargin = (input.SalesPricePerKgAed - totalCost) / input.SalesPricePerKgAed * 100;
-            var matPct = ri.BomHeader.Cost!.RawMaterialCostTotal / totalCost * 100;
+            var matPct = totalCost == 0 ? 0 : ri.BomHeader.Cost!.RawMaterialCostTotal / totalCost * 100;
             var otherPct = 100 - matPct;
 
             decimal? foreignPrice = null;

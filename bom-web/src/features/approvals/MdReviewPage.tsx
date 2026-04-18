@@ -50,7 +50,7 @@ export default function MdReviewPage() {
     return (
       <Card className="mx-auto max-w-lg">
         <CardContent className="py-8 text-center">
-          <p className="text-sm">Requisition not found or not ready for review.</p>
+          <p className="text-sm">Requisition not found.</p>
           <Link to="/requisitions" className="mt-4 inline-block text-sm underline">
             Back to Requisitions
           </Link>
@@ -86,17 +86,23 @@ export default function MdReviewPage() {
     return <p className="text-sm text-muted-foreground">Loading…</p>;
   }
 
-  const allPricesValid = data.items.every((item) => {
-    const price = Number(salesPrices[item.requisitionItemId] ?? "");
-    return Number.isFinite(price) && price > 0;
-  });
+  const allPricesValid = data.items
+    .filter((item) => item.cost !== null)
+    .every((item) => {
+      const price = Number(salesPrices[item.requisitionItemId] ?? "");
+      return Number.isFinite(price) && price > 0;
+    });
+
+  const uncostdItems = data.items.filter((item) => item.cost === null);
 
   async function handleApprove() {
     setFieldErrors({});
-    const items = data!.items.map((item) => {
-      const price = Number(salesPrices[item.requisitionItemId] ?? "");
-      return { requisitionItemId: item.requisitionItemId, salesPricePerKgAed: price };
-    });
+    const items = data!.items
+      .filter((item) => item.cost !== null)
+      .map((item) => {
+        const price = Number(salesPrices[item.requisitionItemId] ?? "");
+        return { requisitionItemId: item.requisitionItemId, salesPricePerKgAed: price };
+      });
     if (items.some((i) => !Number.isFinite(i.salesPricePerKgAed) || i.salesPricePerKgAed <= 0)) {
       notify.error("Enter a valid sales price for all items.");
       return;
@@ -165,15 +171,29 @@ export default function MdReviewPage() {
         </Button>
       </div>
 
+      {/* Partial-costing warning banner */}
+      {!data.readyForReview && uncostdItems.length > 0 && (
+        <div
+          role="alert"
+          className="rounded-md border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-900"
+        >
+          <span className="font-semibold">
+            {uncostdItems.length} item{uncostdItems.length > 1 ? "s" : ""} awaiting costing before approval can be done:
+          </span>{" "}
+          {uncostdItems.map((i) => i.itemDescription).join(", ")}
+        </div>
+      )}
+
       {/* Per-item cost breakdown */}
       <div className="space-y-4">
         {data.items.map((item, idx) => {
           const priceStr = salesPrices[item.requisitionItemId] ?? "";
           const price = Number(priceStr);
           const hasValidPrice = Number.isFinite(price) && price > 0;
-          const marginPct = hasValidPrice
-            ? ((price - item.totalCostPerKg) / price) * 100
-            : 0;
+          const marginPct =
+            hasValidPrice && item.cost
+              ? ((price - item.cost.totalCostPerKg) / price) * 100
+              : 0;
           const priceErr = fieldErrors[`items.${idx}.salesPricePerKgAed`];
 
           return (
@@ -187,63 +207,67 @@ export default function MdReviewPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  <div>
-                    <LabeledRow label="Raw Material" value={`${item.rawMaterialCostPerKg.toFixed(4)} /kg`} />
-                    <LabeledRow label="Landed Cost" value={`${item.landedCostPerKg.toFixed(4)} /kg`} />
-                    <LabeledRow label="FOH" value={`${item.fohPerKg.toFixed(4)} /kg`} />
-                    <div className="mt-2 flex justify-between gap-4 border-t pt-2 text-sm font-semibold">
-                      <span>Total Cost/kg</span>
-                      <span className="font-mono">{item.totalCostPerKg.toFixed(4)}</span>
-                    </div>
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      Material {item.materialCostPct.toFixed(1)}% · Landed {item.landedCostPct.toFixed(1)}% · FOH {item.fohPct.toFixed(1)}%
-                    </div>
-                  </div>
-
-                  {pageState.kind === "reviewing" && (
-                    <div className="space-y-3">
-                      <div>
-                        <label className="mb-1 block text-xs text-muted-foreground">
-                          Sales Price (AED/kg)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.0001"
-                          min="0"
-                          value={priceStr}
-                          onChange={(e) => {
-                            setFieldErrors({});
-                            setSalesPrices((prev) => ({
-                              ...prev,
-                              [item.requisitionItemId]: e.target.value,
-                            }));
-                          }}
-                          className={`w-full rounded-md border px-3 py-2 text-sm ${priceErr ? "border-destructive" : ""}`}
-                          placeholder="0.0000"
-                          aria-label="Sales Price (AED/kg)"
-                        />
-                        {priceErr && <p className="text-xs text-destructive">{priceErr}</p>}
+                {item.cost === null ? (
+                  <p className="text-sm text-muted-foreground">Awaiting costing</p>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <div>
+                      <LabeledRow label="Raw Material" value={`${item.cost.rawMaterialCostPerKg.toFixed(4)} /kg`} />
+                      <LabeledRow label="Landed Cost" value={`${item.cost.landedCostPerKg.toFixed(4)} /kg`} />
+                      <LabeledRow label="FOH" value={`${item.cost.fohPerKg.toFixed(4)} /kg`} />
+                      <div className="mt-2 flex justify-between gap-4 border-t pt-2 text-sm font-semibold">
+                        <span>Total Cost/kg</span>
+                        <span className="font-mono">{item.cost.totalCostPerKg.toFixed(4)}</span>
                       </div>
-                      {hasValidPrice && (
-                        <div
-                          className={`rounded-md p-2 text-center text-sm font-semibold ${
-                            marginPct > 0
-                              ? "bg-green-50 text-green-800"
-                              : "bg-red-50 text-red-800"
-                          }`}
-                        >
-                          <span>Margin: {marginPct.toFixed(2)}%</span>
-                          {marginPct < 0 && (
-                            <span className="ml-2 inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs">
-                              ⚠ Negative margin
-                            </span>
-                          )}
-                        </div>
-                      )}
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        Material {item.cost.materialCostPct.toFixed(1)}% · Landed {item.cost.landedCostPct.toFixed(1)}% · FOH {item.cost.fohPct.toFixed(1)}%
+                      </div>
                     </div>
-                  )}
-                </div>
+
+                    {pageState.kind === "reviewing" && (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="mb-1 block text-xs text-muted-foreground">
+                            Sales Price (AED/kg)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.0001"
+                            min="0"
+                            value={priceStr}
+                            onChange={(e) => {
+                              setFieldErrors({});
+                              setSalesPrices((prev) => ({
+                                ...prev,
+                                [item.requisitionItemId]: e.target.value,
+                              }));
+                            }}
+                            className={`w-full rounded-md border px-3 py-2 text-sm ${priceErr ? "border-destructive" : ""}`}
+                            placeholder="0.0000"
+                            aria-label="Sales Price (AED/kg)"
+                          />
+                          {priceErr && <p className="text-xs text-destructive">{priceErr}</p>}
+                        </div>
+                        {hasValidPrice && (
+                          <div
+                            className={`rounded-md p-2 text-center text-sm font-semibold ${
+                              marginPct > 0
+                                ? "bg-green-50 text-green-800"
+                                : "bg-red-50 text-red-800"
+                            }`}
+                          >
+                            <span>Margin: {marginPct.toFixed(2)}%</span>
+                            {marginPct < 0 && (
+                              <span className="ml-2 inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs">
+                                ⚠ Negative margin
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           );
@@ -286,7 +310,7 @@ export default function MdReviewPage() {
               <div className="flex gap-2">
                 <Button
                   onClick={handleApprove}
-                  disabled={approve.isPending || !allPricesValid}
+                  disabled={approve.isPending || !allPricesValid || !data.readyForReview}
                   className="flex-1 bg-green-700 hover:bg-green-800"
                 >
                   {approve.isPending ? "Approving…" : "Approve All"}

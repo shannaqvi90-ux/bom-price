@@ -300,10 +300,7 @@ export interface CostingReviewResponse {
 
 // ─── MD Review ───────────────────────────────────────────────────────────────
 
-export interface MdReviewItemDetail {
-  requisitionItemId: number;
-  itemDescription: string;
-  expectedQty: number;
+export interface MdReviewItemCost {
   rawMaterialCostPerKg: number;
   landedCostPerKg: number;
   fohPerKg: number;
@@ -313,11 +310,20 @@ export interface MdReviewItemDetail {
   fohPct: number;
 }
 
+export interface MdReviewItemDetail {
+  requisitionItemId: number;
+  itemDescription: string;
+  expectedQty: number;
+  costStatus: "NotStarted" | "Submitted";
+  cost: MdReviewItemCost | null;
+}
+
 export interface MdReviewDetail {
   refNo: string;
   customerName: string;
   currencyCode: string;
   exchangeRate: number | null;
+  readyForReview: boolean;
   items: MdReviewItemDetail[];
 }
 

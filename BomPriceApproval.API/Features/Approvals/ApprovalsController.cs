@@ -13,7 +13,12 @@ namespace BomPriceApproval.API.Features.Approvals;
 [ApiController]
 [Route("api/approvals")]
 [Authorize(Roles = "ManagingDirector")]
-public class ApprovalsController(AppDbContext db, NotificationService notificationSvc, EmailService emailSvc, PdfService pdfSvc) : ControllerBase
+public class ApprovalsController(
+    AppDbContext db,
+    NotificationService notificationSvc,
+    EmailService emailSvc,
+    PdfService pdfSvc,
+    ILogger<ApprovalsController> logger) : ControllerBase
 {
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
@@ -168,9 +173,11 @@ public class ApprovalsController(AppDbContext db, NotificationService notificati
                 $"<p>Dear {req.SalesPerson.Name},</p><p>Your quotation <strong>{req.RefNo}</strong> has been approved. Please find the quotation PDF attached.</p><p>Regards,<br/>Fujairah Plastic Factory</p>",
                 pdf, $"{req.RefNo}-Quotation.pdf");
         }
-        catch
+        catch (Exception ex)
         {
-            // Approval committed; notification/email failures are non-fatal
+            logger.LogError(ex,
+                "Notification dispatch failed after successful commit for {Entity} {Id}",
+                "QuotationRequest", req.Id);
         }
 
         return Ok(new { message = "Approved", req.RefNo });

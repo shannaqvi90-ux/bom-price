@@ -23,6 +23,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CostingDraft> CostingDrafts => Set<CostingDraft>();
     public DbSet<BomCostLine> BomCostLines => Set<BomCostLine>();
     public DbSet<ItemLastCost> ItemLastCosts => Set<ItemLastCost>();
+    public DbSet<RevokedJti> RevokedJtis => Set<RevokedJti>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -199,5 +200,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<BomCostLine>().Property(l => l.CostPerKgInQuoteCurrency).HasPrecision(18, 4);
         mb.Entity<BomCostLine>().Property(l => l.CostPerKgInAed).HasPrecision(18, 4);
         mb.Entity<ItemLastCost>().Property(l => l.CostPerKg).HasPrecision(18, 4);
+
+        mb.Entity<RevokedJti>().Property(r => r.Jti).HasMaxLength(32);
+        mb.Entity<RevokedJti>().HasIndex(r => r.Jti).IsUnique();
+        mb.Entity<RevokedJti>().HasIndex(r => r.ExpiresAt);
     }
 }

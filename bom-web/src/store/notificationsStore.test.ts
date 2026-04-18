@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { notificationsStore } from "./notificationsStore";
 import { notify } from "@/lib/notify";
+import { getAppNavigate } from "@/lib/navigator";
 import type { Notification } from "@/types/api";
 
 vi.mock("@/lib/notify", () => ({
@@ -10,6 +11,10 @@ vi.mock("@/lib/notify", () => ({
     info: vi.fn(),
     fromApiError: vi.fn(),
   },
+}));
+
+vi.mock("@/lib/navigator", () => ({
+  getAppNavigate: vi.fn(),
 }));
 
 beforeEach(() => {
@@ -81,5 +86,63 @@ describe("notificationsStore", () => {
         action: undefined,
       }),
     );
+  });
+
+  it("toast View action calls navigate() and does NOT call window.location.assign when bridge is mounted", () => {
+    const navigateSpy = vi.fn();
+    vi.mocked(getAppNavigate).mockReturnValue(navigateSpy);
+    const assignMock = vi.fn();
+    Object.defineProperty(window, "location", {
+      value: { ...window.location, assign: assignMock },
+      writable: true,
+      configurable: true,
+    });
+
+    const n: Notification = {
+      id: 30,
+      message: "BOM ready",
+      referenceId: 5,
+      referenceType: "QuotationRequest",
+      isRead: false,
+      createdAt: "2026-04-16T12:00:00Z",
+    };
+
+    notificationsStore.getState().showToastForNotification(n);
+
+    const call = vi.mocked(notify.info).mock.calls[0];
+    const onClick = (call[1] as { action?: { onClick: () => void } })?.action?.onClick;
+    expect(onClick).toBeDefined();
+    onClick!();
+
+    expect(navigateSpy).toHaveBeenCalledWith("/requisitions/5");
+    expect(assignMock).not.toHaveBeenCalled();
+  });
+
+  it("toast View action falls back to window.location.assign when bridge is not mounted", () => {
+    vi.mocked(getAppNavigate).mockReturnValue(null);
+    const assignMock = vi.fn();
+    Object.defineProperty(window, "location", {
+      value: { ...window.location, assign: assignMock },
+      writable: true,
+      configurable: true,
+    });
+
+    const n: Notification = {
+      id: 31,
+      message: "BOM ready",
+      referenceId: 5,
+      referenceType: "QuotationRequest",
+      isRead: false,
+      createdAt: "2026-04-16T12:00:00Z",
+    };
+
+    notificationsStore.getState().showToastForNotification(n);
+
+    const call = vi.mocked(notify.info).mock.calls[0];
+    const onClick = (call[1] as { action?: { onClick: () => void } })?.action?.onClick;
+    expect(onClick).toBeDefined();
+    onClick!();
+
+    expect(assignMock).toHaveBeenCalledWith("/requisitions/5");
   });
 });

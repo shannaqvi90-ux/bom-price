@@ -89,6 +89,14 @@ export default function BomEntryPage() {
   const [pendingDuplicate, setPendingDuplicate] = useState<LocalLine | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
+  // Warn before unload when a save is in flight
+  useEffect(() => {
+    if (saveStatus !== "saving") return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [saveStatus]);
+
   // Auto-select first item when bom loads
   useEffect(() => {
     if (bom && bom.items.length > 0 && selectedItemId === null) {

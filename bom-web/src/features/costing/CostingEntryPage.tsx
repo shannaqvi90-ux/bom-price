@@ -82,6 +82,14 @@ export default function CostingEntryPage() {
   const debounceRef = useRef<number | undefined>(undefined);
   const hasAutoStartedRef = useRef(false);
 
+  // Warn before unload when a save is in flight
+  useEffect(() => {
+    if (saveStatus !== "saving") return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [saveStatus]);
+
   // Auto-select first item
   useEffect(() => {
     if (costingReview && costingReview.items.length > 0 && selectedItemId === null) {

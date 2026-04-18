@@ -7,7 +7,7 @@ namespace BomPriceApproval.API.Infrastructure.Services;
 
 public class NotificationService(AppDbContext db, IHubContext<NotificationHub> hub)
 {
-    public async Task SendAsync(int userId, string message, int referenceId, string referenceType)
+    public virtual async Task SendAsync(int userId, string message, int referenceId, string referenceType)
     {
         var notification = new Notification
         {

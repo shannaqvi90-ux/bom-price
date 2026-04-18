@@ -30,6 +30,8 @@ function actionButtonFor(
     return { label: status === "CostingPending" ? "Start Costing" : "Continue Costing", path: "costing" };
   if (role === "ManagingDirector" && status === "MdReview")
     return { label: "Review & Approve", path: "approval" };
+  if (role === "SalesPerson" && status === "Rejected")
+    return { label: "Edit & Resubmit", path: "edit" };
   return null;
 }
 

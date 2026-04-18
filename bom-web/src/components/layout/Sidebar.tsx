@@ -63,6 +63,7 @@ export function Sidebar() {
   const user = useAuthStore((s) => s.user);
   const accessToken = useAuthStore((s) => s.accessToken);
   const connect = notificationsStore((s) => s.connect);
+  const disconnect = notificationsStore((s) => s.disconnect);
   const unreadCount = notificationsStore((s) => s.unreadCount);
 
   const [userCollapsed, setUserCollapsed] = useState<boolean>(() => {
@@ -83,10 +84,13 @@ export function Sidebar() {
     localStorage.setItem(STORAGE_KEY, String(userCollapsed));
   }, [userCollapsed]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (accessToken) connect(accessToken);
-  }, [accessToken]);
+    if (accessToken) {
+      connect(accessToken);
+    } else {
+      disconnect();
+    }
+  }, [accessToken, connect, disconnect]);
 
   // Narrow viewport always collapses; on wide, honour the user preference.
   const collapsed = isNarrow || userCollapsed;

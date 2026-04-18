@@ -6,3 +6,11 @@
 *.suo
 *.swp
 *.DS_Store
+
+# Secrets — never commit
+user id pwd.txt
+*.secrets.json
+.env
+.env.*
+!.env.example
+appsettings.*.Local.json

@@ -21,6 +21,7 @@ public class ApprovalsController(
     ILogger<ApprovalsController> logger) : ControllerBase
 {
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+    private string CurrentRole => User.FindFirstValue(ClaimTypes.Role)!;
 
     [HttpGet("{requisitionId}")]
     public async Task<IActionResult> GetReview(int requisitionId)
@@ -243,6 +244,12 @@ public class ApprovalsController(
             .FirstOrDefaultAsync(q => q.Id == requisitionId);
 
         if (req is null) return NotFound();
+
+        // SalesPerson can only download PDFs for their own requisitions.
+        // Accountant, MD, Admin have null BranchId and see all branches.
+        if (CurrentRole == "SalesPerson" && req.SalesPersonId != CurrentUserId)
+            return Forbid();
+
         var currentApproval = req.Approvals.FirstOrDefault(a => !a.IsSuperseded);
         if (currentApproval is null || !currentApproval.IsApproved) return NotFound();
 

@@ -119,4 +119,23 @@ public class NotificationResilienceTests(ThrowingNotificationFactory factory)
         var after = await _client.GetFromJsonAsync<ReqDetail>($"/api/requisitions/{reqId}");
         after!.Status.Should().Be("Approved");
     }
+
+    [Fact]
+    public async Task Reject_ReturnsOk_EvenIfNotificationThrows()
+    {
+        var (reqId, _) = await WalkToMdReviewAsync();
+
+        var mdToken = await LoginAsync("md@test.com", "Test@1234");
+        UseToken(mdToken);
+
+        var rejectResp = await _client.PostAsJsonAsync($"/api/approvals/{reqId}/reject",
+            new { Notes = "needs more detail" });
+
+        rejectResp.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var spToken = await LoginAsync("ali@test.com", "Test@1234");
+        UseToken(spToken);
+        var after = await _client.GetFromJsonAsync<ReqDetail>($"/api/requisitions/{reqId}");
+        after!.Status.Should().Be("Rejected");
+    }
 }

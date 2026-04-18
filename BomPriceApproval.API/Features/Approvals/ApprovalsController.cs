@@ -209,14 +209,23 @@ public class ApprovalsController(
         req.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        await notificationSvc.SendAsync(req.SalesPersonId,
-            $"Quotation rejected: {req.RefNo}. Reason: {request.Notes}", req.Id, "QuotationRequest");
+        try
+        {
+            await notificationSvc.SendAsync(req.SalesPersonId,
+                $"Quotation rejected: {req.RefNo}. Reason: {request.Notes}", req.Id, "QuotationRequest");
 
-        var accountants = await db.Users
-            .Where(u => u.Role == UserRole.Accountant && u.IsActive).ToListAsync();
-        foreach (var acct in accountants)
-            await notificationSvc.SendAsync(acct.Id,
-                $"Quotation rejected by MD: {req.RefNo}. Reason: {request.Notes}", req.Id, "QuotationRequest");
+            var accountants = await db.Users
+                .Where(u => u.Role == UserRole.Accountant && u.IsActive).ToListAsync();
+            foreach (var acct in accountants)
+                await notificationSvc.SendAsync(acct.Id,
+                    $"Quotation rejected by MD: {req.RefNo}. Reason: {request.Notes}", req.Id, "QuotationRequest");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Notification dispatch failed after successful commit for {Entity} {Id}",
+                "QuotationRequest", req.Id);
+        }
 
         return Ok(new { message = "Rejected" });
     }

@@ -1,8 +1,17 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace BomPriceApproval.API.Features.Approvals;
 
+// Note: SalesPricePerKgAed range is enforced by ApprovalsController with
+// explicit "must be greater than 0" error messages for UI field-key consistency.
 public record ApproveItemInput(int RequisitionItemId, decimal SalesPricePerKgAed);
-public record ApproveRequest(List<ApproveItemInput> Items, string? Notes);
-public record RejectRequest(string Notes);
+
+public record ApproveRequest(
+    [Required, MinLength(1)] List<ApproveItemInput> Items,
+    [MaxLength(2000)] string? Notes);
+
+public record RejectRequest(
+    [Required, MaxLength(2000)] string Notes);
 
 public record MdReviewItemCost(
     decimal RawMaterialCostPerKg, decimal LandedCostPerKg, decimal FohPerKg, decimal TotalCostPerKg,

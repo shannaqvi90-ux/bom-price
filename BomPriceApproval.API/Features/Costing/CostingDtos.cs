@@ -3,7 +3,12 @@ using BomPriceApproval.API.Domain.Enums;
 
 namespace BomPriceApproval.API.Features.Costing;
 
-public record RawMaterialCostInput(int BomLineId, decimal CostPerKg, string CurrencyCode);
+// Note: decimal ranges (CostPerKg, LandedCostValue, FohAmount) are enforced
+// by CostingController with explicit error messages for UI field-key consistency.
+public record RawMaterialCostInput(
+    int BomLineId,
+    decimal CostPerKg,
+    [Required, RegularExpression("^[A-Z]{3}$", ErrorMessage = "Currency code must be 3 uppercase letters.")] string CurrencyCode);
 
 public record SubmitCostingRequest(
     [Required] List<RawMaterialCostInput> RawMaterialCosts,
@@ -11,7 +16,10 @@ public record SubmitCostingRequest(
     decimal LandedCostValue,
     decimal FohAmount);
 
-public record CostingDraftLineInput(int BomLineId, decimal CostPerKg, string CurrencyCode);
+public record CostingDraftLineInput(
+    int BomLineId,
+    decimal CostPerKg,
+    [Required, RegularExpression("^[A-Z]{3}$", ErrorMessage = "Currency code must be 3 uppercase letters.")] string CurrencyCode);
 
 public record SaveCostingDraftRequest(
     [Required] List<CostingDraftLineInput> Lines,

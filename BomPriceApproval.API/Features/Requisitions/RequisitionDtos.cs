@@ -1,8 +1,15 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace BomPriceApproval.API.Features.Requisitions;
 
+// Note: ExpectedQty range is enforced by RequisitionsController with explicit
+// "must be greater than 0" error messages for consistency with UI field-key format.
 public record RequisitionItemInput(int ItemId, decimal ExpectedQty);
 
-public record CreateRequisitionRequest(int CustomerId, List<RequisitionItemInput> Items, string CurrencyCode = "AED");
+public record CreateRequisitionRequest(
+    int CustomerId,
+    [Required, MinLength(1)] List<RequisitionItemInput> Items,
+    [RegularExpression("^[A-Z]{3}$", ErrorMessage = "Currency code must be 3 uppercase letters.")] string CurrencyCode = "AED");
 
 public record AddRequisitionItemRequest(int ItemId, decimal ExpectedQty);
 
@@ -25,4 +32,5 @@ public record RequisitionDetail(
 
 public record ApprovalSummary(bool IsApproved, string? Notes, DateTime ApprovedAt);
 
-public record ResubmitRequisitionRequest(List<RequisitionItemInput> Items);
+public record ResubmitRequisitionRequest(
+    [Required, MinLength(1)] List<RequisitionItemInput> Items);

@@ -2,7 +2,10 @@ using System.ComponentModel.DataAnnotations;
 
 namespace BomPriceApproval.API.Features.Bom;
 
+// Note: QtyPerKg and WastagePct bounds are enforced by BomController with
+// explicit error messages (WastagePct >= 0, no upper bound per business rule).
 public record BomLineInput(int ProcessId, int RawMaterialItemId, decimal QtyPerKg, decimal WastagePct);
+
 public record SubmitBomRequest([Required] List<BomLineInput> Lines);
 public record SaveBomLinesRequest([Required] List<BomLineInput> Lines);
 

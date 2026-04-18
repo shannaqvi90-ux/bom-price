@@ -13,7 +13,10 @@ namespace BomPriceApproval.API.Features.Bom;
 [ApiController]
 [Route("api/bom")]
 [Authorize]
-public class BomController(AppDbContext db, NotificationService notificationService) : ControllerBase
+public class BomController(
+    AppDbContext db,
+    NotificationService notificationService,
+    ILogger<BomController> logger) : ControllerBase
 {
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private int? CurrentBranchId => int.TryParse(User.FindFirstValue("branchId"), out var b) && b > 0 ? b : null;
@@ -207,12 +210,21 @@ public class BomController(AppDbContext db, NotificationService notificationServ
         req.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        var accountants = await db.Users
-            .Where(u => u.Role == UserRole.Accountant && (u.BranchId == req.BranchId || u.BranchId == null) && u.IsActive)
-            .ToListAsync();
-        foreach (var accountant in accountants)
-            await notificationService.SendAsync(accountant.Id,
-                $"BOM ready for costing: {req.RefNo}", req.Id, "QuotationRequest");
+        try
+        {
+            var accountants = await db.Users
+                .Where(u => u.Role == UserRole.Accountant && (u.BranchId == req.BranchId || u.BranchId == null) && u.IsActive)
+                .ToListAsync();
+            foreach (var accountant in accountants)
+                await notificationService.SendAsync(accountant.Id,
+                    $"BOM ready for costing: {req.RefNo}", req.Id, "QuotationRequest");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Notification dispatch failed after successful commit for {Entity} {Id}",
+                "QuotationRequest", req.Id);
+        }
 
         return NoContent();
     }

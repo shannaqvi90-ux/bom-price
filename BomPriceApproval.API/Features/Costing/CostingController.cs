@@ -14,7 +14,10 @@ namespace BomPriceApproval.API.Features.Costing;
 [ApiController]
 [Route("api/costing")]
 [Authorize(Roles = "Accountant")]
-public class CostingController(AppDbContext db, NotificationService notificationService) : ControllerBase
+public class CostingController(
+    AppDbContext db,
+    NotificationService notificationService,
+    ILogger<CostingController> logger) : ControllerBase
 {
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private int? CurrentBranchId => int.TryParse(User.FindFirstValue("branchId"), out var b) && b > 0 ? b : null;
@@ -339,13 +342,23 @@ public class CostingController(AppDbContext db, NotificationService notification
         await tx.CommitAsync();
 
         // Send notifications outside the transaction so a delivery failure
-        // cannot roll back the status promotion.
+        // cannot roll back the status promotion. Swallow and log dispatch
+        // failures — the state change is already committed.
         if (allSubmitted)
         {
-            var mds = await db.Users.Where(u => u.Role == UserRole.ManagingDirector && u.IsActive).ToListAsync();
-            foreach (var md in mds)
-                await notificationService.SendAsync(md.Id,
-                    $"Costing complete, ready for approval: {req.RefNo}", req.Id, "QuotationRequest");
+            try
+            {
+                var mds = await db.Users.Where(u => u.Role == UserRole.ManagingDirector && u.IsActive).ToListAsync();
+                foreach (var md in mds)
+                    await notificationService.SendAsync(md.Id,
+                        $"Costing complete, ready for approval: {req.RefNo}", req.Id, "QuotationRequest");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex,
+                    "Notification dispatch failed after successful commit for {Entity} {Id}",
+                    "QuotationRequest", req.Id);
+            }
         }
 
         return NoContent();

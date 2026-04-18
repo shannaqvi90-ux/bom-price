@@ -80,3 +80,24 @@ export function useRemoveRequisitionItem() {
     },
   });
 }
+
+export interface ResubmitRequisitionRequest {
+  items: { itemId: number; expectedQty: number }[];
+}
+
+export function useResubmitRequisition(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ResubmitRequisitionRequest) =>
+      api
+        .post<{ id: number; refNo: string; status: string }>(
+          `/requisitions/${id}/resubmit`,
+          body,
+        )
+        .then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: requisitionKeys.detail(id) });
+      qc.invalidateQueries({ queryKey: requisitionKeys.list() });
+    },
+  });
+}

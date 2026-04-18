@@ -50,11 +50,13 @@ function convertCost(amount: number, from: string, to: string, rates: { currency
 
 function costStatusLabel(status: string) {
   if (status === "Submitted") return "Submitted";
+  if (status === "InProgress") return "In Progress";
   return "Not Started";
 }
 
 function costStatusColor(status: string) {
   if (status === "Submitted") return "text-green-500";
+  if (status === "InProgress") return "text-yellow-400";
   return "text-muted-foreground";
 }
 
@@ -360,7 +362,7 @@ export default function CostingEntryPage() {
 
               {selectedItem.bomLines.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No BOM lines. BOM must be submitted first.</p>
-              ) : selectedItem.costStatus === "NotStarted" && !isReadOnly && requisition.status === "CostingPending" ? (
+              ) : selectedItem.costStatus === "NotStarted" && !isReadOnly ? (
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">Click "Start Costing" to begin entering costs for this item.</p>
                   <Button

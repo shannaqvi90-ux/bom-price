@@ -9,6 +9,7 @@ public class RequisitionItem
     public int SortOrder { get; set; }
     public QuotationRequest QuotationRequest { get; set; } = null!;
     public Item Item { get; set; } = null!;
+    public DateTime? CostingStartedAt { get; set; }
     public BomHeader? BomHeader { get; set; }
     public ApprovalItem? ApprovalItem { get; set; }
 }

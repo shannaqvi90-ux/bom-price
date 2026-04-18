@@ -57,7 +57,9 @@ public class CostingController(AppDbContext db, NotificationService notification
                     ri.ExpectedQty, null, "NotStarted", null, [], null);
 
             var c = bom.Cost;
-            var costStatus = c is not null ? "Submitted" : "NotStarted";
+            var costStatus = c is not null ? "Submitted"
+                           : ri.CostingStartedAt is not null ? "InProgress"
+                           : "NotStarted";
 
             CostingSummary? costSummary = c is not null
                 ? new CostingSummary(c.Id, c.RawMaterialCostTotal, c.LandedCostType.ToString(),
@@ -99,6 +101,13 @@ public class CostingController(AppDbContext db, NotificationService notification
                 .Detail("Requisition is not in CostingPending or CostingInProgress status")
                 .Field("Status", "Must be CostingPending or CostingInProgress.")
                 .Return();
+
+        var ri = await db.RequisitionItems.FirstOrDefaultAsync(
+            x => x.QuotationRequestId == requisitionId && x.Id == requisitionItemId);
+        if (ri is null) return NotFound();
+
+        if (ri.CostingStartedAt is null)
+            ri.CostingStartedAt = DateTime.UtcNow;
 
         if (req.Status == RequisitionStatus.CostingPending)
         {

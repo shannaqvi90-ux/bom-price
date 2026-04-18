@@ -287,7 +287,7 @@ export interface CostingItemResponse {
   itemDescription: string;
   expectedQty: number;
   bomHeaderId: number | null;
-  costStatus: "NotStarted" | "Submitted";
+  costStatus: "NotStarted" | "InProgress" | "Submitted";
   cost: CostingSummary | null;
   bomLines: CostingBomLine[];
   draft: CostingDraft | null;
@@ -314,7 +314,7 @@ export interface MdReviewItemDetail {
   requisitionItemId: number;
   itemDescription: string;
   expectedQty: number;
-  costStatus: "NotStarted" | "Submitted";
+  costStatus: "NotStarted" | "InProgress" | "Submitted";
   cost: MdReviewItemCost | null;
 }
 

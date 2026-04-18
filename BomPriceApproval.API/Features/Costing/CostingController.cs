@@ -285,34 +285,30 @@ public class CostingController(AppDbContext db, NotificationService notification
         db.BomCosts.Add(cost);
         bom.TotalCostPerKg = totalCost;
 
-        var rawItemIds = newCostLines
-            .Select(l => bom.Lines.First(bl => bl.Id == l.BomLineId).RawMaterialItemId)
-            .Distinct().ToList();
-        var existingLastCosts = await db.ItemLastCosts
-            .Where(l => rawItemIds.Contains(l.ItemId)).ToDictionaryAsync(l => l.ItemId);
+        // Upsert ItemLastCost via Postgres INSERT … ON CONFLICT to avoid a TOCTOU
+        // race on the unique index when concurrent submits share a raw material.
+        var upsertsByItem = newCostLines
+            .Select(cl => new
+            {
+                ItemId = bom.Lines.First(bl => bl.Id == cl.BomLineId).RawMaterialItemId,
+                cl.CostPerKg,
+                cl.CurrencyCode
+            })
+            .GroupBy(x => x.ItemId)
+            .Select(g => g.Last())
+            .ToList();
 
-        foreach (var costLine in newCostLines)
+        var now = DateTime.UtcNow;
+        foreach (var u in upsertsByItem)
         {
-            var bomLine = bom.Lines.First(bl => bl.Id == costLine.BomLineId);
-            var itemId = bomLine.RawMaterialItemId;
-            if (existingLastCosts.TryGetValue(itemId, out var lc))
-            {
-                lc.CostPerKg = costLine.CostPerKg;
-                lc.CurrencyCode = costLine.CurrencyCode;
-                lc.UpdatedAt = DateTime.UtcNow;
-                lc.UpdatedByUserId = CurrentUserId;
-            }
-            else
-            {
-                var newEntry = new ItemLastCost
-                {
-                    ItemId = itemId, CostPerKg = costLine.CostPerKg,
-                    CurrencyCode = costLine.CurrencyCode,
-                    UpdatedAt = DateTime.UtcNow, UpdatedByUserId = CurrentUserId
-                };
-                db.ItemLastCosts.Add(newEntry);
-                existingLastCosts[itemId] = newEntry;
-            }
+            await db.Database.ExecuteSqlInterpolatedAsync($@"
+                INSERT INTO ""ItemLastCosts"" (""ItemId"", ""CostPerKg"", ""CurrencyCode"", ""UpdatedAt"", ""UpdatedByUserId"")
+                VALUES ({u.ItemId}, {u.CostPerKg}, {u.CurrencyCode}, {now}, {CurrentUserId})
+                ON CONFLICT (""ItemId"") DO UPDATE SET
+                    ""CostPerKg"" = EXCLUDED.""CostPerKg"",
+                    ""CurrencyCode"" = EXCLUDED.""CurrencyCode"",
+                    ""UpdatedAt"" = EXCLUDED.""UpdatedAt"",
+                    ""UpdatedByUserId"" = EXCLUDED.""UpdatedByUserId""");
         }
 
         var draft = await db.CostingDrafts.FirstOrDefaultAsync(d => d.BomHeaderId == bom.Id);

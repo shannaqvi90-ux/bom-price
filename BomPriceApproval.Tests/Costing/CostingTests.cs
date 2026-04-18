@@ -585,6 +585,154 @@ public class CostingTests(WebApplicationFactory<Program> factory)
         req!.Status.Should().Be("MdReview");
     }
 
+    [Fact]
+    public async Task SubmitItem_ConcurrentDifferentReqsSharingRawMaterial_NoDeadlock()
+    {
+        // Two independent requisitions whose BOMs both reference a shared raw material,
+        // but in OPPOSITE list positions so the ItemLastCost upsert order would differ
+        // between the two transactions without the fix. The fix sorts the upsert loop
+        // by RawMaterialItemId, making lock acquisition globally consistent.
+
+        // ── Arrange: create shared and per-req raw materials + FG items ────────────
+        var spClient = factory.CreateClient();
+        var spToken = await LoginAsync(spClient, "ali@test.com", "Test@1234");
+        spClient.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", spToken);
+
+        async Task<int> CreateItem(string prefix, string type)
+        {
+            var code = $"{prefix}-{Guid.NewGuid():N}".Substring(0, 10);
+            var resp = await spClient.PostAsJsonAsync("/api/items",
+                new { Code = code, Description = $"{prefix} {code}", Type = type, LastPurchasePrice = (decimal?)null });
+            resp.StatusCode.Should().Be(System.Net.HttpStatusCode.Created);
+            var item = await resp.Content.ReadFromJsonAsync<ItemDto>();
+            return item!.Id;
+        }
+
+        var fgA = await CreateItem("FG", "FinishedGood");
+        var fgB = await CreateItem("FG", "FinishedGood");
+        var rmShared = await CreateItem("RM", "RawMaterial");
+        var rmA = await CreateItem("RM", "RawMaterial");
+        var rmB = await CreateItem("RM", "RawMaterial");
+
+        var customers = await spClient.GetFromJsonAsync<List<CustomerDto>>("/api/customers");
+        var customerId = customers!.First().Id;
+
+        async Task<(int ReqId, int RiId)> CreateReq(int fgId)
+        {
+            var resp = await spClient.PostAsJsonAsync("/api/requisitions", new
+            {
+                CustomerId = customerId,
+                Items = new[] { new { ItemId = fgId, ExpectedQty = 100m } },
+                CurrencyCode = "AED"
+            });
+            resp.StatusCode.Should().Be(System.Net.HttpStatusCode.Created);
+            var created = await resp.Content.ReadFromJsonAsync<CreatedRequisition>();
+            var detail = await spClient.GetFromJsonAsync<RequisitionDetailDto>($"/api/requisitions/{created!.Id}");
+            return (created.Id, detail!.Items[0].Id);
+        }
+
+        var (reqA, riA) = await CreateReq(fgA);
+        var (reqB, riB) = await CreateReq(fgB);
+
+        // ── Admin seeds a Process for BOM lines ──
+        var adminClient = factory.CreateClient();
+        var adminToken = await LoginAsync(adminClient, "admin@test.com", "Admin@1234");
+        adminClient.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", adminToken);
+        var procCode = $"PROC-{Guid.NewGuid():N}".Substring(0, 12);
+        var procResp = await adminClient.PostAsJsonAsync("/api/processes", new { Name = procCode, DisplayOrder = 99 });
+        procResp.StatusCode.Should().Be(System.Net.HttpStatusCode.Created);
+        var process = await procResp.Content.ReadFromJsonAsync<ProcessDto>();
+
+        // ── BomCreator builds TWO-line BOMs, reversed order of the shared RM ──
+        //    reqA lines: [rmA, rmShared]   reqB lines: [rmShared, rmB]
+        var bomClient = factory.CreateClient();
+        var bomToken = await LoginAsync(bomClient, "bob@test.com", "Test@1234");
+        bomClient.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bomToken);
+
+        async Task BuildAndSubmitBom(int reqId, int riId, int firstRm, int secondRm)
+        {
+            await bomClient.PostAsync($"/api/bom/{reqId}/items/{riId}/start", null);
+            var saveResp = await bomClient.PutAsJsonAsync($"/api/bom/{reqId}/items/{riId}/lines", new
+            {
+                Lines = new[]
+                {
+                    new { ProcessId = process!.Id, RawMaterialItemId = firstRm,  QtyPerKg = 0.50m, WastagePct = 1.0m },
+                    new { ProcessId = process!.Id, RawMaterialItemId = secondRm, QtyPerKg = 0.50m, WastagePct = 1.0m }
+                }
+            });
+            saveResp.StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
+            (await bomClient.PostAsync($"/api/bom/{reqId}/submit", null))
+                .StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
+        }
+
+        await BuildAndSubmitBom(reqA, riA, rmA, rmShared);
+        await BuildAndSubmitBom(reqB, riB, rmShared, rmB);
+
+        // ── Accountant starts costing on both, then submits concurrently ──
+        async Task<(int RiId, List<CostingBomLineDto> Lines)> StartAndLoad(HttpClient c, int reqId, int riId)
+        {
+            (await c.PostAsync($"/api/costing/{reqId}/items/{riId}/start", null))
+                .StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
+            var review = await c.GetFromJsonAsync<CostingReviewDto>($"/api/costing/{reqId}");
+            return (riId, review!.Items.First(x => x.RequisitionItemId == riId).BomLines);
+        }
+
+        var startClient = factory.CreateClient();
+        var startToken = await LoginAsync(startClient, "sara@test.com", "Test@1234");
+        startClient.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", startToken);
+
+        var (_, linesA) = await StartAndLoad(startClient, reqA, riA);
+        var (_, linesB) = await StartAndLoad(startClient, reqB, riB);
+
+        object SubmitBody(List<CostingBomLineDto> lines) => new
+        {
+            RawMaterialCosts = lines
+                .Select(l => new { BomLineId = l.BomLineId, CostPerKg = 3.0m, CurrencyCode = "AED" })
+                .ToArray(),
+            LandedCostType = "Percentage",
+            LandedCostValue = 0m,
+            FohAmount = 0m
+        };
+
+        // Fire the two submits concurrently. The FOR UPDATE lock on QuotationRequest
+        // does NOT serialize them because they target different req rows, so both
+        // transactions enter the ItemLastCost upsert loop at nearly the same time.
+        // Pre-fix: high probability of a 40P01 deadlock on the shared rmShared row.
+        // Post-fix: both transactions lock ItemLastCost rows in ascending RawMaterialItemId
+        // order, so there is no cyclic wait and both complete.
+
+        async Task<HttpResponseMessage> DoSubmit(int reqId, int riId, List<CostingBomLineDto> lines)
+        {
+            var c = factory.CreateClient();
+            var t = await LoginAsync(c, "sara@test.com", "Test@1234");
+            c.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", t);
+            return await c.PostAsJsonAsync($"/api/costing/{reqId}/items/{riId}/submit", SubmitBody(lines));
+        }
+
+        var taskA = Task.Run(() => DoSubmit(reqA, riA, linesA));
+        var taskB = Task.Run(() => DoSubmit(reqB, riB, linesB));
+        var results = await Task.WhenAll(taskA, taskB);
+
+        // ── Assert: both submits succeed, neither deadlocked into 500 ──
+        foreach (var r in results)
+            r.StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
+
+        // Both requisitions should be MdReview (single-item reqs, so one submit each = complete).
+        var verifyClient = factory.CreateClient();
+        var verifyToken = await LoginAsync(verifyClient, "ali@test.com", "Test@1234");
+        verifyClient.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", verifyToken);
+        (await verifyClient.GetFromJsonAsync<RequisitionDto>($"/api/requisitions/{reqA}"))!
+            .Status.Should().Be("MdReview");
+        (await verifyClient.GetFromJsonAsync<RequisitionDto>($"/api/requisitions/{reqB}"))!
+            .Status.Should().Be("MdReview");
+    }
+
     // ── DTOs ──
     private record LoginResponse(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId);
     private record ItemDto(int Id, string Code, string Description, string Type, int BranchId, bool IsActive, decimal? LastPurchasePrice);

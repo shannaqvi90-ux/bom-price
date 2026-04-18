@@ -1,18 +1,18 @@
-import { useForm, Controller, useFieldArray, useWatch } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import type { Path } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useNavigate } from "react-router-dom";
-import { Plus, Trash2 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { useCustomers, useItems, useActiveExchangeRates } from "@/api/lookups";
 import { useCreateRequisition } from "./requisitionsApi";
+import { RequisitionItemsEditor } from "./components/RequisitionItemsEditor";
 import { notify } from "@/lib/notify";
 import { extractFieldErrors } from "@/lib/apiError";
-import type { Customer, Item } from "@/types/api";
+import type { Customer } from "@/types/api";
 
 const itemRowSchema = z.object({
   item: z
@@ -67,20 +67,6 @@ export default function NewRequisitionPage() {
       currencyCode: "AED",
     },
   });
-
-  const { fields, append, remove } = useFieldArray({ control, name: "items" });
-
-  const watchedItems = useWatch({ control, name: "items" });
-
-  const availableItemsFor = (rowIndex: number): Item[] => {
-    const base = itemsQ.data ?? [];
-    const takenIds = new Set(
-      (watchedItems ?? [])
-        .map((row, i) => (i !== rowIndex ? row?.item?.id : undefined))
-        .filter((v): v is number => typeof v === "number"),
-    );
-    return base.filter((it) => !takenIds.has(it.id));
-  };
 
   const isLoadingLookups = customersQ.isLoading || itemsQ.isLoading || ratesQ.isLoading;
   const isErrorLookups = customersQ.isError || itemsQ.isError || ratesQ.isError;
@@ -146,71 +132,12 @@ export default function NewRequisitionPage() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Items</label>
-                {fields.map((field, index) => (
-                  <div key={field.id} className="flex items-start gap-2">
-                    <div className="flex-1">
-                      <Controller
-                        control={control}
-                        name={`items.${index}.item`}
-                        render={({ field: f }) => (
-                          <SearchableSelect<Item>
-                            id={`item-${index}`}
-                            options={availableItemsFor(index)}
-                            value={f.value as Item | null}
-                            onChange={f.onChange}
-                            getLabel={(i) => i.description}
-                            getValue={(i) => i.id}
-                            placeholder="Search items…"
-                          />
-                        )}
-                      />
-                      {errors.items?.[index]?.item && (
-                        <p className="text-xs text-destructive">
-                          {errors.items[index].item?.message as string}
-                        </p>
-                      )}
-                    </div>
-                    <div className="w-32">
-                      <input
-                        type="number"
-                        step="0.0001"
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        placeholder="Qty"
-                        {...register(`items.${index}.expectedQty`, { valueAsNumber: true })}
-                      />
-                      {errors.items?.[index]?.expectedQty && (
-                        <p className="text-xs text-destructive">
-                          {errors.items[index].expectedQty?.message}
-                        </p>
-                      )}
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      disabled={fields.length <= 1}
-                      onClick={() => remove(index)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    append({ item: null as unknown as { id: number }, expectedQty: undefined as unknown as number })
-                  }
-                >
-                  <Plus className="mr-1 h-4 w-4" /> Add Item
-                </Button>
-                {errors.items?.root && (
-                  <p className="text-xs text-destructive">{errors.items.root.message}</p>
-                )}
-              </div>
+              <RequisitionItemsEditor
+                control={control}
+                register={register}
+                errors={errors}
+                availableItems={itemsQ.data ?? []}
+              />
 
               <div className="space-y-2">
                 <label htmlFor="currencyCode" className="text-sm font-medium">

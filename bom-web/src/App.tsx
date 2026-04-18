@@ -7,6 +7,7 @@ import DashboardRouter from "@/features/dashboard/DashboardRouter";
 import RequisitionListPage from "@/features/requisitions/RequisitionListPage";
 import NewRequisitionPage from "@/features/requisitions/NewRequisitionPage";
 import RequisitionDetailPage from "@/features/requisitions/RequisitionDetailPage";
+import EditRequisitionPage from "@/features/requisitions/EditRequisitionPage";
 import CustomerListPage from "@/features/customers/CustomerListPage";
 import ItemListPage from "@/features/items/ItemListPage";
 import BomEntryPage from "@/features/bom/BomEntryPage";
@@ -99,6 +100,14 @@ const router = createBrowserRouter([
             allow={["Admin", "SalesPerson", "BomCreator", "Accountant", "ManagingDirector"]}
           >
             <RequisitionDetailPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "requisitions/:id/edit",
+        element: (
+          <ProtectedRoute allow={["SalesPerson"]}>
+            <EditRequisitionPage />
           </ProtectedRoute>
         ),
       },

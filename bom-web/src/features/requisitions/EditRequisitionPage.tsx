@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -63,14 +63,17 @@ export default function EditRequisitionPage() {
     defaultValues: { items: [] },
   });
 
+  const hydratedRef = useRef(false);
+
   useEffect(() => {
-    if (!detailQ.data) return;
+    if (!detailQ.data || hydratedRef.current) return;
     reset({
       items: detailQ.data.items.map((ri) => ({
         item: { id: ri.itemId },
         expectedQty: ri.expectedQty,
       })),
     });
+    hydratedRef.current = true;
   }, [detailQ.data, reset]);
 
   if (detailQ.isLoading || itemsQ.isLoading) {

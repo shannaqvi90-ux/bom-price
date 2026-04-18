@@ -1,5 +1,6 @@
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Infrastructure.Data;
+using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -20,17 +21,31 @@ public class UsersController(AppDbContext db) : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(CreateUserRequest req)
     {
-        if (await db.Users.AnyAsync(u => u.Email == req.Email))
+        var email = req.Email.Trim().ToLowerInvariant();
+
+        if (await db.Users.AnyAsync(u => u.Email == email))
             return Conflict(new { message = "Email already exists" });
 
         var user = new User
         {
-            Name = req.Name, Email = req.Email,
+            Name = req.Name, Email = email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password),
             Role = req.Role, BranchId = req.BranchId
         };
         db.Users.Add(user);
-        await db.SaveChangesAsync();
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (
+            ex.InnerException?.Message.Contains("IX_Users_Email", StringComparison.OrdinalIgnoreCase) == true
+            || ex.InnerException?.Message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return Validation
+                .Detail("Email already registered.")
+                .Field("Email", "Already registered.")
+                .Return();
+        }
         return CreatedAtAction(nameof(GetAll), new UserResponse(user.Id, user.Name, user.Email, user.Role.ToString(), user.BranchId, null, user.IsActive));
     }
 
@@ -43,7 +58,8 @@ public class UsersController(AppDbContext db) : ControllerBase
         var oldRole = user.Role;
         var oldBranchId = user.BranchId;
 
-        user.Name = req.Name; user.Email = req.Email;
+        user.Name = req.Name;
+        user.Email = req.Email.Trim().ToLowerInvariant();
         user.Role = req.Role; user.BranchId = req.BranchId; user.IsActive = req.IsActive;
 
         if (user.Role != oldRole || user.BranchId != oldBranchId)
@@ -55,7 +71,19 @@ public class UsersController(AppDbContext db) : ControllerBase
                 rt.IsRevoked = true;
         }
 
-        await db.SaveChangesAsync();
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (
+            ex.InnerException?.Message.Contains("IX_Users_Email", StringComparison.OrdinalIgnoreCase) == true
+            || ex.InnerException?.Message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return Validation
+                .Detail("Email already registered.")
+                .Field("Email", "Already registered.")
+                .Return();
+        }
         return NoContent();
     }
 

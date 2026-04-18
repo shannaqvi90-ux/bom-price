@@ -3,6 +3,7 @@ using System;
 using BomPriceApproval.API.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BomPriceApproval.API.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260417170126_UniqueUserEmail")]
+    partial class UniqueUserEmail
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -421,9 +424,6 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
 
                     b.HasIndex("BranchId");
 
-                    b.HasIndex("Code", "BranchId")
-                        .IsUnique();
-
                     b.ToTable("Items");
                 });
 
@@ -540,25 +540,18 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                     b.Property<bool>("IsApproved")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("IsSuperseded")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("Notes")
                         .HasColumnType("text");
 
                     b.Property<int>("QuotationRequestId")
                         .HasColumnType("integer");
 
-                    b.Property<DateTime?>("SupersededAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.HasKey("Id");
 
                     b.HasIndex("ApprovedByUserId");
 
                     b.HasIndex("QuotationRequestId")
-                        .HasDatabaseName("ix_quotation_approvals_current")
-                        .HasFilter("\"IsSuperseded\" = false");
+                        .IsUnique();
 
                     b.ToTable("QuotationApprovals");
                 });
@@ -654,9 +647,6 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)");
 
-                    b.Property<DateTime?>("CostingStartedAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<int>("ItemId")
                         .HasColumnType("integer");
 
@@ -697,14 +687,8 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("FailedLoginAttempts")
-                        .HasColumnType("integer");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("LockedUntil")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -924,8 +908,8 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.HasOne("BomPriceApproval.API.Domain.Entities.QuotationRequest", "QuotationRequest")
-                        .WithMany("Approvals")
-                        .HasForeignKey("QuotationRequestId")
+                        .WithOne("Approval")
+                        .HasForeignKey("BomPriceApproval.API.Domain.Entities.QuotationApproval", "QuotationRequestId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -1025,7 +1009,7 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("BomPriceApproval.API.Domain.Entities.QuotationRequest", b =>
                 {
-                    b.Navigation("Approvals");
+                    b.Navigation("Approval");
 
                     b.Navigation("Items");
                 });

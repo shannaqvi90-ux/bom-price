@@ -20,9 +20,10 @@ public class AuthController(AppDbContext db, TokenService tokenService, IConfigu
     [EnableRateLimiting("login")]
     public async Task<IActionResult> Login(LoginRequest req)
     {
+        var normalizedEmail = req.Email.Trim().ToLowerInvariant();
         var user = await db.Users
             .Include(u => u.RefreshTokens)
-            .FirstOrDefaultAsync(u => u.Email == req.Email && u.IsActive);
+            .FirstOrDefaultAsync(u => u.Email == normalizedEmail && u.IsActive);
 
         if (user is null)
         {

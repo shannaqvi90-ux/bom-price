@@ -204,5 +204,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<RevokedJti>().Property(r => r.Jti).HasMaxLength(32);
         mb.Entity<RevokedJti>().HasIndex(r => r.Jti).IsUnique();
         mb.Entity<RevokedJti>().HasIndex(r => r.ExpiresAt);
+
+        // Optimistic concurrency via PostgreSQL system xmin column.
+        // No migration needed — xmin is always present on every row.
+        mb.Entity<RefreshToken>().UseXminAsConcurrencyToken();
     }
 }

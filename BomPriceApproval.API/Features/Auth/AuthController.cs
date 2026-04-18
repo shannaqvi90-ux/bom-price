@@ -88,7 +88,17 @@ public class AuthController(AppDbContext db, TokenService tokenService, IConfigu
             UserId = token.UserId,
             ExpiresAt = DateTime.UtcNow.AddDays(int.Parse(config["Jwt:RefreshTokenExpiryDays"]!))
         });
-        await db.SaveChangesAsync();
+
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Another concurrent refresh already consumed this token.
+            // Treat as token-already-used: 401.
+            return Unauthorized(new { message = "Invalid refresh token" });
+        }
 
         return Ok(new LoginResponse(
             tokenService.GenerateAccessToken(token.User),

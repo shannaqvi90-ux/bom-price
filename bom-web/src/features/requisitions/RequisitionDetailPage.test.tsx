@@ -196,4 +196,41 @@ describe("RequisitionDetailPage", () => {
     expect(screen.getByText("Notes")).toBeInTheDocument();
     expect(screen.getByText("Approved with conditions")).toBeInTheDocument();
   });
+
+  it('shows "Edit & Resubmit" button for the owning SalesPerson when status is Rejected', async () => {
+    useAuthStore.getState().setSession({
+      accessToken: "at", refreshToken: "rt",
+      role: "SalesPerson", userId: 10, name: "Ali", branchId: 1,
+    });
+    vi.mocked(api.get).mockResolvedValueOnce({
+      data: {
+        ...sample,
+        status: "Rejected",
+        approval: { isApproved: false, notes: "try again", approvedAt: "2026-04-15T12:00:00Z" },
+      },
+    });
+    render(wrap(<RequisitionDetailPage />));
+    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /edit & resubmit/i })).toBeInTheDocument();
+  });
+
+  it('does not show "Edit & Resubmit" for non-SalesPerson roles', async () => {
+    for (const role of ["BomCreator", "Accountant", "ManagingDirector"] as const) {
+      vi.mocked(api.get).mockResolvedValueOnce({
+        data: {
+          ...sample,
+          status: "Rejected",
+          approval: { isApproved: false, notes: "try again", approvedAt: "2026-04-15T12:00:00Z" },
+        },
+      });
+      useAuthStore.getState().setSession({
+        accessToken: "at", refreshToken: "rt",
+        role, userId: 99, name: "X", branchId: 1,
+      });
+      const { unmount } = render(wrap(<RequisitionDetailPage />));
+      await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
+      expect(screen.queryByRole("button", { name: /edit & resubmit/i })).not.toBeInTheDocument();
+      unmount();
+    }
+  });
 });

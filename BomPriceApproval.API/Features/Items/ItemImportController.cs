@@ -2,6 +2,7 @@ using BomPriceApproval.API.Infrastructure.Services;
 using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace BomPriceApproval.API.Features.Items;
 
@@ -12,6 +13,22 @@ public class ItemImportController(
     ItemImportService importService,
     PurchaseLedgerService ledgerService) : ControllerBase
 {
+    private const long MaxUploadBytes = 50L * 1024 * 1024; // 50 MB
+
+    private IActionResult? ValidateUpload(IFormFile file, params string[] allowedExts)
+    {
+        if (file.Length == 0)
+            return Validation.Detail("File is empty").Field("File", "File is empty.").Return();
+        if (file.Length > MaxUploadBytes)
+            return Validation.Detail($"File exceeds maximum size of {MaxUploadBytes / (1024 * 1024)} MB")
+                .Field("File", "File too large.").Return();
+        var ext = Path.GetExtension(file.FileName).ToLower();
+        if (!allowedExts.Contains(ext))
+            return Validation.Detail($"Only {string.Join(", ", allowedExts)} files are supported")
+                .Field("File", "Unsupported file type.").Return();
+        return null;
+    }
+
     [HttpGet("template")]
     public IActionResult Template()
     {
@@ -22,15 +39,14 @@ public class ItemImportController(
     }
 
     [HttpPost]
+    [RequestSizeLimit(MaxUploadBytes)]
+    [EnableRateLimiting("imports")]
     public async Task<IActionResult> Import([FromForm] IFormFile file, [FromForm] int branchId)
     {
-        if (file.Length == 0)
-            return Validation.Detail("File is empty").Field("File", "File is empty.").Return();
-        var ext = Path.GetExtension(file.FileName).ToLower();
-        if (ext is not (".xlsx" or ".csv"))
-            return Validation.Detail("Only .xlsx and .csv files are supported").Field("File", "Only .xlsx and .csv files are supported.").Return();
+        if (ValidateUpload(file, ".xlsx", ".csv") is { } error) return error;
 
         using var stream = file.OpenReadStream();
+        var ext = Path.GetExtension(file.FileName).ToLower();
         var result = ext == ".xlsx"
             ? await importService.ImportExcelAsync(stream, branchId)
             : await importService.ImportCsvAsync(stream, branchId);
@@ -38,12 +54,11 @@ public class ItemImportController(
     }
 
     [HttpPost("ledger/headers")]
+    [RequestSizeLimit(MaxUploadBytes)]
+    [EnableRateLimiting("imports")]
     public IActionResult LedgerHeaders([FromForm] IFormFile file)
     {
-        if (file.Length == 0)
-            return Validation.Detail("File is empty").Field("File", "File is empty.").Return();
-        if (Path.GetExtension(file.FileName).ToLower() != ".xlsx")
-            return Validation.Detail("Only .xlsx files are supported for ledger import").Field("File", "Only .xlsx files are supported for ledger import.").Return();
+        if (ValidateUpload(file, ".xlsx") is { } error) return error;
 
         using var stream = file.OpenReadStream();
         var headers = ledgerService.ExtractHeaders(stream);
@@ -51,6 +66,8 @@ public class ItemImportController(
     }
 
     [HttpPost("ledger")]
+    [RequestSizeLimit(MaxUploadBytes)]
+    [EnableRateLimiting("imports")]
     public async Task<IActionResult> LedgerImport(
         [FromForm] IFormFile file,
         [FromForm] string itemCodeColumn,
@@ -58,10 +75,7 @@ public class ItemImportController(
         [FromForm] string unitPriceColumn,
         [FromForm] int branchId)
     {
-        if (file.Length == 0)
-            return Validation.Detail("File is empty").Field("File", "File is empty.").Return();
-        if (Path.GetExtension(file.FileName).ToLower() != ".xlsx")
-            return Validation.Detail("Only .xlsx files are supported for ledger import").Field("File", "Only .xlsx files are supported for ledger import.").Return();
+        if (ValidateUpload(file, ".xlsx") is { } error) return error;
 
         using var stream = file.OpenReadStream();
         try

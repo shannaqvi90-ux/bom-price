@@ -3,6 +3,7 @@ using BomPriceApproval.API.Infrastructure.Services;
 using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace BomPriceApproval.API.Features.Customers;
 
@@ -11,6 +12,8 @@ namespace BomPriceApproval.API.Features.Customers;
 [Authorize(Roles = "Admin")]
 public class CustomerImportController(CustomerImportService importService) : ControllerBase
 {
+    private const long MaxUploadBytes = 50L * 1024 * 1024; // 50 MB
+
     [HttpGet("template")]
     public IActionResult Template()
     {
@@ -21,10 +24,15 @@ public class CustomerImportController(CustomerImportService importService) : Con
     }
 
     [HttpPost]
+    [RequestSizeLimit(MaxUploadBytes)]
+    [EnableRateLimiting("imports")]
     public async Task<IActionResult> Import([FromForm] IFormFile file)
     {
         if (file.Length == 0)
             return Validation.Detail("File is empty").Field("File", "File is empty.").Return();
+        if (file.Length > MaxUploadBytes)
+            return Validation.Detail($"File exceeds maximum size of {MaxUploadBytes / (1024 * 1024)} MB")
+                .Field("File", "File too large.").Return();
 
         var ext = Path.GetExtension(file.FileName).ToLower();
         if (ext is not (".xlsx" or ".csv"))

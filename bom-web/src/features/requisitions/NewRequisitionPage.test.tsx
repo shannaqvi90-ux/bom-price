@@ -169,7 +169,6 @@ describe("NewRequisitionPage", () => {
       },
     });
 
-    const user = userEvent.setup();
     render(wrap(<NewRequisitionPage />));
     await waitFor(() => expect(screen.getByLabelText(/customer/i)).toBeInTheDocument());
 

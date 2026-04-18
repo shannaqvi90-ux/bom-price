@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { useAuthStore } from "@/store/authStore";
 import CustomerListPage from "./CustomerListPage";
 import { api } from "@/api/axios";
+import type { UserRole } from "@/types/api";
 
 vi.mock("@/api/axios", () => ({
   api: { get: vi.fn(), post: vi.fn() },
@@ -46,7 +47,7 @@ const sampleCustomers = [
   },
 ];
 
-function loginAs(role: string) {
+function loginAs(role: UserRole) {
   useAuthStore.getState().setSession({
     accessToken: "at",
     refreshToken: "rt",

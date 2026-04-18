@@ -21,6 +21,9 @@ public class UsersController(AppDbContext db) : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(CreateUserRequest req)
     {
+        if (PasswordValidator.Validate(req.Password) is { } pwdError)
+            return Validation.Detail(pwdError).Field("Password", pwdError).Return();
+
         var email = req.Email.Trim().ToLowerInvariant();
 
         if (await db.Users.AnyAsync(u => u.Email == email))

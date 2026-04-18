@@ -147,11 +147,53 @@ describe("RequisitionDetailPage", () => {
       data: {
         ...sample,
         status: "Approved",
-        approval: { isApproved: true },
+        approval: { isApproved: true, notes: null, approvedAt: "2026-04-15T12:00:00Z" },
       },
     });
     render(wrap(<RequisitionDetailPage />));
     await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
-    expect(screen.getByText("Yes")).toBeInTheDocument();
+    expect(screen.getAllByText("Approved").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("renders rejection reason block when approval.isApproved is false", async () => {
+    useAuthStore.getState().setSession({
+      accessToken: "at", refreshToken: "rt",
+      role: "SalesPerson", userId: 10, name: "Ali", branchId: 1,
+    });
+    const rejected: RequisitionDetail = {
+      ...sample,
+      status: "Rejected",
+      approval: {
+        isApproved: false,
+        notes: "Margin too low",
+        approvedAt: "2026-04-15T12:00:00Z",
+      },
+    };
+    vi.mocked(api.get).mockResolvedValueOnce({ data: rejected });
+    render(wrap(<RequisitionDetailPage />));
+    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
+
+    expect(screen.getByText("Rejection reason")).toBeInTheDocument();
+    expect(screen.getByText("Margin too low")).toBeInTheDocument();
+    const notesEl = screen.getByText("Margin too low").closest("div");
+    expect(notesEl).toHaveClass("text-destructive");
+  });
+
+  it("renders notes block (non-destructive) when approval.isApproved is true", async () => {
+    const approved: RequisitionDetail = {
+      ...sample,
+      status: "Approved",
+      approval: {
+        isApproved: true,
+        notes: "Approved with conditions",
+        approvedAt: "2026-04-15T12:00:00Z",
+      },
+    };
+    vi.mocked(api.get).mockResolvedValueOnce({ data: approved });
+    render(wrap(<RequisitionDetailPage />));
+    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
+
+    expect(screen.getByText("Notes")).toBeInTheDocument();
+    expect(screen.getByText("Approved with conditions")).toBeInTheDocument();
   });
 });

@@ -150,7 +150,20 @@ export default function RequisitionDetailPage() {
             <CardHeader><CardTitle>Approval</CardTitle></CardHeader>
             <CardContent>
               {r.approval ? (
-                <LabeledValue label="Approved" value={r.approval.isApproved ? "Yes" : "No"} />
+                <>
+                  <LabeledValue
+                    label={r.approval.isApproved ? "Approved" : "Rejected"}
+                    value={formatRelative(r.approval.approvedAt)}
+                  />
+                  {r.approval.notes && (
+                    <div className={`mt-2 text-sm ${r.approval.isApproved ? "" : "text-destructive"}`}>
+                      <p className="font-medium">
+                        {r.approval.isApproved ? "Notes" : "Rejection reason"}
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap">{r.approval.notes}</p>
+                    </div>
+                  )}
+                </>
               ) : (
                 <p className="text-sm text-muted-foreground">Not yet submitted for approval.</p>
               )}

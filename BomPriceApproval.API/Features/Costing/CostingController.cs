@@ -296,6 +296,7 @@ public class CostingController(AppDbContext db, NotificationService notification
             })
             .GroupBy(x => x.ItemId)
             .Select(g => g.Last())
+            .OrderBy(u => u.ItemId)
             .ToList();
 
         var now = DateTime.UtcNow;

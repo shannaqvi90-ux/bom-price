@@ -589,9 +589,10 @@ public class CostingTests(WebApplicationFactory<Program> factory)
     public async Task SubmitItem_ConcurrentDifferentReqsSharingRawMaterial_NoDeadlock()
     {
         // Two independent requisitions whose BOMs both reference a shared raw material,
-        // but in OPPOSITE list positions so the ItemLastCost upsert order would differ
-        // between the two transactions without the fix. The fix sorts the upsert loop
-        // by RawMaterialItemId, making lock acquisition globally consistent.
+        // but in OPPOSITE list positions to maximize the chance that both transactions
+        // enter the ItemLastCost upsert with the shared item concurrently.
+        // Pre-fix: 23505 unique_violation from the TOCTOU read-then-insert race.
+        // Post-fix: INSERT … ON CONFLICT atomically serializes concurrent first-INSERTs.
 
         // ── Arrange: create shared and per-req raw materials + FG items ────────────
         var spClient = factory.CreateClient();
@@ -698,24 +699,24 @@ public class CostingTests(WebApplicationFactory<Program> factory)
             FohAmount = 0m
         };
 
-        // Fire the two submits concurrently. The FOR UPDATE lock on QuotationRequest
-        // does NOT serialize them because they target different req rows, so both
-        // transactions enter the ItemLastCost upsert loop at nearly the same time.
-        // Pre-fix: high probability of a 40P01 deadlock on the shared rmShared row.
-        // Post-fix: both transactions lock ItemLastCost rows in ascending RawMaterialItemId
-        // order, so there is no cyclic wait and both complete.
-
-        async Task<HttpResponseMessage> DoSubmit(int reqId, int riId, List<CostingBomLineDto> lines)
+        // Fire the two submits concurrently on fresh authenticated clients.
+        async Task<HttpClient> AuthedClient()
         {
             var c = factory.CreateClient();
             var t = await LoginAsync(c, "sara@test.com", "Test@1234");
             c.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", t);
-            return await c.PostAsJsonAsync($"/api/costing/{reqId}/items/{riId}/submit", SubmitBody(lines));
+            return c;
         }
 
-        var taskA = Task.Run(() => DoSubmit(reqA, riA, linesA));
-        var taskB = Task.Run(() => DoSubmit(reqB, riB, linesB));
+        var submitClientA = await AuthedClient();
+        var submitClientB = await AuthedClient();
+
+        Task<HttpResponseMessage> DoSubmit(HttpClient c, int reqId, int riId, List<CostingBomLineDto> lines) =>
+            c.PostAsJsonAsync($"/api/costing/{reqId}/items/{riId}/submit", SubmitBody(lines));
+
+        var taskA = Task.Run(() => DoSubmit(submitClientA, reqA, riA, linesA));
+        var taskB = Task.Run(() => DoSubmit(submitClientB, reqB, riB, linesB));
         var results = await Task.WhenAll(taskA, taskB);
 
         // ── Assert: both submits succeed, neither deadlocked into 500 ──

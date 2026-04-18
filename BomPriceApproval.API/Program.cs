@@ -88,29 +88,35 @@ builder.Services.AddSwaggerGen(c =>
 
 builder.Services.AddRateLimiter(opts =>
 {
-    opts.AddPolicy("login", ctx =>
+    // Skip rate limiting outside Production so integration tests and local dev can run freely.
+    static RateLimitPartition<string> NonProdOrFixed(
+        HttpContext ctx, IWebHostEnvironment env, int permit, TimeSpan window)
     {
-        // Skip rate limiting outside Production so integration tests and local dev can run freely.
-        if (!builder.Environment.IsProduction())
+        if (!env.IsProduction())
             return RateLimitPartition.GetNoLimiter("non-prod");
 
         return RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 20,
-                Window = TimeSpan.FromMinutes(15),
+                PermitLimit = permit,
+                Window = window,
                 QueueLimit = 0,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst
             });
-    });
+    }
+
+    opts.AddPolicy("login", ctx => NonProdOrFixed(ctx, builder.Environment, 20, TimeSpan.FromMinutes(15)));
+    opts.AddPolicy("imports", ctx => NonProdOrFixed(ctx, builder.Environment, 10, TimeSpan.FromHours(1)));
     opts.RejectionStatusCode = 429;
 });
 
 builder.Services.AddCors(opt =>
     opt.AddDefaultPolicy(p => p
         .WithOrigins("http://localhost:5300", "http://localhost:8081")
-        .AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
+        .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+        .WithHeaders("Content-Type", "Authorization")
+        .AllowCredentials()));
 
 var app = builder.Build();
 
@@ -278,6 +284,20 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+else
+{
+    app.UseHttpsRedirection();
+    app.UseHsts();
+}
+
+app.Use(async (ctx, next) =>
+{
+    ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    ctx.Response.Headers["X-Frame-Options"] = "DENY";
+    ctx.Response.Headers["Referrer-Policy"] = "no-referrer";
+    await next();
+});
+
 app.UseCors();
 app.UseRateLimiter();
 app.UseAuthentication();

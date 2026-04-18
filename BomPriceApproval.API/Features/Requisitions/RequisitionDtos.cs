@@ -23,4 +23,4 @@ public record RequisitionDetail(
     List<RequisitionItemDto> Items,
     ApprovalSummary? Approval);
 
-public record ApprovalSummary(bool IsApproved);
+public record ApprovalSummary(bool IsApproved, string? Notes, DateTime ApprovedAt);

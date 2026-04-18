@@ -68,6 +68,8 @@ export interface RequisitionItemDto {
 
 export interface ApprovalSummary {
   isApproved: boolean;
+  notes: string | null;
+  approvedAt: string;
 }
 
 export interface RequisitionDetail {

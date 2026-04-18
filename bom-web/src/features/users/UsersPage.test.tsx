@@ -230,13 +230,13 @@ describe("AddUserModal", () => {
     expect(screen.getByText(/Role is required/i)).toBeInTheDocument();
   });
 
-  it("submits correct payload (with branchId: null) and closes modal on success", async () => {
+  it("submits correct payload (branch-less role) and closes modal on success", async () => {
     vi.mocked(api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       data: {
         id: 10,
         name: "Charlie",
         email: "charlie@example.com",
-        role: "BomCreator",
+        role: "Admin",
         branchId: null,
         branchName: null,
         isActive: true,
@@ -247,7 +247,8 @@ describe("AddUserModal", () => {
     await user.type(screen.getByLabelText(/^Name$/i), "Charlie");
     await user.type(screen.getByLabelText(/^Email$/i), "charlie@example.com");
     await user.type(screen.getByLabelText(/^Password$/i), "password123");
-    await user.selectOptions(screen.getByLabelText(/^Role$/i), "BomCreator");
+    // Admin is branch-less: no branch selector should appear, payload.branchId = null.
+    await user.selectOptions(screen.getByLabelText(/^Role$/i), "Admin");
     await user.click(screen.getByRole("button", { name: /^Save$/i }));
 
     await waitFor(() =>
@@ -259,7 +260,7 @@ describe("AddUserModal", () => {
         name: "Charlie",
         email: "charlie@example.com",
         password: "password123",
-        role: "BomCreator",
+        role: "Admin",
         branchId: null,
       }),
     );

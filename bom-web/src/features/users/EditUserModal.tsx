@@ -7,14 +7,24 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { useUpdateUser } from "./usersApi";
+import { useBranches } from "@/api/lookups";
 import type { User, UserRole } from "@/types/api";
 
-const schema = z.object({
-  name: z.string().min(1, "Name is required"),
-  email: z.string().min(1, "Email is required").email("Invalid email format"),
-  role: z.string().min(1, "Role is required"),
-  isActive: z.boolean(),
-});
+const BRANCH_SCOPED_ROLES = new Set<UserRole>(["SalesPerson", "BomCreator"]);
+
+const schema = z
+  .object({
+    name: z.string().min(1, "Name is required"),
+    email: z.string().min(1, "Email is required").email("Invalid email format"),
+    role: z.string().min(1, "Role is required"),
+    branchId: z.string(),
+    isActive: z.boolean(),
+  })
+  .refine(
+    (v) =>
+      !BRANCH_SCOPED_ROLES.has(v.role as UserRole) || v.branchId.length > 0,
+    { path: ["branchId"], message: "Branch is required for this role." },
+  );
 
 type FormValues = z.infer<typeof schema>;
 
@@ -26,10 +36,12 @@ interface Props {
 
 export function EditUserModal({ open, user, onClose }: Props) {
   const update = useUpdateUser();
+  const { data: branches = [] } = useBranches({ enabled: open });
   const {
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -41,10 +53,14 @@ export function EditUserModal({ open, user, onClose }: Props) {
         name: user.name,
         email: user.email,
         role: user.role,
+        branchId: user.branchId !== null ? String(user.branchId) : "",
         isActive: user.isActive,
       });
     }
   }, [user, reset]);
+
+  const role = watch("role") as UserRole | "";
+  const branchRequired = role !== "" && BRANCH_SCOPED_ROLES.has(role as UserRole);
 
   function handleClose() {
     update.reset();
@@ -60,7 +76,7 @@ export function EditUserModal({ open, user, onClose }: Props) {
           name: values.name,
           email: values.email,
           role: values.role as UserRole,
-          branchId: null,
+          branchId: branchRequired && values.branchId ? Number(values.branchId) : null,
           isActive: values.isActive,
         },
       });
@@ -102,6 +118,27 @@ export function EditUserModal({ open, user, onClose }: Props) {
           </select>
           {errors.role && <p className="text-xs text-destructive">{errors.role.message}</p>}
         </div>
+
+        {branchRequired && (
+          <div className="space-y-1">
+            <Label htmlFor="edit-user-branch">Branch</Label>
+            <select
+              id="edit-user-branch"
+              className="block w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              {...register("branchId")}
+            >
+              <option value="">Select branch</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+            {errors.branchId && (
+              <p className="text-xs text-destructive">{errors.branchId.message}</p>
+            )}
+          </div>
+        )}
 
         <div className="flex items-center gap-2">
           <input

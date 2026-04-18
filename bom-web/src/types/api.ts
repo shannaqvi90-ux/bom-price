@@ -355,13 +355,13 @@ export interface CreateUserRequest {
   email: string;
   password: string;
   role: UserRole;
-  branchId: null;
+  branchId: number | null;
 }
 
 export interface UpdateUserRequest {
   name: string;
   email: string;
   role: UserRole;
-  branchId: null;
+  branchId: number | null;
   isActive: boolean;
 }

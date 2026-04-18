@@ -1,271 +1,126 @@
-# Costing `ItemLastCost` Deadlock Fix — Implementation Plan
+# Costing `ItemLastCost` Concurrency Fix — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Eliminate the Postgres `40P01` deadlock that can occur when two concurrent `/api/costing/{reqId}/items/{riId}/submit` calls on different requisitions share one or more raw-material items.
+**Goal:** Eliminate the `23505` unique-constraint-violation that occurs when two concurrent `/api/costing/{reqId}/items/{riId}/submit` calls on different requisitions share a raw-material item whose `ItemLastCost` row does not yet exist.
 
-**Architecture:** Inside `CostingController.SubmitItem`, the `newCostLines` list is iterated in BOM-line order to upsert `ItemLastCost` rows. Two concurrent submitters touching the same raw-material rows from different BOMs can acquire row locks in opposite orders, forming a cyclic wait-for graph. The fix is to sort the upsert loop by `RawMaterialItemId` ascending so every caller acquires locks in the same global order.
+**Architecture:** `CostingController.SubmitItem` currently upserts `ItemLastCost` via a read-then-insert-if-absent pattern (`existingLastCosts` dict + `db.Add`). This is a TOCTOU race against the unique index on `"ItemId"`. The fix replaces it with an atomic Postgres `INSERT … ON CONFLICT ("ItemId") DO UPDATE` executed inside the existing ambient transaction via EF Core's `ExecuteSqlInterpolatedAsync`.
 
-**Tech Stack:** ASP.NET Core 8 (EF Core + Npgsql), xUnit + FluentAssertions + Testcontainers.
+**Tech Stack:** ASP.NET Core 8, EF Core 8 (Npgsql provider), xUnit + FluentAssertions + Testcontainers.
 
-**Spec:** `docs/superpowers/specs/2026-04-18-costing-itemlastcost-deadlock-fix.md`
+**Spec:** `docs/superpowers/specs/2026-04-18-costing-itemlastcost-deadlock-fix.md` (revised 2026-04-18 after Task 1 TDD-red)
+
+---
+
+## Revision note
+
+The initial plan proposed a `.OrderBy(RawMaterialItemId)` one-line fix targeting a hypothetical `40P01` deadlock. Task 1's red-phase test reliably reproduced SQLSTATE `23505` (unique_violation) instead — a TOCTOU race on first-INSERT rather than a row-lock cycle. The spec and Task 2 below are revised accordingly. Task 1 is complete and the failing test is retained verbatim as the regression test for the revised fix.
 
 ---
 
 ## File Structure
 
-- **Modify:** `BomPriceApproval.API/Features/Costing/CostingController.cs` (the `foreach` at ~line 294)
-- **Modify:** `BomPriceApproval.Tests/Costing/CostingTests.cs` (add one new `[Fact]` in the existing "Concurrency tests" region around lines 478–586; the file's existing DTO records and login helpers will be reused)
+- **Modify:** `BomPriceApproval.API/Features/Costing/CostingController.cs` (replace the dictionary read + upsert loop at lines ~288–316)
+- **Modify:** `BomPriceApproval.Tests/Costing/CostingTests.cs` (test already added at lines 588–735 in Task 1)
 
 No new files.
 
 ---
 
-## Task 1 — Write the regression test (TDD red)
+## Task 1 — Write the regression test (TDD red) — ✅ COMPLETE
 
-**Files:**
-- Modify: `BomPriceApproval.Tests/Costing/CostingTests.cs` — add a new method inside the existing `public class CostingTests(...)` class, just after `SubmitItem_MultipleConcurrent_NoDuplicatedCosts` (ends at line 586) and before the `// ── DTOs ──` comment at line 588.
+**Status:** Done. Method `SubmitItem_ConcurrentDifferentReqsSharingRawMaterial_NoDeadlock` was inserted at `BomPriceApproval.Tests/Costing/CostingTests.cs:588`. Test fails with SQLSTATE `23505` on unfixed code (deterministic across two runs). Uncommitted.
 
-### Step 1.1 — Add the failing test
-
-- [ ] Insert the following method into `BomPriceApproval.Tests/Costing/CostingTests.cs` immediately after line 586 (after the closing `}` of `SubmitItem_MultipleConcurrent_NoDuplicatedCosts`) and before the `// ── DTOs ──` comment.
-
-```csharp
-[Fact]
-public async Task SubmitItem_ConcurrentDifferentReqsSharingRawMaterial_NoDeadlock()
-{
-    // Two independent requisitions whose BOMs both reference a shared raw material,
-    // but in OPPOSITE list positions so the ItemLastCost upsert order would differ
-    // between the two transactions without the fix. The fix sorts the upsert loop
-    // by RawMaterialItemId, making lock acquisition globally consistent.
-
-    // ── Arrange: create shared and per-req raw materials + FG items ────────────
-    var spClient = factory.CreateClient();
-    var spToken = await LoginAsync(spClient, "ali@test.com", "Test@1234");
-    spClient.DefaultRequestHeaders.Authorization =
-        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", spToken);
-
-    async Task<int> CreateItem(string prefix, string type)
-    {
-        var code = $"{prefix}-{Guid.NewGuid():N}".Substring(0, 10);
-        var resp = await spClient.PostAsJsonAsync("/api/items",
-            new { Code = code, Description = $"{prefix} {code}", Type = type, LastPurchasePrice = (decimal?)null });
-        resp.StatusCode.Should().Be(System.Net.HttpStatusCode.Created);
-        var item = await resp.Content.ReadFromJsonAsync<ItemDto>();
-        return item!.Id;
-    }
-
-    var fgA = await CreateItem("FG", "FinishedGood");
-    var fgB = await CreateItem("FG", "FinishedGood");
-    var rmShared = await CreateItem("RM", "RawMaterial");
-    var rmA = await CreateItem("RM", "RawMaterial");
-    var rmB = await CreateItem("RM", "RawMaterial");
-
-    var customers = await spClient.GetFromJsonAsync<List<CustomerDto>>("/api/customers");
-    var customerId = customers!.First().Id;
-
-    async Task<(int ReqId, int RiId)> CreateReq(int fgId)
-    {
-        var resp = await spClient.PostAsJsonAsync("/api/requisitions", new
-        {
-            CustomerId = customerId,
-            Items = new[] { new { ItemId = fgId, ExpectedQty = 100m } },
-            CurrencyCode = "AED"
-        });
-        resp.StatusCode.Should().Be(System.Net.HttpStatusCode.Created);
-        var created = await resp.Content.ReadFromJsonAsync<CreatedRequisition>();
-        var detail = await spClient.GetFromJsonAsync<RequisitionDetailDto>($"/api/requisitions/{created!.Id}");
-        return (created.Id, detail!.Items[0].Id);
-    }
-
-    var (reqA, riA) = await CreateReq(fgA);
-    var (reqB, riB) = await CreateReq(fgB);
-
-    // ── Admin seeds a Process for BOM lines ──
-    var adminClient = factory.CreateClient();
-    var adminToken = await LoginAsync(adminClient, "admin@test.com", "Admin@1234");
-    adminClient.DefaultRequestHeaders.Authorization =
-        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", adminToken);
-    var procCode = $"PROC-{Guid.NewGuid():N}".Substring(0, 12);
-    var procResp = await adminClient.PostAsJsonAsync("/api/processes", new { Name = procCode, DisplayOrder = 99 });
-    procResp.StatusCode.Should().Be(System.Net.HttpStatusCode.Created);
-    var process = await procResp.Content.ReadFromJsonAsync<ProcessDto>();
-
-    // ── BomCreator builds TWO-line BOMs, reversed order of the shared RM ──
-    //    reqA lines: [rmA, rmShared]   reqB lines: [rmShared, rmB]
-    var bomClient = factory.CreateClient();
-    var bomToken = await LoginAsync(bomClient, "bob@test.com", "Test@1234");
-    bomClient.DefaultRequestHeaders.Authorization =
-        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bomToken);
-
-    async Task BuildAndSubmitBom(int reqId, int riId, int firstRm, int secondRm)
-    {
-        (await bomClient.PostAsync($"/api/bom/{reqId}/items/{riId}/start", null))
-            .StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
-        var saveResp = await bomClient.PutAsJsonAsync($"/api/bom/{reqId}/items/{riId}/lines", new
-        {
-            Lines = new[]
-            {
-                new { ProcessId = process!.Id, RawMaterialItemId = firstRm,  QtyPerKg = 0.50m, WastagePct = 1.0m },
-                new { ProcessId = process!.Id, RawMaterialItemId = secondRm, QtyPerKg = 0.50m, WastagePct = 1.0m }
-            }
-        });
-        saveResp.StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
-        (await bomClient.PostAsync($"/api/bom/{reqId}/submit", null))
-            .StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
-    }
-
-    await BuildAndSubmitBom(reqA, riA, rmA, rmShared);
-    await BuildAndSubmitBom(reqB, riB, rmShared, rmB);
-
-    // ── Accountant starts costing on both, then submits concurrently ──
-    async Task<(int RiId, List<CostingBomLineDto> Lines)> StartAndLoad(HttpClient c, int reqId, int riId)
-    {
-        (await c.PostAsync($"/api/costing/{reqId}/items/{riId}/start", null))
-            .StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
-        var review = await c.GetFromJsonAsync<CostingReviewDto>($"/api/costing/{reqId}");
-        return (riId, review!.Items.First(x => x.RequisitionItemId == riId).BomLines);
-    }
-
-    var startClient = factory.CreateClient();
-    var startToken = await LoginAsync(startClient, "sara@test.com", "Test@1234");
-    startClient.DefaultRequestHeaders.Authorization =
-        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", startToken);
-
-    var (_, linesA) = await StartAndLoad(startClient, reqA, riA);
-    var (_, linesB) = await StartAndLoad(startClient, reqB, riB);
-
-    object SubmitBody(List<CostingBomLineDto> lines) => new
-    {
-        RawMaterialCosts = lines
-            .Select(l => new { BomLineId = l.BomLineId, CostPerKg = 3.0m, CurrencyCode = "AED" })
-            .ToArray(),
-        LandedCostType = "Percentage",
-        LandedCostValue = 0m,
-        FohAmount = 0m
-    };
-
-    // Fire the two submits concurrently. The FOR UPDATE lock on QuotationRequest
-    // does NOT serialize them because they target different req rows, so both
-    // transactions enter the ItemLastCost upsert loop at nearly the same time.
-    // Pre-fix: high probability of a 40P01 deadlock on the shared rmShared row.
-    // Post-fix: both transactions lock ItemLastCost rows in ascending RawMaterialItemId
-    // order, so there is no cyclic wait and both complete.
-
-    async Task<HttpResponseMessage> DoSubmit(int reqId, int riId, List<CostingBomLineDto> lines)
-    {
-        var c = factory.CreateClient();
-        var t = await LoginAsync(c, "sara@test.com", "Test@1234");
-        c.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", t);
-        return await c.PostAsJsonAsync($"/api/costing/{reqId}/items/{riId}/submit", SubmitBody(lines));
-    }
-
-    var taskA = Task.Run(() => DoSubmit(reqA, riA, linesA));
-    var taskB = Task.Run(() => DoSubmit(reqB, riB, linesB));
-    var results = await Task.WhenAll(taskA, taskB);
-
-    // ── Assert: both submits succeed, neither deadlocked into 500 ──
-    foreach (var r in results)
-        r.StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
-
-    // Both requisitions should be MdReview (single-item reqs, so one submit each = complete).
-    var verifyClient = factory.CreateClient();
-    var verifyToken = await LoginAsync(verifyClient, "ali@test.com", "Test@1234");
-    verifyClient.DefaultRequestHeaders.Authorization =
-        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", verifyToken);
-    (await verifyClient.GetFromJsonAsync<RequisitionDto>($"/api/requisitions/{reqA}"))!
-        .Status.Should().Be("MdReview");
-    (await verifyClient.GetFromJsonAsync<RequisitionDto>($"/api/requisitions/{reqB}"))!
-        .Status.Should().Be("MdReview");
-}
-```
-
-### Step 1.2 — Build the solution to confirm the test compiles
-
-- [ ] Run:
-
-```bash
-dotnet build BomPriceApproval.Tests/BomPriceApproval.Tests.csproj
-```
-
-Expected: `Build succeeded` with 0 errors. If the build fails on an unresolved type (`ItemDto`, `CustomerDto`, `CreatedRequisition`, `RequisitionDetailDto`, `ProcessDto`, `CostingReviewDto`, `CostingBomLineDto`, `RequisitionDto`) confirm the method was pasted **inside** the `CostingTests` class, above the `// ── DTOs ──` block where those records live (line 588).
-
-### Step 1.3 — Run the new test to verify it fails on the unfixed code
-
-- [ ] Run:
-
-```bash
-dotnet test BomPriceApproval.Tests/BomPriceApproval.Tests.csproj --filter "FullyQualifiedName~SubmitItem_ConcurrentDifferentReqsSharingRawMaterial_NoDeadlock"
-```
-
-Expected: **FAIL** on the first run in most cases. Typical failure shapes (any of these confirms the bug):
-- `Expected response.StatusCode to be NoContent, but found InternalServerError` with server log mentioning `40P01 deadlock detected` or `Microsoft.EntityFrameworkCore.DbUpdateException`.
-- `System.Net.Http.HttpRequestException: ... 500 Internal Server Error`.
-
-If the test PASSES on the first run, re-run up to 3 times — deadlocks are probabilistic. If it still passes, see "Flake fallback" below before concluding the test is ineffective.
-
-**Flake fallback (only if test passes pre-fix after 3 runs):**
-Replace the single `Task.WhenAll` block with a loop that rebuilds fresh BOM/costing state and re-fires the race, e.g.:
-
-```csharp
-var failures = 0;
-for (var attempt = 0; attempt < 5; attempt++)
-{
-    // ... recreate 2 fresh reqs + BOMs with the shared RM (extract the arrange block
-    //     into a local function first) and fire the race ...
-    if (results.Any(r => r.StatusCode != System.Net.HttpStatusCode.NoContent)) failures++;
-}
-failures.Should().Be(0);
-```
-
-Do **not** add this loop unless the simple version fails to reproduce — extra iterations slow the test. The flake fallback is only a safety net.
-
-### Step 1.4 — Do NOT commit yet
-
-- [ ] Leave the failing test uncommitted. We commit the test and the fix together in Task 2 so the repo history has no known-broken intermediate state on `main`.
+**Deviation from Task 1 template:** the `BOM /items/{riId}/start` endpoint returns `200 OK` (not `204 NoContent`), so the status assertion on that call was dropped inside the `BuildAndSubmitBom` local — matches the pattern already in use elsewhere in the same test class.
 
 ---
 
-## Task 2 — Apply the fix, verify green, commit
+## Task 2 — Apply the `ON CONFLICT` fix, verify, commit
 
 **Files:**
-- Modify: `BomPriceApproval.API/Features/Costing/CostingController.cs` — the `foreach (var costLine in newCostLines)` at line 294.
+- Modify: `BomPriceApproval.API/Features/Costing/CostingController.cs` — replace the block at lines ~288–316.
 
-### Step 2.1 — Apply the one-line change
+### Step 2.1 — Replace the dictionary read + upsert loop
 
-- [ ] In `BomPriceApproval.API/Features/Costing/CostingController.cs`, replace the `foreach` header on line 294:
+- [ ] Open `BomPriceApproval.API/Features/Costing/CostingController.cs`. Locate this exact block (runs from roughly line 288 to line 316 — grep for `var rawItemIds` to anchor):
 
-**Before:**
+**Remove (delete these 29 lines):**
 
 ```csharp
+        var rawItemIds = newCostLines
+            .Select(l => bom.Lines.First(bl => bl.Id == l.BomLineId).RawMaterialItemId)
+            .Distinct().ToList();
+        var existingLastCosts = await db.ItemLastCosts
+            .Where(l => rawItemIds.Contains(l.ItemId)).ToDictionaryAsync(l => l.ItemId);
+
         foreach (var costLine in newCostLines)
         {
             var bomLine = bom.Lines.First(bl => bl.Id == costLine.BomLineId);
+            var itemId = bomLine.RawMaterialItemId;
+            if (existingLastCosts.TryGetValue(itemId, out var lc))
+            {
+                lc.CostPerKg = costLine.CostPerKg;
+                lc.CurrencyCode = costLine.CurrencyCode;
+                lc.UpdatedAt = DateTime.UtcNow;
+                lc.UpdatedByUserId = CurrentUserId;
+            }
+            else
+            {
+                var newEntry = new ItemLastCost
+                {
+                    ItemId = itemId, CostPerKg = costLine.CostPerKg,
+                    CurrencyCode = costLine.CurrencyCode,
+                    UpdatedAt = DateTime.UtcNow, UpdatedByUserId = CurrentUserId
+                };
+                db.ItemLastCosts.Add(newEntry);
+                existingLastCosts[itemId] = newEntry;
+            }
+        }
 ```
 
-**After:**
+**Insert in its place:**
 
 ```csharp
-        foreach (var costLine in newCostLines
-            .OrderBy(cl => bom.Lines.First(bl => bl.Id == cl.BomLineId).RawMaterialItemId))
+        // Upsert ItemLastCost via Postgres INSERT … ON CONFLICT to avoid a TOCTOU
+        // race on the unique index when concurrent submits share a raw material.
+        var upsertsByItem = newCostLines
+            .Select(cl => new
+            {
+                ItemId = bom.Lines.First(bl => bl.Id == cl.BomLineId).RawMaterialItemId,
+                cl.CostPerKg,
+                cl.CurrencyCode
+            })
+            .GroupBy(x => x.ItemId)
+            .Select(g => g.Last())
+            .ToList();
+
+        var now = DateTime.UtcNow;
+        foreach (var u in upsertsByItem)
         {
-            var bomLine = bom.Lines.First(bl => bl.Id == costLine.BomLineId);
+            await db.Database.ExecuteSqlInterpolatedAsync($@"
+                INSERT INTO ""ItemLastCosts"" (""ItemId"", ""CostPerKg"", ""CurrencyCode"", ""UpdatedAt"", ""UpdatedByUserId"")
+                VALUES ({u.ItemId}, {u.CostPerKg}, {u.CurrencyCode}, {now}, {CurrentUserId})
+                ON CONFLICT (""ItemId"") DO UPDATE SET
+                    ""CostPerKg"" = EXCLUDED.""CostPerKg"",
+                    ""CurrencyCode"" = EXCLUDED.""CurrencyCode"",
+                    ""UpdatedAt"" = EXCLUDED.""UpdatedAt"",
+                    ""UpdatedByUserId"" = EXCLUDED.""UpdatedByUserId""");
+        }
 ```
 
-No other lines change.
+**Leave untouched:** all surrounding code — the earlier `newCostLines.Add(...)` loop that builds the cost lines, the `db.BomCosts.Add(cost)` call, the `req.Status = ...` / `req.UpdatedAt = ...` lines, the later `await db.SaveChangesAsync();` at ~line 324, and the commit at the end of the method.
 
 ### Step 2.2 — Build
 
-- [ ] Run:
+- [ ] From the worktree root:
 
 ```bash
 dotnet build
 ```
 
-Expected: `Build succeeded` with 0 errors, 0 warnings introduced by this change.
+Expected: `Build succeeded` with 0 errors. If the compiler complains about `ExecuteSqlInterpolatedAsync` being undefined, verify `using Microsoft.EntityFrameworkCore;` is at the top of `CostingController.cs` (it already is — that namespace exposes the extension on `DatabaseFacade`).
 
-### Step 2.3 — Run the new test and confirm it passes
+### Step 2.3 — Run the Task-1 regression test, confirm it PASSES
 
 - [ ] Run:
 
@@ -273,9 +128,9 @@ Expected: `Build succeeded` with 0 errors, 0 warnings introduced by this change.
 dotnet test BomPriceApproval.Tests/BomPriceApproval.Tests.csproj --filter "FullyQualifiedName~SubmitItem_ConcurrentDifferentReqsSharingRawMaterial_NoDeadlock"
 ```
 
-Expected: **PASS**. Run it a second time to rule out luck — should still pass.
+Expected: **PASS.** Run a second time to confirm it's not a fluke.
 
-### Step 2.4 — Run the full Costing test suite to confirm no regression
+### Step 2.4 — Run the full Costing suite (regression sweep)
 
 - [ ] Run:
 
@@ -283,9 +138,9 @@ Expected: **PASS**. Run it a second time to rule out luck — should still pass.
 dotnet test BomPriceApproval.Tests/BomPriceApproval.Tests.csproj --filter "FullyQualifiedName~Costing"
 ```
 
-Expected: **All tests pass**, including `SubmitItem_ConcurrentLastTwoItems_BothTriggerMdReview` and `SubmitItem_MultipleConcurrent_NoDuplicatedCosts`.
+Expected: **all tests pass**, including the existing `Submit_ConvertsCurrencyWritesLinesUpsertsLastCostAndMovesToMdReview` (verifies `ItemLastCost` is correctly written with the converted values) and `Recosting_NewRequisitionDoesNotModifyPreviousBomCostLines` (verifies cross-requisition isolation of BomCostLines). These two act as regression checks for the upsert rewrite.
 
-### Step 2.5 — Run the entire test suite
+### Step 2.5 — Run the whole test suite
 
 - [ ] Run:
 
@@ -293,27 +148,32 @@ Expected: **All tests pass**, including `SubmitItem_ConcurrentLastTwoItems_BothT
 dotnet test
 ```
 
-Expected: **All tests pass.** If any unrelated test fails on your machine (e.g., a port binding issue), confirm it was failing before this change too — this fix only touches `SubmitItem`, so unrelated failures are pre-existing.
+Expected: **all tests pass.**
 
-### Step 2.6 — Commit
+### Step 2.6 — Commit (test + fix together)
 
 - [ ] Run:
 
 ```bash
 git add BomPriceApproval.API/Features/Costing/CostingController.cs BomPriceApproval.Tests/Costing/CostingTests.cs
 git commit -m "$(cat <<'EOF'
-fix(costing): deterministic ItemLastCost lock order to prevent deadlock
+fix(costing): atomic ItemLastCost upsert via INSERT…ON CONFLICT
 
-Two concurrent costing submits on different requisitions sharing one or
-more raw-material items could acquire ItemLastCost row locks in opposite
-orders, producing a Postgres 40P01 deadlock that surfaced as HTTP 500.
+Two concurrent costing submits on different requisitions that shared
+a raw-material item whose ItemLastCost row did not yet exist could
+race on the TOCTOU gap between the dictionary-read and the INSERT,
+producing a 23505 unique_violation on IX_ItemLastCosts_ItemId that
+surfaced as HTTP 500. The FOR UPDATE on QuotationRequest from the
+prior concurrency fix did not serialize them because they targeted
+different req rows.
 
-Sort the upsert loop by RawMaterialItemId so every submitter locks rows
-in the same global order. Semantics of the upsert are unchanged because
-each item id is touched at most once per transaction.
+Replace the read-then-insert-if-absent loop with an atomic Postgres
+INSERT … ON CONFLICT ("ItemId") DO UPDATE per distinct raw material.
+The statement runs inside the existing transaction and preserves
+last-write-wins semantics.
 
-Adds a parallel-submit regression test covering two reqs with a shared
-raw material in reversed BOM positions.
+Adds a parallel-submit regression test covering two reqs with a
+shared raw material in reversed BOM positions.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -324,9 +184,9 @@ Expected: commit created; `git status` clean.
 
 ---
 
-## Self-Review Notes (pre-handoff)
+## Self-Review Notes
 
-- **Spec coverage:** The spec's Problem/Fix/Test sections are covered by Tasks 1 and 2. The spec's "Out of scope" items (dictionary refactor, retry middleware, FOR UPDATE changes) are intentionally omitted.
-- **Placeholder scan:** No TBDs. All steps have either exact code blocks or exact commands with expected outputs.
-- **Type consistency:** The test reuses the record types defined at lines 588–609 of the existing `CostingTests.cs` (`ItemDto`, `CustomerDto`, `ProcessDto`, `CreatedRequisition`, `RequisitionDetailDto`, `RequisitionDto`, `CostingReviewDto`, `CostingBomLineDto`). The one-line code change in `SubmitItem` does not alter any public type.
-- **Known caveat:** The test's effectiveness at reproducing a pre-fix deadlock is probabilistic. Step 1.3 includes an explicit flake fallback for the rare case that the simple version passes pre-fix.
+- **Spec coverage:** Problem, Fix, and Regression-test sections of the revised spec are covered by Task 1 (complete) and Task 2.
+- **Placeholder scan:** no TBDs. All steps have exact code blocks or commands with expected outputs.
+- **Type consistency:** `ExecuteSqlInterpolatedAsync` is an extension on `DatabaseFacade` provided by `Microsoft.EntityFrameworkCore`, already imported in the file. Column types in the SQL (`"ItemId"` int, `"CostPerKg"` numeric(18,4), `"CurrencyCode"` text, `"UpdatedAt"` timestamptz, `"UpdatedByUserId"` int) match the migration at `20260414171405_CostingEntry.cs:68–95`. The unique index being exploited by `ON CONFLICT ("ItemId")` is declared at the same migration, line 113–117.
+- **Transaction scoping:** `ExecuteSqlInterpolatedAsync` participates in the ambient transaction opened earlier in `SubmitItem` — verified by reading `Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions` behavior.

@@ -145,7 +145,12 @@ public class CostingController(AppDbContext db, NotificationService notification
     [HttpPost("{requisitionId}/items/{requisitionItemId}/submit")]
     public async Task<IActionResult> SubmitItem(int requisitionId, int requisitionItemId, SubmitCostingRequest request)
     {
-        var req = await db.QuotationRequests.FirstOrDefaultAsync(q => q.Id == requisitionId);
+        await using var tx = await db.Database.BeginTransactionAsync();
+
+        // Lock the requisition row to serialize concurrent submits for the same requisition.
+        var req = await db.QuotationRequests
+            .FromSqlInterpolated($"SELECT * FROM \"QuotationRequests\" WHERE \"Id\" = {requisitionId} FOR UPDATE")
+            .FirstOrDefaultAsync();
         if (req is null) return NotFound();
         if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
         if (req.Status != RequisitionStatus.CostingInProgress)
@@ -304,21 +309,31 @@ public class CostingController(AppDbContext db, NotificationService notification
         var draft = await db.CostingDrafts.FirstOrDefaultAsync(d => d.BomHeaderId == bom.Id);
         if (draft is not null) db.CostingDrafts.Remove(draft);
 
+        req.UpdatedAt = DateTime.UtcNow;
+
+        // Persist the new cost rows inside the transaction.
+        await db.SaveChangesAsync();
+
+        // Re-query the count after saving so concurrent submits each see the
+        // committed state of the other (FOR UPDATE at the top serialises them).
         var allItemIds = await db.RequisitionItems
             .Where(ri => ri.QuotationRequestId == requisitionId)
             .Select(ri => ri.Id).ToListAsync();
         var costCount = await db.BomCosts
             .CountAsync(c => allItemIds.Contains(c.BomHeader.RequisitionItemId));
-        var allSubmitted = (costCount + 1) >= allItemIds.Count;
+        var allSubmitted = costCount >= allItemIds.Count;
 
         if (allSubmitted)
         {
             req.Status = RequisitionStatus.MdReview;
+            req.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
         }
 
-        req.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
+        await tx.CommitAsync();
 
+        // Send notifications outside the transaction so a delivery failure
+        // cannot roll back the status promotion.
         if (allSubmitted)
         {
             var mds = await db.Users.Where(u => u.Role == UserRole.ManagingDirector && u.IsActive).ToListAsync();

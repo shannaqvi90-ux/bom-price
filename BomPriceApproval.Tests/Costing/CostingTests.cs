@@ -18,6 +18,13 @@ public class CostingTests(WebApplicationFactory<Program> factory)
         return body!.AccessToken;
     }
 
+    private static async Task<string> LoginAsync(HttpClient client, string email, string password)
+    {
+        var resp = await client.PostAsJsonAsync("/api/auth/login", new { Email = email, Password = password });
+        var body = await resp.Content.ReadFromJsonAsync<LoginResponse>();
+        return body!.AccessToken;
+    }
+
     private async Task<(int RequisitionId, int RequisitionItemId)> CreateRequisitionWithBomInCostingPendingAsync(string quoteCurrency = "AED")
     {
         // 1. SalesPerson creates items + requisition
@@ -368,6 +375,214 @@ public class CostingTests(WebApplicationFactory<Program> factory)
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var body = await resp.Content.ReadFromJsonAsync<BomPriceApproval.Tests.Shared.ValidationProblemResponse>();
         body!.Detail.Should().Contain("Missing cost");
+    }
+
+    // ── Multi-item concurrency helper ──────────────────────────────────────────
+
+    /// <summary>
+    /// Seeds a requisition with <paramref name="itemCount"/> requisition items,
+    /// builds a BOM for each, submits the BOM, and transitions to CostingInProgress.
+    /// Returns (requisitionId, array of (requisitionItemId, bomLineId) per item).
+    /// </summary>
+    private async Task<(int RequisitionId, (int RequisitionItemId, int BomLineId)[] Items)>
+        BootstrapMultiItemToCostingInProgressAsync(int itemCount)
+    {
+        var client = factory.CreateClient();
+
+        // Login helpers scoped to this client
+        async Task<string> Login(string email, string pw)
+        {
+            var r = await client.PostAsJsonAsync("/api/auth/login", new { Email = email, Password = pw });
+            return (await r.Content.ReadFromJsonAsync<LoginResponse>())!.AccessToken;
+        }
+
+        void Auth(string token) =>
+            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        // 1. Create FG items (one per requisition item) + one shared RM
+        var spToken = await Login("ali@test.com", "Test@1234");
+        Auth(spToken);
+
+        var fgIds = new List<int>();
+        for (var i = 0; i < itemCount; i++)
+        {
+            var code = $"FG-{Guid.NewGuid():N}".Substring(0, 10);
+            var resp = await client.PostAsJsonAsync("/api/items",
+                new { Code = code, Description = $"FG {i}", Type = "FinishedGood", LastPurchasePrice = (decimal?)null });
+            fgIds.Add((await resp.Content.ReadFromJsonAsync<ItemDto>())!.Id);
+        }
+
+        var rmCode = $"RM-{Guid.NewGuid():N}".Substring(0, 10);
+        var rmResp = await client.PostAsJsonAsync("/api/items",
+            new { Code = rmCode, Description = "Shared RM", Type = "RawMaterial", LastPurchasePrice = (decimal?)null });
+        var rmId = (await rmResp.Content.ReadFromJsonAsync<ItemDto>())!.Id;
+
+        var customers = await client.GetFromJsonAsync<List<CustomerDto>>("/api/customers");
+        var reqResp = await client.PostAsJsonAsync("/api/requisitions", new
+        {
+            CustomerId = customers!.First().Id,
+            Items = fgIds.Select(fgId => new { ItemId = fgId, ExpectedQty = 100m }).ToArray(),
+            CurrencyCode = "AED"
+        });
+        var requisitionId = (await reqResp.Content.ReadFromJsonAsync<CreatedRequisition>())!.Id;
+
+        var reqDetail = await client.GetFromJsonAsync<RequisitionDetailDto>($"/api/requisitions/{requisitionId}");
+        var riIds = reqDetail!.Items.Select(i => i.Id).ToArray();
+
+        // 2. Admin creates a process
+        var adminToken = await Login("admin@test.com", "Admin@1234");
+        Auth(adminToken);
+        var procCode = $"P-{Guid.NewGuid():N}".Substring(0, 12);
+        var procResp = await client.PostAsJsonAsync("/api/processes", new { Name = procCode, DisplayOrder = 1 });
+        var processId = (await procResp.Content.ReadFromJsonAsync<ProcessDto>())!.Id;
+
+        // 3. BomCreator builds + submits BOM for every item
+        var bomToken = await Login("bob@test.com", "Test@1234");
+        Auth(bomToken);
+        foreach (var riId in riIds)
+        {
+            await client.PostAsync($"/api/bom/{requisitionId}/items/{riId}/start", null);
+            await client.PutAsJsonAsync($"/api/bom/{requisitionId}/items/{riId}/lines", new
+            {
+                Lines = new[] { new { ProcessId = processId, RawMaterialItemId = rmId, QtyPerKg = 0.85m, WastagePct = 2.0m } }
+            });
+        }
+        await client.PostAsync($"/api/bom/{requisitionId}/submit", null);
+
+        // 4. Accountant starts costing
+        var accToken = await Login("sara@test.com", "Test@1234");
+        Auth(accToken);
+        await client.PostAsync($"/api/costing/{requisitionId}/items/{riIds[0]}/start", null);
+
+        // 5. Fetch bomLineIds per item
+        var review = await client.GetFromJsonAsync<CostingReviewDto>($"/api/costing/{requisitionId}");
+        var itemData = riIds
+            .Select(riId =>
+            {
+                var ci = review!.Items.First(x => x.RequisitionItemId == riId);
+                return (riId, ci.BomLines[0].BomLineId);
+            }).ToArray();
+
+        client.DefaultRequestHeaders.Authorization = null;
+        return (requisitionId, itemData);
+    }
+
+    private object DefaultSubmitBody(int bomLineId) => new
+    {
+        RawMaterialCosts = new[] { new { BomLineId = bomLineId, CostPerKg = 2.0m, CurrencyCode = "AED" } },
+        LandedCostType = "Percentage",
+        LandedCostValue = 0m,
+        FohAmount = 0m
+    };
+
+    // ── Concurrency tests ──────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task SubmitItem_SingleItemReq_TransitionsToMdReview()
+    {
+        var (reqId, items) = await BootstrapMultiItemToCostingInProgressAsync(itemCount: 1);
+        var (riId, bomLineId) = items[0];
+
+        var client = factory.CreateClient();
+        var token = await LoginAsync(client, "sara@test.com", "Test@1234");
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        var resp = await client.PostAsJsonAsync(
+            $"/api/costing/{reqId}/items/{riId}/submit",
+            DefaultSubmitBody(bomLineId));
+        resp.StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
+
+        var spClient = factory.CreateClient();
+        var spToken = await LoginAsync(spClient, "ali@test.com", "Test@1234");
+        spClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", spToken);
+        var req = await spClient.GetFromJsonAsync<RequisitionDto>($"/api/requisitions/{reqId}");
+        req!.Status.Should().Be("MdReview");
+    }
+
+    [Fact]
+    public async Task SubmitItem_ConcurrentLastTwoItems_BothTriggerMdReview()
+    {
+        // Seed: 3-item req with item 1 already costed sequentially.
+        var (reqId, items) = await BootstrapMultiItemToCostingInProgressAsync(itemCount: 3);
+        var (ri0, bl0) = items[0];
+        var (ri1, bl1) = items[1];
+        var (ri2, bl2) = items[2];
+
+        // Pre-submit item 0 sequentially.
+        var seqClient = factory.CreateClient();
+        var seqToken = await LoginAsync(seqClient, "sara@test.com", "Test@1234");
+        seqClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", seqToken);
+        var pre = await seqClient.PostAsJsonAsync(
+            $"/api/costing/{reqId}/items/{ri0}/submit", DefaultSubmitBody(bl0));
+        pre.StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
+
+        // Items 1 and 2 are submitted concurrently — each with its own HttpClient.
+        var task1 = Task.Run(async () =>
+        {
+            var c = factory.CreateClient();
+            var t = await LoginAsync(c, "sara@test.com", "Test@1234");
+            c.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", t);
+            return await c.PostAsJsonAsync($"/api/costing/{reqId}/items/{ri1}/submit", DefaultSubmitBody(bl1));
+        });
+        var task2 = Task.Run(async () =>
+        {
+            var c = factory.CreateClient();
+            var t = await LoginAsync(c, "sara@test.com", "Test@1234");
+            c.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", t);
+            return await c.PostAsJsonAsync($"/api/costing/{reqId}/items/{ri2}/submit", DefaultSubmitBody(bl2));
+        });
+
+        var results = await Task.WhenAll(task1, task2);
+        foreach (var r in results)
+            r.StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
+
+        // Final state: requisition must be MdReview, exactly 3 BomCost rows.
+        var spClient = factory.CreateClient();
+        var spToken = await LoginAsync(spClient, "ali@test.com", "Test@1234");
+        spClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", spToken);
+        var req = await spClient.GetFromJsonAsync<RequisitionDto>($"/api/requisitions/{reqId}");
+        req!.Status.Should().Be("MdReview");
+
+        var accClient = factory.CreateClient();
+        var accToken = await LoginAsync(accClient, "sara@test.com", "Test@1234");
+        accClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accToken);
+        var review = await accClient.GetFromJsonAsync<CostingReviewDto>($"/api/costing/{reqId}");
+        review!.Items.Count(i => i.Cost is not null).Should().Be(3);
+    }
+
+    [Fact]
+    public async Task SubmitItem_MultipleConcurrent_NoDuplicatedCosts()
+    {
+        // One-item requisition; fire 5 parallel submits of the same item.
+        var (reqId, items) = await BootstrapMultiItemToCostingInProgressAsync(itemCount: 1);
+        var (riId, bomLineId) = items[0];
+
+        var tasks = Enumerable.Range(0, 5).Select(_ => Task.Run(async () =>
+        {
+            var c = factory.CreateClient();
+            var t = await LoginAsync(c, "sara@test.com", "Test@1234");
+            c.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", t);
+            return await c.PostAsJsonAsync(
+                $"/api/costing/{reqId}/items/{riId}/submit", DefaultSubmitBody(bomLineId));
+        })).ToArray();
+
+        var results = await Task.WhenAll(tasks);
+
+        // At least one must succeed.
+        results.Should().Contain(r => r.StatusCode == System.Net.HttpStatusCode.NoContent);
+
+        // Final state: exactly 1 BomCost row (no duplicates), status is MdReview.
+        var accClient = factory.CreateClient();
+        var accToken = await LoginAsync(accClient, "sara@test.com", "Test@1234");
+        accClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accToken);
+        var review = await accClient.GetFromJsonAsync<CostingReviewDto>($"/api/costing/{reqId}");
+        review!.Items.Count(i => i.Cost is not null).Should().Be(1);
+
+        var spClient = factory.CreateClient();
+        var spToken = await LoginAsync(spClient, "ali@test.com", "Test@1234");
+        spClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", spToken);
+        var req = await spClient.GetFromJsonAsync<RequisitionDto>($"/api/requisitions/{reqId}");
+        req!.Status.Should().Be("MdReview");
     }
 
     // ── DTOs ──

@@ -13,7 +13,10 @@ namespace BomPriceApproval.API.Features.Requisitions;
 [ApiController]
 [Route("api/requisitions")]
 [Authorize]
-public class RequisitionsController(AppDbContext db, NotificationService notificationService) : ControllerBase
+public class RequisitionsController(
+    AppDbContext db,
+    NotificationService notificationService,
+    ILogger<RequisitionsController> logger) : ControllerBase
 {
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string CurrentRole => User.FindFirstValue(ClaimTypes.Role)!;
@@ -159,13 +162,22 @@ public class RequisitionsController(AppDbContext db, NotificationService notific
         db.QuotationRequests.Add(requisition);
         await db.SaveChangesAsync();
 
-        var bomCreators = await db.Users
-            .Where(u => u.Role == UserRole.BomCreator && (u.BranchId == requisition.BranchId || u.BranchId == null) && u.IsActive)
-            .ToListAsync();
+        try
+        {
+            var bomCreators = await db.Users
+                .Where(u => u.Role == UserRole.BomCreator && (u.BranchId == requisition.BranchId || u.BranchId == null) && u.IsActive)
+                .ToListAsync();
 
-        foreach (var creator in bomCreators)
-            await notificationService.SendAsync(creator.Id,
-                $"New BOM request: {requisition.RefNo}", requisition.Id, "QuotationRequest");
+            foreach (var creator in bomCreators)
+                await notificationService.SendAsync(creator.Id,
+                    $"New BOM request: {requisition.RefNo}", requisition.Id, "QuotationRequest");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Notification dispatch failed after successful commit for {Entity} {Id}",
+                "QuotationRequest", requisition.Id);
+        }
 
         return CreatedAtAction(nameof(Get), new { id = requisition.Id }, new { requisition.Id, requisition.RefNo });
     }

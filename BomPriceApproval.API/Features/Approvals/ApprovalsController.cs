@@ -12,7 +12,7 @@ namespace BomPriceApproval.API.Features.Approvals;
 
 [ApiController]
 [Route("api/approvals")]
-[Authorize(Roles = "ManagingDirector")]
+[Authorize]
 public class ApprovalsController(
     AppDbContext db,
     NotificationService notificationSvc,
@@ -24,6 +24,7 @@ public class ApprovalsController(
     private string CurrentRole => User.FindFirstValue(ClaimTypes.Role)!;
 
     [HttpGet("{requisitionId}")]
+    [Authorize(Roles = "ManagingDirector")]
     public async Task<IActionResult> GetReview(int requisitionId)
     {
         var req = await db.QuotationRequests
@@ -62,6 +63,7 @@ public class ApprovalsController(
     }
 
     [HttpPost("{requisitionId}/approve")]
+    [Authorize(Roles = "ManagingDirector")]
     public async Task<IActionResult> Approve(int requisitionId, ApproveRequest request)
     {
         var req = await db.QuotationRequests
@@ -185,6 +187,7 @@ public class ApprovalsController(
     }
 
     [HttpPost("{requisitionId}/reject")]
+    [Authorize(Roles = "ManagingDirector")]
     public async Task<IActionResult> Reject(int requisitionId, RejectRequest request)
     {
         var req = await db.QuotationRequests

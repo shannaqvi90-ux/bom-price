@@ -76,7 +76,12 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddRateLimiter(opts =>
 {
     opts.AddPolicy("login", ctx =>
-        RateLimitPartition.GetFixedWindowLimiter(
+    {
+        // Skip rate limiting outside Production so integration tests and local dev can run freely.
+        if (!builder.Environment.IsProduction())
+            return RateLimitPartition.GetNoLimiter("non-prod");
+
+        return RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
             {
@@ -84,7 +89,8 @@ builder.Services.AddRateLimiter(opts =>
                 Window = TimeSpan.FromMinutes(15),
                 QueueLimit = 0,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst
-            }));
+            });
+    });
     opts.RejectionStatusCode = 429;
 });
 

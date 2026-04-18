@@ -114,4 +114,27 @@ public class UsersController(AppDbContext db, ILogger<UsersController> logger) :
 
         return NoContent();
     }
+
+    // Admin-only: revoke all active refresh tokens for a user. Effectively kicks
+    // the user out of every device/session — on next /refresh they get a 401 and
+    // must log in again. Access tokens issued before revocation stay valid until
+    // their 15-min expiry; for a full immediate kick, the client must also log out.
+    [HttpPost("{id}/revoke-sessions")]
+    public async Task<IActionResult> RevokeSessions(int id)
+    {
+        var user = await db.Users.FindAsync(id);
+        if (user is null) return NotFound();
+
+        var tokens = await db.RefreshTokens
+            .Where(rt => rt.UserId == id && !rt.IsRevoked)
+            .ToListAsync();
+        foreach (var rt in tokens)
+            rt.IsRevoked = true;
+        await db.SaveChangesAsync();
+
+        logger.LogWarning("[Audit] Sessions revoked {TargetUserId} {Email} RevokedTokenCount={Count}",
+            user.Id, user.Email, tokens.Count);
+
+        return Ok(new { revokedTokens = tokens.Count });
+    }
 }

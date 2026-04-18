@@ -119,6 +119,38 @@ public class UserTokenRevocationTests(WebApplicationFactory<Program> factory)
         refreshResp.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
+    [Fact]
+    public async Task RevokeSessions_Admin_InvalidatesRefreshToken()
+    {
+        var email = $"revoke-{Guid.NewGuid():N}"[..28] + "@t.com";
+        var userId = await CreateUserAsync(email, UserRole.SalesPerson, branchId: 1);
+
+        var (_, refreshToken, _) = await LoginAsync(email, "Test@1234");
+
+        var adminToken = await AdminTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var revokeResp = await _client.PostAsync($"/api/users/{userId}/revoke-sessions", content: null);
+        revokeResp.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Refresh token must now be rejected
+        _client.DefaultRequestHeaders.Authorization = null;
+        var refreshResp = await _client.PostAsJsonAsync("/api/auth/refresh", new { RefreshToken = refreshToken });
+        refreshResp.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task RevokeSessions_NonAdmin_Forbidden()
+    {
+        var email = $"revoke-nonad-{Guid.NewGuid():N}"[..20] + "@t.com";
+        var userId = await CreateUserAsync(email, UserRole.SalesPerson, branchId: 1);
+
+        // Login as a non-admin and try to revoke sessions
+        var (salesToken, _, _) = await LoginAsync("ali@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", salesToken);
+        var revokeResp = await _client.PostAsync($"/api/users/{userId}/revoke-sessions", content: null);
+        revokeResp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
     private record LoginResult(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId);
     private record CreatedUser(int Id, string Name, string Email, string Role, int? BranchId, string? BranchName, bool IsActive);
 }

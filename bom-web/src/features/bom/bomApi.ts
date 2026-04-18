@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/axios";
 import type { BomReviewResponse } from "@/types/api";
+import { requisitionKeys } from "@/features/requisitions/requisitionsApi";
 
 export const bomKeys = {
   detail: (requisitionId: number) => ["bom", requisitionId] as const,
@@ -63,7 +64,8 @@ export function useSubmitBom() {
     mutationFn: (requisitionId: number) =>
       api.post(`/bom/${requisitionId}/submit`),
     onSuccess: (_data, requisitionId) => {
-      qc.invalidateQueries({ queryKey: ["requisitions"] });
+      qc.invalidateQueries({ queryKey: requisitionKeys.detail(requisitionId) });
+      qc.invalidateQueries({ queryKey: requisitionKeys.list() });
       qc.invalidateQueries({ queryKey: bomKeys.detail(requisitionId) });
     },
   });

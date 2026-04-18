@@ -33,6 +33,7 @@ export function useCosting(requisitionId: number) {
     queryFn: () =>
       api.get<CostingReviewResponse>(`/costing/${requisitionId}`).then((r) => r.data),
     enabled: Number.isFinite(requisitionId) && requisitionId > 0,
+    staleTime: 30_000,
   });
 }
 
@@ -83,7 +84,8 @@ export function useSubmitCostingItem() {
     }) =>
       api.post(`/costing/${requisitionId}/items/${requisitionItemId}/submit`, payload),
     onSuccess: (_d, { requisitionId }) => {
-      qc.invalidateQueries({ queryKey: ["requisitions"] });
+      qc.invalidateQueries({ queryKey: requisitionKeys.detail(requisitionId) });
+      qc.invalidateQueries({ queryKey: requisitionKeys.list() });
       qc.invalidateQueries({ queryKey: costingKeys.detail(requisitionId) });
     },
   });

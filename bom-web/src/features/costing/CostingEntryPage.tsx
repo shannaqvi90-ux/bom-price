@@ -92,6 +92,14 @@ export default function CostingEntryPage() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [saveStatus]);
 
+  // Cancel any pending debounced auto-save on unmount so the setTimeout
+  // callback does not run (and call mutate) after the component is gone.
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   // Auto-select first item
   useEffect(() => {
     if (costingReview && costingReview.items.length > 0 && selectedItemId === null) {

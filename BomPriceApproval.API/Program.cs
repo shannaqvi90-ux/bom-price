@@ -10,11 +10,31 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Serilog;
+using Serilog.Formatting.Compact;
 
 // Preserve jti and exp claims under their standard short names after validation
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Structured logging via Serilog.
+// - Development: human-readable console output.
+// - Production: compact JSON lines (one event per line) so log aggregators
+//   (Loki, Elastic, Datadog, etc.) can parse structured properties directly.
+builder.Host.UseSerilog((context, _, config) =>
+{
+    config
+        .MinimumLevel.Information()
+        .MinimumLevel.Override("Microsoft.AspNetCore", Serilog.Events.LogEventLevel.Warning)
+        .MinimumLevel.Override("Microsoft.EntityFrameworkCore", Serilog.Events.LogEventLevel.Warning)
+        .Enrich.FromLogContext();
+
+    if (context.HostingEnvironment.IsProduction())
+        config.WriteTo.Console(new CompactJsonFormatter());
+    else
+        config.WriteTo.Console();
+});
 
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));

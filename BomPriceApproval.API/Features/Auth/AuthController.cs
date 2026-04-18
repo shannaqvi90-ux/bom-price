@@ -12,7 +12,11 @@ namespace BomPriceApproval.API.Features.Auth;
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController(AppDbContext db, TokenService tokenService, IConfiguration config) : ControllerBase
+public class AuthController(
+    AppDbContext db,
+    TokenService tokenService,
+    IConfiguration config,
+    ILogger<AuthController> logger) : ControllerBase
 {
     // Computed once at class load; used to absorb timing when the email is not found,
     // preventing user enumeration via response-time difference (~3 ms vs ~93 ms).
@@ -30,11 +34,15 @@ public class AuthController(AppDbContext db, TokenService tokenService, IConfigu
         if (user is null)
         {
             BCrypt.Net.BCrypt.Verify(req.Password, DummyHash); // constant-time; result discarded
+            logger.LogInformation("[Audit] Login failed: unknown email {Email}",
+                normalizedEmail);
             return Unauthorized(new { message = "Invalid credentials" });
         }
 
         if (user.LockedUntil is not null && user.LockedUntil > DateTime.UtcNow)
         {
+            logger.LogWarning("[Audit] Login rejected: account locked {UserId} {Email} LockedUntil={LockedUntil}",
+                user.Id, user.Email, user.LockedUntil);
             return Validation
                 .Detail("Account temporarily locked due to too many failed login attempts. Try again later.")
                 .Field("Email", "Account locked.")
@@ -47,6 +55,8 @@ public class AuthController(AppDbContext db, TokenService tokenService, IConfigu
             if (user.FailedLoginAttempts >= 5)
                 user.LockedUntil = DateTime.UtcNow.AddMinutes(15);
             await db.SaveChangesAsync();
+            logger.LogWarning("[Audit] Login failed: wrong password {UserId} {Email} Attempts={Attempts} Locked={Locked}",
+                user.Id, user.Email, user.FailedLoginAttempts, user.LockedUntil is not null);
             return Unauthorized(new { message = "Invalid credentials" });
         }
 
@@ -64,6 +74,9 @@ public class AuthController(AppDbContext db, TokenService tokenService, IConfigu
         };
         db.RefreshTokens.Add(refreshToken);
         await db.SaveChangesAsync();
+
+        logger.LogInformation("[Audit] Login success {UserId} {Email} Role={Role} BranchId={BranchId}",
+            user.Id, user.Email, user.Role, user.BranchId);
 
         return Ok(new LoginResponse(accessToken, refreshTokenValue, user.Role.ToString(), user.Id, user.Name, user.BranchId));
     }
@@ -97,8 +110,12 @@ public class AuthController(AppDbContext db, TokenService tokenService, IConfigu
         {
             // Another concurrent refresh already consumed this token.
             // Treat as token-already-used: 401.
+            logger.LogWarning("[Audit] Refresh race lost — token already consumed {UserId}",
+                token.UserId);
             return Unauthorized(new { message = "Invalid refresh token" });
         }
+
+        logger.LogInformation("[Audit] Token refreshed {UserId}", token.UserId);
 
         return Ok(new LoginResponse(
             tokenService.GenerateAccessToken(token.User),
@@ -129,6 +146,11 @@ public class AuthController(AppDbContext db, TokenService tokenService, IConfigu
         if (token is not null) token.IsRevoked = true;
 
         await db.SaveChangesAsync();
+
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        logger.LogInformation("[Audit] Logout UserId={UserId} Jti={Jti}",
+            userIdClaim ?? "unknown", jti ?? "none");
+
         return NoContent();
     }
 }

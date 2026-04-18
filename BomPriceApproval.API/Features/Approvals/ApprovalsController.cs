@@ -163,6 +163,9 @@ public class ApprovalsController(
         req.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
+        logger.LogInformation("[Audit] Quotation approved {RequisitionId} {RefNo} ApprovedByUserId={ApprovedByUserId} ItemCount={ItemCount}",
+            req.Id, req.RefNo, CurrentUserId, approval.Items.Count);
+
         try
         {
             await db.Entry(approval).Collection(a => a.Items).LoadAsync();
@@ -212,6 +215,9 @@ public class ApprovalsController(
         req.Status = RequisitionStatus.Rejected;
         req.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
+
+        logger.LogWarning("[Audit] Quotation rejected {RequisitionId} {RefNo} RejectedByUserId={RejectedByUserId}",
+            req.Id, req.RefNo, CurrentUserId);
 
         try
         {

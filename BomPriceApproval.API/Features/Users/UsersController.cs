@@ -10,7 +10,7 @@ namespace BomPriceApproval.API.Features.Users;
 [ApiController]
 [Route("api/users")]
 [Authorize(Roles = "Admin")]
-public class UsersController(AppDbContext db) : ControllerBase
+public class UsersController(AppDbContext db, ILogger<UsersController> logger) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> GetAll() =>
@@ -49,6 +49,10 @@ public class UsersController(AppDbContext db) : ControllerBase
                 .Field("Email", "Already registered.")
                 .Return();
         }
+
+        logger.LogInformation("[Audit] User created {TargetUserId} {Email} Role={Role} BranchId={BranchId}",
+            user.Id, user.Email, user.Role, user.BranchId);
+
         return CreatedAtAction(nameof(GetAll), new UserResponse(user.Id, user.Name, user.Email, user.Role.ToString(), user.BranchId, null, user.IsActive));
     }
 
@@ -87,6 +91,13 @@ public class UsersController(AppDbContext db) : ControllerBase
                 .Field("Email", "Already registered.")
                 .Return();
         }
+
+        if (user.Role != oldRole || user.BranchId != oldBranchId)
+        {
+            logger.LogWarning("[Audit] User role/branch changed {TargetUserId} {Email} OldRole={OldRole} NewRole={NewRole} OldBranchId={OldBranchId} NewBranchId={NewBranchId}",
+                user.Id, user.Email, oldRole, user.Role, oldBranchId, user.BranchId);
+        }
+
         return NoContent();
     }
 
@@ -97,6 +108,10 @@ public class UsersController(AppDbContext db) : ControllerBase
         if (user is null) return NotFound();
         user.IsActive = false;
         await db.SaveChangesAsync();
+
+        logger.LogWarning("[Audit] User deactivated {TargetUserId} {Email}",
+            user.Id, user.Email);
+
         return NoContent();
     }
 }

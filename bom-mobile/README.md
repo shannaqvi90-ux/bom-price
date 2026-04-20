@@ -48,6 +48,10 @@ This split exists because `jest-expo`'s polyfills crash `axios-mock-adapter` at 
 
 `npm install` must be run with `--legacy-peer-deps` because of a transitive peer conflict between `react-dom@19.2.5` and Expo-pinned `react@19.1.0`. This will self-resolve when Expo aligns on React 19.2.
 
-## Out of scope in this foundation plan
+## What's implemented
 
-Requisition and approval screens, SignalR, notifications, and EAS Build are covered in follow-up plans (`2026-04-20-mobile-salesperson.md`, `2026-04-21-mobile-md-and-deploy.md`).
+**Plan 1 (merged):** login, role-based routing, secure-store tokens, axios 401 refresh, profile + logout, placeholder home screens.
+
+**Plan 2 (this work):** SalesPerson flow — requisitions list, create multi-item requisition, detail view with per-item stage indicators and PDF download. Detail remains read-only in V1.
+
+**Plan 3 (next):** MD approval screens, SignalR live updates, notifications, EAS Build.

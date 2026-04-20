@@ -3,6 +3,7 @@ export const colors = {
   text: { primary: "#0f172a", muted: "#64748b", inverse: "#ffffff" },
   bg: { app: "#f8fafc", card: "#ffffff", border: "#e2e8f0" },
   status: {
+    Draft: "#64748b",
     BomPending: "#f59e0b",
     BomInProgress: "#3b82f6",
     CostingPending: "#f59e0b",

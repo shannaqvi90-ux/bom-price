@@ -15,5 +15,5 @@ export default (): ExpoConfig => ({
   extra: {
     apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://localhost:7300",
   },
-  experiments: { typedRoutes: true },
+  experiments: { typedRoutes: false },
 });

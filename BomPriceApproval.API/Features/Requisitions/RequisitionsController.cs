@@ -23,7 +23,7 @@ public class RequisitionsController(
     private int? CurrentBranchId => int.TryParse(User.FindFirstValue("branchId"), out var b) && b > 0 ? b : null;
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] string? status = null)
     {
         var query = db.QuotationRequests
             .Include(q => q.Items)
@@ -38,6 +38,12 @@ public class RequisitionsController(
             _ when CurrentBranchId.HasValue => query.Where(q => q.BranchId == CurrentBranchId),
             _ => query
         };
+
+        if (!string.IsNullOrWhiteSpace(status) &&
+            Enum.TryParse<RequisitionStatus>(status, ignoreCase: true, out var parsedStatus))
+        {
+            query = query.Where(q => q.Status == parsedStatus);
+        }
 
         return Ok(await query.OrderByDescending(q => q.CreatedAt)
             .Select(q => new RequisitionListItem(

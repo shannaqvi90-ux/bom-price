@@ -52,6 +52,8 @@ This split exists because `jest-expo`'s polyfills crash `axios-mock-adapter` at 
 
 **Plan 1 (merged):** login, role-based routing, secure-store tokens, axios 401 refresh, profile + logout, placeholder home screens.
 
-**Plan 2 (this work):** SalesPerson flow — requisitions list, create multi-item requisition, detail view with per-item stage indicators and PDF download. Detail remains read-only in V1.
+**Plan 2 (merged):** SalesPerson flow — requisitions list, create multi-item requisition, detail view with per-item stage indicators and PDF download. Detail is read-only.
 
-**Plan 3 (next):** MD approval screens, SignalR live updates, notifications, EAS Build.
+**Plan 3a (this work):** MD pending-approvals list, MD approval detail with per-item prices + approve/reject flow, notifications screen with bell badge, SignalR foreground live updates.
+
+**Plan 3b (next):** EAS Build profiles for Android, Play Store Internal Testing distribution, deployment docs. iOS is a later phase.

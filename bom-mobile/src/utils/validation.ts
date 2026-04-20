@@ -21,3 +21,17 @@ export const createRequisitionSchema = z.object({
 });
 
 export type CreateRequisitionInput = z.infer<typeof createRequisitionSchema>;
+
+export const approveSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        requisitionItemId: z.number().int().positive(),
+        salesPricePerKgAed: z.number().positive("Price must be greater than zero"),
+      })
+    )
+    .min(1, "At least one item is required"),
+  notes: z.string().max(2000, "Notes must be 2000 characters or fewer").optional(),
+});
+
+export type ApproveInput = z.infer<typeof approveSchema>;

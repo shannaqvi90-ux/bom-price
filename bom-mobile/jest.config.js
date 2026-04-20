@@ -3,10 +3,7 @@ module.exports = {
     {
       displayName: "node",
       testEnvironment: "node",
-      testMatch: [
-        "<rootDir>/__tests__/client.test.ts",
-        "<rootDir>/__tests__/loginSchema.test.ts",
-      ],
+      testMatch: ["<rootDir>/__tests__/**/*.test.ts"],
       transform: {
         "^.+\\.tsx?$": ["ts-jest", { tsconfig: "<rootDir>/tsconfig.json" }],
       },
@@ -16,7 +13,7 @@ module.exports = {
     {
       displayName: "rn",
       preset: "jest-expo",
-      testMatch: ["<rootDir>/__tests__/roleGuard.test.tsx"],
+      testMatch: ["<rootDir>/__tests__/**/*.test.tsx"],
       moduleNameMapper: { "^@/(.*)$": "<rootDir>/src/$1" },
       setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
       transformIgnorePatterns: [

@@ -7,12 +7,13 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/Button";
+import { Input } from "@/components/Input";
 import { SearchablePicker } from "@/components/SearchablePicker";
 import { ErrorBanner } from "@/components/ErrorBanner";
-import { useCustomers, useExchangeRates } from "@/api/lookups";
+import { useCustomers, useExchangeRates, useItems } from "@/api/lookups";
 import { useCreateRequisition } from "@/api/requisitions";
 import {
   createRequisitionSchema,
@@ -22,6 +23,7 @@ import {
 export default function NewRequisition() {
   const router = useRouter();
   const customersQ = useCustomers();
+  const itemsQ = useItems();
   const ratesQ = useExchangeRates();
   const createMut = useCreateRequisition();
   const [topError, setTopError] = useState<string | null>(null);
@@ -38,6 +40,8 @@ export default function NewRequisition() {
       items: [{ itemId: 0, expectedQty: 0 }],
     },
   });
+
+  const { fields, append, remove } = useFieldArray({ control, name: "items" });
 
   const currencyOptions = [
     { code: "AED", label: "AED — UAE Dirham" },
@@ -127,9 +131,73 @@ export default function NewRequisition() {
           )}
         />
 
-        {/* Items — populated in Task 9 */}
         <Text className="text-base font-semibold text-slate-900 mt-4 mb-2">Items</Text>
-        <Text className="text-slate-500 text-sm">Items editor added in next task.</Text>
+
+        {fields.map((f, idx) => (
+          <View key={f.id} className="bg-white border border-slate-200 rounded-md p-3 mb-3">
+            <View className="flex-row items-center justify-between mb-2">
+              <Text className="text-sm font-medium text-slate-700">Item {idx + 1}</Text>
+              {fields.length > 1 ? (
+                <Text
+                  onPress={() => remove(idx)}
+                  className="text-rose-600 text-sm font-semibold"
+                >
+                  Remove
+                </Text>
+              ) : null}
+            </View>
+
+            <Controller
+              control={control}
+              name={`items.${idx}.itemId` as const}
+              render={({ field }) => (
+                <SearchablePicker
+                  label="Item"
+                  placeholder="Select item..."
+                  value={field.value || null}
+                  onChange={field.onChange}
+                  loading={itemsQ.isPending}
+                  options={
+                    (itemsQ.data ?? []).map((it) => ({
+                      id: it.id,
+                      label: it.description,
+                      sublabel: it.code,
+                    }))
+                  }
+                  error={errors.items?.[idx]?.itemId?.message}
+                />
+              )}
+            />
+
+            <Controller
+              control={control}
+              name={`items.${idx}.expectedQty` as const}
+              render={({ field }) => (
+                <Input
+                  label="Expected Qty"
+                  keyboardType="decimal-pad"
+                  value={field.value ? String(field.value) : ""}
+                  onChangeText={(t) => {
+                    const n = Number(t);
+                    field.onChange(Number.isFinite(n) ? n : 0);
+                  }}
+                  error={errors.items?.[idx]?.expectedQty?.message}
+                />
+              )}
+            />
+          </View>
+        ))}
+
+        <Text
+          onPress={() => append({ itemId: 0, expectedQty: 0 })}
+          className="text-brand-600 font-semibold self-start mb-2"
+        >
+          + Add another item
+        </Text>
+
+        {errors.items?.root ? (
+          <Text className="text-xs text-rose-600 mb-2">{errors.items.root.message}</Text>
+        ) : null}
 
         <View className="mt-6">
           <Button

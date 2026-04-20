@@ -1,19 +1,23 @@
-import { Pressable, Text } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { Redirect, Stack, useRouter } from "expo-router";
 import { useAuth, useRoleGuard } from "@/auth/AuthContext";
 import { LoadingView } from "@/components/LoadingView";
+import { NotificationBell } from "@/components/NotificationBell";
 
-function HeaderLogout() {
+function HeaderRight() {
   const { logout } = useAuth();
   const router = useRouter();
-  const onPress = async () => {
+  const onLogout = async () => {
     await logout();
     router.replace("/login");
   };
   return (
-    <Pressable onPress={onPress} className="pr-3">
-      <Text className="text-brand-600 text-base font-semibold">Log out</Text>
-    </Pressable>
+    <View className="flex-row items-center">
+      <NotificationBell />
+      <Pressable onPress={onLogout} className="pr-3">
+        <Text className="text-brand-600 text-base font-semibold">Log out</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -25,7 +29,7 @@ export default function MdLayout() {
     <Stack
       screenOptions={{
         headerShown: true,
-        headerRight: () => <HeaderLogout />,
+        headerRight: () => <HeaderRight />,
       }}
     />
   );

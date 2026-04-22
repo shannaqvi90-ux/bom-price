@@ -64,6 +64,28 @@ public class RequisitionsController(
         return Ok(await projected.ToListAsync());
     }
 
+    [HttpGet("count")]
+    public async Task<IActionResult> Count([FromQuery] string? status = null)
+    {
+        var query = db.QuotationRequests.AsQueryable();
+
+        query = CurrentRole switch
+        {
+            "SalesPerson" => query.Where(q => q.SalesPersonId == CurrentUserId),
+            "BomCreator" => query.Where(q => q.BranchId == CurrentBranchId),
+            _ when CurrentBranchId.HasValue => query.Where(q => q.BranchId == CurrentBranchId),
+            _ => query
+        };
+
+        if (!string.IsNullOrWhiteSpace(status) &&
+            Enum.TryParse<RequisitionStatus>(status, ignoreCase: true, out var parsedStatus))
+        {
+            query = query.Where(q => q.Status == parsedStatus);
+        }
+
+        return Ok(new { count = await query.CountAsync() });
+    }
+
     [HttpGet("{id}")]
     public async Task<IActionResult> Get(int id)
     {

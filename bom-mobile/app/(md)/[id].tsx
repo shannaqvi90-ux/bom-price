@@ -1,13 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMdReview, useApproveRequisition, useRejectRequisition } from "@/api/approvals";
 import { ApprovalItemRow } from "@/components/ApprovalItemRow";
+import { BomDetailSheet } from "@/components/BomDetailSheet";
 import { Button } from "@/components/Button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { RejectReasonPrompt } from "@/components/RejectReasonPrompt";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { LoadingView } from "@/components/LoadingView";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { formatMoney } from "@/utils/numbers";
 import { approveSchema } from "@/utils/validation";
 
@@ -24,6 +33,10 @@ export default function MdApprovalDetail() {
   const [topError, setTopError] = useState<string | null>(null);
   const [approveOpen, setApproveOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
+  const [bomSheetItem, setBomSheetItem] = useState<{
+    reqItemId: number;
+    desc: string;
+  } | null>(null);
 
   // Initialize price state from backend once data arrives
   useEffect(() => {
@@ -44,26 +57,12 @@ export default function MdApprovalDetail() {
     }, 0);
   }, [q.data, prices]);
 
-  if (q.isPending) return <LoadingView />;
-  if (q.isError || !q.data) {
-    return (
-      <View className="flex-1 p-4 bg-slate-50">
-        <ErrorBanner
-          message={q.error instanceof Error ? q.error.message : "Failed to load review"}
-          onRetry={() => q.refetch()}
-        />
-      </View>
-    );
-  }
-
-  const r = q.data;
-
   const onApprove = async () => {
     setTopError(null);
     setItemErrors({});
 
     const payload = {
-      items: r.items.map((it) => ({
+      items: q.data!.items.map((it) => ({
         requisitionItemId: it.requisitionItemId,
         salesPricePerKgAed: prices[it.requisitionItemId] ?? 0,
       })),
@@ -74,7 +73,7 @@ export default function MdApprovalDetail() {
       const errMap: Record<number, string> = {};
       for (const issue of parsed.error.issues) {
         if (issue.path[0] === "items" && typeof issue.path[1] === "number") {
-          const item = r.items[issue.path[1] as number];
+          const item = q.data!.items[issue.path[1] as number];
           if (item) errMap[item.requisitionItemId] = issue.message;
         }
       }
@@ -112,74 +111,189 @@ export default function MdApprovalDetail() {
       router.back();
     } catch (e: unknown) {
       setRejectOpen(false);
-      setTopError(
-        e instanceof Error ? e.message : "Reject failed"
-      );
+      setTopError(e instanceof Error ? e.message : "Reject failed");
     }
   };
 
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      className="flex-1 bg-slate-50"
+  const BackButton = (
+    <Pressable
+      onPress={() => router.back()}
+      style={{
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+        borderRadius: 8,
+        backgroundColor: "#f1f5f9",
+      }}
     >
-      <ScrollView contentContainerClassName="p-4 pb-32">
-        <Text className="text-2xl font-bold text-slate-900">{r.refNo}</Text>
-        <Text className="text-base text-slate-700">{r.customerName}</Text>
-        <Text className="text-xs text-slate-500 mb-4">
-          {r.currencyCode}
-          {r.exchangeRate != null ? ` · Rate ${formatMoney(r.exchangeRate)}` : ""}
-        </Text>
+      <Text style={{ color: "#1e40af", fontSize: 15, fontWeight: "600" }}>
+        Back
+      </Text>
+    </Pressable>
+  );
 
-        {topError ? (
-          <ErrorBanner message={topError} onRetry={() => setTopError(null)} />
-        ) : null}
+  if (q.isPending) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <LoadingView variant="list" />
+      </View>
+    );
+  }
 
-        {!r.readyForReview ? (
-          <View className="bg-amber-50 border border-amber-200 rounded-md p-3 mb-4">
-            <Text className="text-sm text-amber-800">
-              Costing is still in progress for one or more items. Approval is disabled.
+  if (q.isError || !q.data) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#f8fafc", padding: 16 }}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ErrorBanner
+          message={q.error instanceof Error ? q.error.message : "Failed to load review"}
+          onRetry={() => q.refetch()}
+        />
+      </View>
+    );
+  }
+
+  const r = q.data;
+  const rateSnippet = r.exchangeRate != null ? ` · Rate ${formatMoney(r.exchangeRate)}` : "";
+  const headerLabel = `${r.currencyCode}${rateSnippet}`;
+
+  return (
+    <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
+      <Stack.Screen options={{ headerShown: false }} />
+
+      <ScreenHeader
+        label={headerLabel}
+        title={r.refNo}
+        right={BackButton}
+      />
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          contentContainerStyle={{ padding: 16, paddingBottom: 160 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Customer name card */}
+          <View
+            style={{
+              backgroundColor: "#ffffff",
+              borderWidth: 1,
+              borderColor: "#e2e8f0",
+              borderRadius: 14,
+              padding: 14,
+              marginBottom: 12,
+            }}
+          >
+            <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>
+              {r.customerName}
+            </Text>
+            <Text style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>Customer</Text>
+          </View>
+
+          {/* Readiness warning */}
+          {!r.readyForReview ? (
+            <View
+              style={{
+                backgroundColor: "#fef3c7",
+                borderWidth: 1,
+                borderColor: "#fde68a",
+                borderRadius: 14,
+                padding: 14,
+                marginBottom: 12,
+              }}
+            >
+              <Text style={{ fontSize: 14, color: "#92400e" }}>
+                Costing still in progress for one or more items. Approval is disabled.
+              </Text>
+            </View>
+          ) : null}
+
+          {/* Top error */}
+          {topError ? (
+            <ErrorBanner message={topError} onRetry={() => setTopError(null)} />
+          ) : null}
+
+          {/* Items heading */}
+          <Text
+            style={{
+              fontSize: 16,
+              fontWeight: "700",
+              color: "#0f172a",
+              marginTop: 20,
+              marginBottom: 10,
+            }}
+          >
+            Items ({r.items.length})
+          </Text>
+
+          {r.items.map((it) => (
+            <ApprovalItemRow
+              key={it.requisitionItemId}
+              item={it}
+              price={prices[it.requisitionItemId] ?? 0}
+              onPriceChange={(p) =>
+                setPrices((prev) => ({ ...prev, [it.requisitionItemId]: p }))
+              }
+              error={itemErrors[it.requisitionItemId]}
+              onViewBom={() =>
+                setBomSheetItem({
+                  reqItemId: it.requisitionItemId,
+                  desc: it.itemDescription,
+                })
+              }
+            />
+          ))}
+        </ScrollView>
+
+        {/* Sticky bottom bar */}
+        <View
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: "#ffffff",
+            borderTopWidth: 1,
+            borderTopColor: "#e2e8f0",
+            padding: 16,
+            paddingBottom: 24,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 12,
+            }}
+          >
+            <Text style={{ fontSize: 15, color: "#64748b" }}>Total revenue</Text>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>
+              {formatMoney(grandTotal)}
             </Text>
           </View>
-        ) : null}
-
-        <Text className="text-base font-semibold text-slate-900 mb-2">Items</Text>
-        {r.items.map((it) => (
-          <ApprovalItemRow
-            key={it.requisitionItemId}
-            item={it}
-            price={prices[it.requisitionItemId] ?? 0}
-            onPriceChange={(p) =>
-              setPrices((prev) => ({ ...prev, [it.requisitionItemId]: p }))
-            }
-            error={itemErrors[it.requisitionItemId]}
-          />
-        ))}
-      </ScrollView>
-
-      <View className="border-t border-slate-200 bg-white p-3">
-        <View className="flex-row justify-between mb-3">
-          <Text className="text-sm text-slate-600">Total revenue</Text>
-          <Text className="text-base font-bold text-slate-900">{formatMoney(grandTotal)}</Text>
-        </View>
-        <View className="flex-row">
-          <View className="flex-1 mr-2">
-            <Button
-              title="Reject"
-              variant="danger"
-              onPress={() => setRejectOpen(true)}
-              disabled={approveMut.isPending || rejectMut.isPending}
-            />
-          </View>
-          <View className="flex-1">
-            <Button
-              title="Approve"
-              onPress={() => setApproveOpen(true)}
-              disabled={!r.readyForReview || approveMut.isPending || rejectMut.isPending}
-            />
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Button
+                title="Reject"
+                variant="danger"
+                onPress={() => setRejectOpen(true)}
+                disabled={approveMut.isPending || rejectMut.isPending}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                title="Approve"
+                variant="primary"
+                onPress={() => setApproveOpen(true)}
+                disabled={!r.readyForReview || approveMut.isPending || rejectMut.isPending}
+              />
+            </View>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
 
       <ConfirmDialog
         visible={approveOpen}
@@ -197,6 +311,16 @@ export default function MdApprovalDetail() {
         onCancel={() => setRejectOpen(false)}
         onConfirm={onReject}
       />
-    </KeyboardAvoidingView>
+
+      {bomSheetItem ? (
+        <BomDetailSheet
+          visible
+          onClose={() => setBomSheetItem(null)}
+          requisitionId={id}
+          requisitionItemId={bomSheetItem.reqItemId}
+          itemDescription={bomSheetItem.desc}
+        />
+      ) : null}
+    </View>
   );
 }

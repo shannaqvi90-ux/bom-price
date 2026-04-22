@@ -85,6 +85,8 @@ export default function MdPendingApprovals() {
           data={q.data ?? []}
           keyExtractor={(r) => String(r.id)}
           contentContainerStyle={{ padding: 16, paddingTop: 4 }}
+          overScrollMode="never"
+          bounces={false}
           refreshControl={
             <RefreshControl
               refreshing={q.isRefetching}

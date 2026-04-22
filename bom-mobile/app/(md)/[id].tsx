@@ -187,9 +187,21 @@ export default function MdApprovalDetail() {
               marginBottom: 12,
             }}
           >
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>
-              {stripTags(r.customerName)}
-            </Text>
+            {(() => {
+              const name = stripTags(r.customerName);
+              return (
+                <Text
+                  style={{
+                    fontSize: 18,
+                    fontWeight: "700",
+                    color: name ? "#0f172a" : "#94a3b8",
+                    fontStyle: name ? "normal" : "italic",
+                  }}
+                >
+                  {name || "— No name"}
+                </Text>
+              );
+            })()}
             <Text style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>Customer</Text>
           </View>
 

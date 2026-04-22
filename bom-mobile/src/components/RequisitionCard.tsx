@@ -54,12 +54,22 @@ export function RequisitionCard({ item, onPress }: Props) {
           </Text>
           <StatusPill status={item.status as Parameters<typeof StatusPill>[0]["status"]} />
         </View>
-        <Text
-          style={{ fontSize: 15, color: "#475569", marginBottom: 8 }}
-          numberOfLines={1}
-        >
-          {stripTags(item.customerName)}
-        </Text>
+        {(() => {
+          const name = stripTags(item.customerName);
+          return (
+            <Text
+              style={{
+                fontSize: 15,
+                color: name ? "#475569" : "#94a3b8",
+                fontStyle: name ? "normal" : "italic",
+                marginBottom: 8,
+              }}
+              numberOfLines={1}
+            >
+              {name || "— No name"}
+            </Text>
+          );
+        })()}
         <View
           style={{
             flexDirection: "row",

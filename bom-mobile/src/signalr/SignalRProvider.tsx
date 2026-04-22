@@ -37,6 +37,7 @@ export function SignalRProvider({ children }: { children: ReactNode }) {
       const connection = new signalR.HubConnectionBuilder()
         .withUrl(`${baseURL}/hubs/notifications?access_token=${token}`)
         .withAutomaticReconnect()
+        .configureLogging(signalR.LogLevel.None)
         .build();
 
       connection.on("ReceiveNotification", (n: Notification) => {

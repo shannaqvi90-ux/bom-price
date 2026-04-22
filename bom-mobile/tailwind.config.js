@@ -8,12 +8,28 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        primary: {
+          50: "#eff6ff",
+          100: "#dbeafe",
+          500: "#3b82f6",
+          600: "#2563eb",
+          700: "#1d4ed8",
+          800: "#1e40af",
+          900: "#1e3a8a",
+        },
         brand: {
-          50: "#eef2ff",
-          100: "#e0e7ff",
-          500: "#6366f1",
-          600: "#4f46e5",
-          700: "#4338ca",
+          50: "#eff6ff",
+          100: "#dbeafe",
+          500: "#3b82f6",
+          600: "#2563eb",
+          700: "#1d4ed8",
+        },
+        surface: {
+          DEFAULT: "#ffffff",
+          alt: "#f8fafc",
+        },
+        border: {
+          DEFAULT: "#e2e8f0",
         },
         status: {
           pending: "#f59e0b",

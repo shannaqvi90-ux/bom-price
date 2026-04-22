@@ -1,24 +1,62 @@
+import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
+import { MotiView } from "moti";
+import * as Haptics from "expo-haptics";
 import { useUnreadCount } from "@/api/notifications";
 
 export function NotificationBell() {
   const router = useRouter();
   const q = useUnreadCount();
   const count = q.data ?? 0;
+  const prevCountRef = useRef<number | undefined>(undefined);
+  const [wiggleKey, setWiggleKey] = useState(0);
+
+  useEffect(() => {
+    if (!q.isSuccess) return;
+    if (prevCountRef.current !== undefined && count > prevCountRef.current) {
+      setWiggleKey((k) => k + 1);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    prevCountRef.current = count;
+  }, [count, q.isSuccess]);
 
   return (
-    <Pressable onPress={() => router.push("/notifications")} className="pr-3">
-      <View className="relative py-1">
-        <Text className="text-brand-600 text-base font-semibold">🔔</Text>
+    <Pressable
+      onPress={() => router.push("/notifications")}
+      style={{ paddingRight: 12 }}
+    >
+      <MotiView
+        key={wiggleKey}
+        from={{ rotate: "0deg" }}
+        animate={{ rotate: ["0deg", "-15deg", "15deg", "-8deg", "0deg"] }}
+        transition={{ type: "timing", duration: 400 }}
+        style={{ position: "relative", paddingVertical: 4 }}
+      >
+        <Text style={{ color: "#1e40af", fontSize: 18, fontWeight: "600" }}>
+          🔔
+        </Text>
         {count > 0 ? (
-          <View className="absolute -top-1 -right-2 bg-rose-600 rounded-full min-w-[18px] h-[18px] items-center justify-center px-1">
-            <Text className="text-white text-[10px] font-bold">
+          <View
+            style={{
+              position: "absolute",
+              top: -4,
+              right: -8,
+              backgroundColor: "#dc2626",
+              borderRadius: 9,
+              minWidth: 18,
+              height: 18,
+              alignItems: "center",
+              justifyContent: "center",
+              paddingHorizontal: 4,
+            }}
+          >
+            <Text style={{ color: "#ffffff", fontSize: 10, fontWeight: "700" }}>
               {count > 99 ? "99+" : count}
             </Text>
           </View>
         ) : null}
-      </View>
+      </MotiView>
     </Pressable>
   );
 }

@@ -51,7 +51,7 @@ export default function RequisitionDetail() {
     <ScrollView className="flex-1 bg-slate-50" contentContainerClassName="p-4">
       <View className="flex-row items-center justify-between mb-2">
         <Text className="text-2xl font-bold text-slate-900">{r.refNo}</Text>
-        <StatusPill status={r.status} />
+        <StatusPill status={r.status as Parameters<typeof StatusPill>[0]["status"]} />
       </View>
       <Text className="text-base text-slate-700">{r.customerName}</Text>
       <Text className="text-xs text-slate-500 mb-4">

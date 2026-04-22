@@ -4,6 +4,7 @@ import { Stack } from "expo-router";
 import { AuthProvider } from "@/auth/AuthContext";
 import { SignalRProvider } from "@/signalr/SignalRProvider";
 import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 10_000 } },
@@ -11,13 +12,15 @@ const queryClient = new QueryClient({
 
 export default function RootLayout() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <SignalRProvider>
-          <StatusBar style="dark" />
-          <Stack screenOptions={{ headerShown: false }} />
-        </SignalRProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <SignalRProvider>
+            <StatusBar style="dark" />
+            <Stack screenOptions={{ headerShown: false }} />
+          </SignalRProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </SafeAreaProvider>
   );
 }

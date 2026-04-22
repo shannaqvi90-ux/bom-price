@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { Skeleton } from "./Skeleton";
 import { ErrorBanner } from "./ErrorBanner";
+import { stripTags } from "@/utils/text";
 import type { BomReviewResponse } from "@/types/api";
 
 interface Props {
@@ -86,7 +87,7 @@ export function BomDetailSheet({
               style={{ fontSize: 14, color: "#475569", marginTop: 2 }}
               numberOfLines={1}
             >
-              {itemDescription}
+              {stripTags(itemDescription)}
             </Text>
           </View>
           <View style={{ flex: 1, alignItems: "flex-end" }}>
@@ -146,7 +147,7 @@ export function BomDetailSheet({
               >
                 <View style={{ flex: 1, marginRight: 12 }}>
                   <Text style={{ fontSize: 15, fontWeight: "600", color: "#0f172a" }}>
-                    {line.rawMaterialDescription}
+                    {stripTags(line.rawMaterialDescription)}
                   </Text>
                   <Text style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>
                     Wastage {line.wastagePct}% · {line.qtyPerKg} kg/kg

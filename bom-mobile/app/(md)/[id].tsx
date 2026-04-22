@@ -18,6 +18,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { LoadingView } from "@/components/LoadingView";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { formatMoney } from "@/utils/numbers";
+import { stripTags } from "@/utils/text";
 import { approveSchema } from "@/utils/validation";
 
 export default function MdApprovalDetail() {
@@ -187,7 +188,7 @@ export default function MdApprovalDetail() {
             }}
           >
             <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>
-              {r.customerName}
+              {stripTags(r.customerName)}
             </Text>
             <Text style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>Customer</Text>
           </View>
@@ -240,7 +241,7 @@ export default function MdApprovalDetail() {
               onViewBom={() =>
                 setBomSheetItem({
                   reqItemId: it.requisitionItemId,
-                  desc: it.itemDescription,
+                  desc: stripTags(it.itemDescription),
                 })
               }
             />

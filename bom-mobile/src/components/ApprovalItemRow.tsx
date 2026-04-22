@@ -4,6 +4,7 @@ import { MotiView } from "moti";
 import * as Haptics from "expo-haptics";
 import type { MdReviewItemDetail } from "@/types/api";
 import { formatMoney } from "@/utils/numbers";
+import { stripTags } from "@/utils/text";
 
 interface Props {
   item: MdReviewItemDetail;
@@ -60,7 +61,7 @@ export function ApprovalItemRow({ item, price, onPriceChange, error, onViewBom }
         style={{ fontSize: 16, fontWeight: "700", color: "#0f172a", marginBottom: 6 }}
         numberOfLines={2}
       >
-        {item.itemDescription}
+        {stripTags(item.itemDescription)}
       </Text>
 
       {/* Meta row */}

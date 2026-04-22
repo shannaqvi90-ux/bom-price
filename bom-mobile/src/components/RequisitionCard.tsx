@@ -5,6 +5,7 @@ import * as Haptics from "expo-haptics";
 import { StatusPill } from "./StatusPill";
 import type { RequisitionListItem } from "@/types/api";
 import { formatShortDate } from "@/utils/dates";
+import { stripTags } from "@/utils/text";
 
 interface Props {
   item: RequisitionListItem;
@@ -57,7 +58,7 @@ export function RequisitionCard({ item, onPress }: Props) {
           style={{ fontSize: 15, color: "#475569", marginBottom: 8 }}
           numberOfLines={1}
         >
-          {item.customerName}
+          {stripTags(item.customerName)}
         </Text>
         <View
           style={{

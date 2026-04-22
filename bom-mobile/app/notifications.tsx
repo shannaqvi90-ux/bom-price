@@ -9,6 +9,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { LoadingView } from "@/components/LoadingView";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { formatShortDate } from "@/utils/dates";
+import { stripTags } from "@/utils/text";
 import { useAuth } from "@/auth/AuthContext";
 import type { Notification } from "@/types/api";
 
@@ -152,7 +153,7 @@ export default function Notifications() {
                         fontWeight: item.isRead ? "400" : "600",
                       }}
                     >
-                      {item.message}
+                      {stripTags(item.message)}
                     </Text>
                     <Text style={{ fontSize: 13, color: "#94a3b8", marginTop: 4 }}>
                       {formatShortDate(item.createdAt)}

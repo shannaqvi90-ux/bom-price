@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -63,29 +64,12 @@ export default function Login() {
           from={{ opacity: 0, translateY: 14 }}
           animate={{ opacity: 1, translateY: 0 }}
           transition={{ type: "spring", damping: 14, stiffness: 140 }}
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 12,
-            backgroundColor: "#1e40af",
-            marginBottom: 24,
-            alignItems: "center",
-            justifyContent: "center",
-            shadowColor: "#1e40af",
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.3,
-            shadowRadius: 12,
-            elevation: 6,
-          }}
+          style={{ marginBottom: 28, alignSelf: "flex-start" }}
         >
-          <View
-            style={{
-              width: 22,
-              height: 22,
-              backgroundColor: "#ffffff",
-              borderRadius: 5,
-              opacity: 0.95,
-            }}
+          <Image
+            source={require("../assets/fpf-logo.png")}
+            style={{ width: 220, height: 108 }}
+            resizeMode="contain"
           />
         </MotiView>
 

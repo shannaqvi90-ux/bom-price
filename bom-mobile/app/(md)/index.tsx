@@ -51,13 +51,13 @@ export default function MdPendingApprovals() {
       <Pressable
         onPress={onLogout}
         style={{
-          paddingHorizontal: 10,
-          paddingVertical: 7,
+          paddingHorizontal: 12,
+          paddingVertical: 9,
           borderRadius: 8,
           backgroundColor: "#f1f5f9",
         }}
       >
-        <Text style={{ color: "#1e40af", fontSize: 13, fontWeight: "600" }}>
+        <Text style={{ color: "#1e40af", fontSize: 15, fontWeight: "600" }}>
           Log out
         </Text>
       </Pressable>
@@ -131,13 +131,13 @@ export default function MdPendingApprovals() {
             q.isFetchingNextPage ? (
               <View style={{ paddingVertical: 20, alignItems: "center" }}>
                 <ActivityIndicator color="#1e40af" />
-                <Text style={{ color: "#64748b", fontSize: 12, marginTop: 8 }}>
+                <Text style={{ color: "#64748b", fontSize: 14, marginTop: 8 }}>
                   Loading more…
                 </Text>
               </View>
             ) : q.hasNextPage === false && items.length > PAGE_SIZE ? (
               <View style={{ paddingVertical: 20, alignItems: "center" }}>
-                <Text style={{ color: "#94a3b8", fontSize: 11 }}>
+                <Text style={{ color: "#94a3b8", fontSize: 13 }}>
                   End of list · {items.length} total
                 </Text>
               </View>

@@ -37,9 +37,9 @@ export function EmptyState({ title, hint, icon }: Props) {
           {icon}
         </MotiView>
       ) : null}
-      <Text style={{ fontSize: 17, fontWeight: "700", color: "#0f172a" }}>{title}</Text>
+      <Text style={{ fontSize: 19, fontWeight: "700", color: "#0f172a" }}>{title}</Text>
       {hint ? (
-        <Text style={{ fontSize: 13, color: "#64748b", marginTop: 6, textAlign: "center" }}>
+        <Text style={{ fontSize: 15, color: "#64748b", marginTop: 6, textAlign: "center" }}>
           {hint}
         </Text>
       ) : null}

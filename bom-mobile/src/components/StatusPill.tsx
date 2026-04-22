@@ -25,13 +25,13 @@ export function StatusPill({ status }: { status: Status }) {
     <View
       style={{
         backgroundColor: t.bg,
-        paddingHorizontal: 8,
-        paddingVertical: 3,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
         borderRadius: 6,
         alignSelf: "flex-start",
       }}
     >
-      <Text style={{ color: t.fg, fontSize: 10, fontWeight: "700", letterSpacing: 0.3 }}>
+      <Text style={{ color: t.fg, fontSize: 12, fontWeight: "700", letterSpacing: 0.3 }}>
         {t.label}
       </Text>
     </View>

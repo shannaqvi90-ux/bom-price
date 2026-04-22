@@ -17,7 +17,7 @@ export function Input({ label, error, onFocus, onBlur, ...rest }: Props) {
 
   return (
     <View style={{ marginBottom: 14 }}>
-      <Text style={{ fontSize: 12, fontWeight: "600", color: "#334155", marginBottom: 6 }}>
+      <Text style={{ fontSize: 14, fontWeight: "600", color: "#334155", marginBottom: 6 }}>
         {label}
       </Text>
       <MotiView
@@ -43,13 +43,13 @@ export function Input({ label, error, onFocus, onBlur, ...rest }: Props) {
           style={{
             paddingHorizontal: 12,
             paddingVertical: 11,
-            fontSize: 15,
+            fontSize: 17,
             color: "#0f172a",
           }}
         />
       </MotiView>
       {error ? (
-        <Text style={{ color: "#dc2626", fontSize: 11, marginTop: 4 }}>{error}</Text>
+        <Text style={{ color: "#dc2626", fontSize: 13, marginTop: 4 }}>{error}</Text>
       ) : null}
     </View>
   );

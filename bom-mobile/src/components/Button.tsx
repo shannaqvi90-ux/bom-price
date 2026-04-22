@@ -70,7 +70,7 @@ export function Button({
         {loading ? (
           <ActivityIndicator color={fg[variant]} />
         ) : (
-          <Text style={{ color: fg[variant], fontSize: 15, fontWeight: "600" }}>
+          <Text style={{ color: fg[variant], fontSize: 17, fontWeight: "600" }}>
             {title}
           </Text>
         )}

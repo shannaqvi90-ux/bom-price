@@ -33,7 +33,7 @@ export function NotificationBell() {
         transition={{ type: "timing", duration: 400 }}
         style={{ position: "relative", paddingVertical: 4 }}
       >
-        <Text style={{ color: "#1e40af", fontSize: 18, fontWeight: "600" }}>
+        <Text style={{ color: "#1e40af", fontSize: 22, fontWeight: "600" }}>
           🔔
         </Text>
         {count > 0 ? (
@@ -43,15 +43,15 @@ export function NotificationBell() {
               top: -4,
               right: -8,
               backgroundColor: "#dc2626",
-              borderRadius: 9,
-              minWidth: 18,
-              height: 18,
+              borderRadius: 11,
+              minWidth: 22,
+              height: 22,
               alignItems: "center",
               justifyContent: "center",
               paddingHorizontal: 4,
             }}
           >
-            <Text style={{ color: "#ffffff", fontSize: 10, fontWeight: "700" }}>
+            <Text style={{ color: "#ffffff", fontSize: 12, fontWeight: "700" }}>
               {count > 99 ? "99+" : count}
             </Text>
           </View>

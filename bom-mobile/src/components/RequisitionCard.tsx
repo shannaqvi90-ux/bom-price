@@ -48,13 +48,13 @@ export function RequisitionCard({ item, onPress }: Props) {
             marginBottom: 6,
           }}
         >
-          <Text style={{ fontSize: 14, fontWeight: "700", color: "#0f172a" }}>
+          <Text style={{ fontSize: 16, fontWeight: "700", color: "#0f172a" }}>
             {item.refNo}
           </Text>
           <StatusPill status={item.status as Parameters<typeof StatusPill>[0]["status"]} />
         </View>
         <Text
-          style={{ fontSize: 13, color: "#475569", marginBottom: 8 }}
+          style={{ fontSize: 15, color: "#475569", marginBottom: 8 }}
           numberOfLines={1}
         >
           {item.customerName}
@@ -66,10 +66,10 @@ export function RequisitionCard({ item, onPress }: Props) {
             alignItems: "center",
           }}
         >
-          <Text style={{ fontSize: 11, color: "#94a3b8" }}>
+          <Text style={{ fontSize: 13, color: "#94a3b8" }}>
             {item.itemCount} {item.itemCount === 1 ? "item" : "items"} · {item.currencyCode}
           </Text>
-          <Text style={{ fontSize: 11, color: "#94a3b8" }}>
+          <Text style={{ fontSize: 13, color: "#94a3b8" }}>
             {formatShortDate(item.createdAt)}
           </Text>
         </View>

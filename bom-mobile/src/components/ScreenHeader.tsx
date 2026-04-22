@@ -28,14 +28,14 @@ export function ScreenHeader({ label, title, count, right }: Props) {
     >
       <View style={{ flex: 1, flexShrink: 1 }}>
         {label ? (
-          <Text style={{ fontSize: 11, fontWeight: "600", color: "#64748b" }}>
+          <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748b" }}>
             {label}
           </Text>
         ) : null}
         <View style={{ flexDirection: "row", alignItems: "center", marginTop: 3 }}>
           <Text
             style={{
-              fontSize: 22,
+              fontSize: 26,
               fontWeight: "700",
               color: "#0f172a",
               letterSpacing: -0.5,
@@ -57,8 +57,8 @@ export function ScreenHeader({ label, title, count, right }: Props) {
               style={{
                 marginLeft: 10,
                 backgroundColor: "#1e40af",
-                paddingHorizontal: 10,
-                paddingVertical: 3,
+                paddingHorizontal: 12,
+                paddingVertical: 4,
                 borderRadius: 999,
                 shadowColor: "#1e40af",
                 shadowOffset: { width: 0, height: 2 },
@@ -67,7 +67,7 @@ export function ScreenHeader({ label, title, count, right }: Props) {
                 elevation: 3,
               }}
             >
-              <Text style={{ color: "white", fontSize: 12, fontWeight: "700" }}>
+              <Text style={{ color: "white", fontSize: 14, fontWeight: "700" }}>
                 {count}
               </Text>
             </MotiView>

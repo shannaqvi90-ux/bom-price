@@ -87,7 +87,7 @@ export default function Login() {
         >
           <Text
             style={{
-              fontSize: 24,
+              fontSize: 28,
               fontWeight: "700",
               color: "#0f172a",
               letterSpacing: -0.5,
@@ -95,7 +95,7 @@ export default function Login() {
           >
             Welcome back
           </Text>
-          <Text style={{ fontSize: 13, color: "#64748b", marginTop: 2, marginBottom: 28 }}>
+          <Text style={{ fontSize: 15, color: "#64748b", marginTop: 2, marginBottom: 28 }}>
             Sign in to FPF Quotations
           </Text>
         </MotiView>

@@ -26,7 +26,6 @@ api.interceptors.response.use(
     const original = error.config as InternalAxiosRequestConfig & { _retried?: boolean };
     const isAuthExpired =
       error.response?.status === 401 &&
-      error.response?.data?.code === "token_expired" &&
       original &&
       !original._retried &&
       !original.url?.includes("/api/auth/refresh");

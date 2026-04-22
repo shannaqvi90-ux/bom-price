@@ -23,7 +23,10 @@ public class RequisitionsController(
     private int? CurrentBranchId => int.TryParse(User.FindFirstValue("branchId"), out var b) && b > 0 ? b : null;
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] string? status = null)
+    public async Task<IActionResult> GetAll(
+        [FromQuery] string? status = null,
+        [FromQuery] int? page = null,
+        [FromQuery] int? pageSize = null)
     {
         var query = db.QuotationRequests
             .Include(q => q.Items)
@@ -45,12 +48,20 @@ public class RequisitionsController(
             query = query.Where(q => q.Status == parsedStatus);
         }
 
-        return Ok(await query.OrderByDescending(q => q.CreatedAt)
+        var projected = query.OrderByDescending(q => q.CreatedAt)
             .Select(q => new RequisitionListItem(
                 q.Id, q.RefNo, q.Status.ToString(), q.Items.Count,
                 q.Customer.Name, q.CurrencyCode,
-                q.Branch.Name, q.SalesPerson.Name, q.CreatedAt))
-            .ToListAsync());
+                q.Branch.Name, q.SalesPerson.Name, q.CreatedAt));
+
+        if (page.HasValue && pageSize.HasValue)
+        {
+            var p = Math.Max(page.Value, 1);
+            var ps = Math.Clamp(pageSize.Value, 1, 100);
+            projected = projected.Skip((p - 1) * ps).Take(ps);
+        }
+
+        return Ok(await projected.ToListAsync());
     }
 
     [HttpGet("{id}")]

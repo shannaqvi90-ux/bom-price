@@ -1,6 +1,6 @@
-import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { MotiView } from "moti";
 import * as Haptics from "expo-haptics";
 import { api } from "@/api/client";
@@ -14,15 +14,21 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { useAuth } from "@/auth/AuthContext";
 import type { RequisitionListItem } from "@/types/api";
 
+const PAGE_SIZE = 20;
+const STAGGER_CAP = 20;
+
 function useMdPending() {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: [...requisitionKeys.list(), "mdReview"],
-    queryFn: async () => {
+    queryFn: async ({ pageParam }) => {
       const res = await api.get<RequisitionListItem[]>("/api/requisitions", {
-        params: { status: "MdReview" },
+        params: { status: "MdReview", page: pageParam, pageSize: PAGE_SIZE },
       });
       return res.data;
     },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length < PAGE_SIZE ? undefined : allPages.length + 1,
   });
 }
 
@@ -30,6 +36,8 @@ export default function MdPendingApprovals() {
   const router = useRouter();
   const { logout } = useAuth();
   const q = useMdPending();
+
+  const items: RequisitionListItem[] = q.data?.pages.flat() ?? [];
 
   const onLogout = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -63,7 +71,7 @@ export default function MdPendingApprovals() {
       <ScreenHeader
         label="Managing Director"
         title="Pending approvals"
-        count={q.data?.length}
+        count={items.length}
         right={HeaderRight}
       />
 
@@ -82,14 +90,18 @@ export default function MdPendingApprovals() {
         </View>
       ) : (
         <FlatList
-          data={q.data ?? []}
+          data={items}
           keyExtractor={(r) => String(r.id)}
           contentContainerStyle={{ padding: 16, paddingTop: 4 }}
           overScrollMode="never"
           bounces={false}
+          onEndReached={() => {
+            if (q.hasNextPage && !q.isFetchingNextPage) q.fetchNextPage();
+          }}
+          onEndReachedThreshold={0.5}
           refreshControl={
             <RefreshControl
-              refreshing={q.isRefetching}
+              refreshing={q.isRefetching && !q.isFetchingNextPage}
               onRefresh={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 q.refetch();
@@ -106,7 +118,7 @@ export default function MdPendingApprovals() {
                 type: "spring",
                 damping: 16,
                 stiffness: 140,
-                delay: 200 + index * 80,
+                delay: index < STAGGER_CAP ? 200 + index * 80 : 0,
               }}
             >
               <RequisitionCard
@@ -115,6 +127,22 @@ export default function MdPendingApprovals() {
               />
             </MotiView>
           )}
+          ListFooterComponent={
+            q.isFetchingNextPage ? (
+              <View style={{ paddingVertical: 20, alignItems: "center" }}>
+                <ActivityIndicator color="#1e40af" />
+                <Text style={{ color: "#64748b", fontSize: 12, marginTop: 8 }}>
+                  Loading more…
+                </Text>
+              </View>
+            ) : q.hasNextPage === false && items.length > PAGE_SIZE ? (
+              <View style={{ paddingVertical: 20, alignItems: "center" }}>
+                <Text style={{ color: "#94a3b8", fontSize: 11 }}>
+                  End of list · {items.length} total
+                </Text>
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             <EmptyState
               title="All caught up"

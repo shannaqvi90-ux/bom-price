@@ -53,12 +53,19 @@ export default function Login() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1, backgroundColor: "#ffffff" }}
     >
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: 24 }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingTop: 72,
+          paddingHorizontal: 24,
+          paddingBottom: 32,
+        }}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
       >
         <MotiView
           from={{ opacity: 0, translateY: 14 }}

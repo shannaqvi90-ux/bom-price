@@ -17,6 +17,7 @@ import { RejectReasonPrompt } from "@/components/RejectReasonPrompt";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { LoadingView } from "@/components/LoadingView";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { formatMoney } from "@/utils/numbers";
 import { stripTags } from "@/utils/text";
 import { approveSchema } from "@/utils/validation";
@@ -28,6 +29,7 @@ export default function MdApprovalDetail() {
   const q = useMdReview(id);
   const approveMut = useApproveRequisition();
   const rejectMut = useRejectRequisition();
+  const insets = useSafeAreaInsets();
 
   const [prices, setPrices] = useState<Record<number, number>>({});
   const [itemErrors, setItemErrors] = useState<Record<number, string>>({});
@@ -172,7 +174,7 @@ export default function MdApprovalDetail() {
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerStyle={{ padding: 16, paddingBottom: 160 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 180 + insets.bottom }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
@@ -270,8 +272,9 @@ export default function MdApprovalDetail() {
             backgroundColor: "#ffffff",
             borderTopWidth: 1,
             borderTopColor: "#e2e8f0",
-            padding: 16,
-            paddingBottom: 24,
+            paddingHorizontal: 16,
+            paddingTop: 16,
+            paddingBottom: Math.max(insets.bottom, 16) + 8,
           }}
         >
           <View

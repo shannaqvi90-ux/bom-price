@@ -24,13 +24,23 @@ api.interceptors.response.use(
   (r) => r,
   async (error: AxiosError<{ code?: string }>) => {
     const original = error.config as InternalAxiosRequestConfig & { _retried?: boolean };
+    const isAuthEndpoint =
+      original?.url?.includes("/api/auth/login") ||
+      original?.url?.includes("/api/auth/refresh");
+
     const isAuthExpired =
       error.response?.status === 401 &&
       original &&
       !original._retried &&
-      !original.url?.includes("/api/auth/refresh");
+      !isAuthEndpoint;
 
     if (!isAuthExpired) return Promise.reject(error);
+
+    // If we've never logged in (no refresh token yet), surface the
+    // original 401 instead of the generic "no-refresh-token" error.
+    const refresh = await getRefresh();
+    if (!refresh) return Promise.reject(error);
+
     original._retried = true;
 
     try {

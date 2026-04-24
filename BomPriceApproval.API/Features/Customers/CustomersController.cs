@@ -45,7 +45,7 @@ public class CustomersController(AppDbContext db) : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "SalesPerson,Admin")]
+    [Authorize(Roles = "SalesPerson,Admin,Accountant")]
     public async Task<IActionResult> Create(CreateCustomerRequest req)
     {
         if (string.IsNullOrWhiteSpace(req.Code))
@@ -76,7 +76,7 @@ public class CustomersController(AppDbContext db) : ControllerBase
     }
 
     [HttpPut("{id}")]
-    [Authorize(Roles = "SalesPerson,Admin")]
+    [Authorize(Roles = "SalesPerson,Admin,Accountant")]
     public async Task<IActionResult> Update(int id, UpdateCustomerRequest req)
     {
         var c = await db.Customers.FindAsync(id);

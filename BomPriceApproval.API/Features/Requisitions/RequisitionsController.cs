@@ -114,7 +114,7 @@ public class RequisitionsController(
     }
 
     [HttpPost]
-    [Authorize(Roles = "SalesPerson")]
+    [Authorize(Roles = "SalesPerson,Accountant")]
     public async Task<IActionResult> Create(CreateRequisitionRequest req)
     {
         if (CurrentBranchId is null)
@@ -161,7 +161,7 @@ public class RequisitionsController(
 
         var customerExists = await db.Customers.AnyAsync(c =>
             c.Id == req.CustomerId &&
-            (!CurrentBranchId.HasValue || c.SalesPersonId == CurrentUserId));
+            (!CurrentBranchId.HasValue || CurrentRole == "Accountant" || c.SalesPersonId == CurrentUserId));
         if (!customerExists)
             return Validation
                 .Detail("Customer not found.")
@@ -222,12 +222,15 @@ public class RequisitionsController(
     }
 
     [HttpPost("{id}/items")]
-    [Authorize(Roles = "SalesPerson")]
+    [Authorize(Roles = "SalesPerson,Accountant")]
     public async Task<IActionResult> AddItem(int id, AddRequisitionItemRequest req)
     {
         var q = await db.QuotationRequests.Include(r => r.Items).FirstOrDefaultAsync(r => r.Id == id);
         if (q is null) return NotFound();
-        if (q.SalesPersonId != CurrentUserId) return Forbid();
+        if (q.SalesPersonId != CurrentUserId &&
+            CurrentRole != "Admin" &&
+            (CurrentRole != "Accountant" || q.BranchId != CurrentBranchId))
+            return Forbid();
         if (q.Status != RequisitionStatus.BomPending)
             return Validation
                 .Detail("Items can only be added when status is BomPending")
@@ -267,12 +270,15 @@ public class RequisitionsController(
     }
 
     [HttpDelete("{id}/items/{requisitionItemId}")]
-    [Authorize(Roles = "SalesPerson")]
+    [Authorize(Roles = "SalesPerson,Accountant")]
     public async Task<IActionResult> RemoveItem(int id, int requisitionItemId)
     {
         var q = await db.QuotationRequests.Include(r => r.Items).FirstOrDefaultAsync(r => r.Id == id);
         if (q is null) return NotFound();
-        if (q.SalesPersonId != CurrentUserId) return Forbid();
+        if (q.SalesPersonId != CurrentUserId &&
+            CurrentRole != "Admin" &&
+            (CurrentRole != "Accountant" || q.BranchId != CurrentBranchId))
+            return Forbid();
         if (q.Status != RequisitionStatus.BomPending)
             return Validation
                 .Detail("Items can only be removed when status is BomPending")
@@ -294,7 +300,7 @@ public class RequisitionsController(
     }
 
     [HttpPost("{id}/resubmit")]
-    [Authorize(Roles = "SalesPerson")]
+    [Authorize(Roles = "SalesPerson,Accountant")]
     public async Task<IActionResult> Resubmit(int id, ResubmitRequisitionRequest req)
     {
         var q = await db.QuotationRequests
@@ -303,7 +309,10 @@ public class RequisitionsController(
             .FirstOrDefaultAsync(r => r.Id == id);
 
         if (q is null) return NotFound();
-        if (q.SalesPersonId != CurrentUserId) return Forbid();
+        if (q.SalesPersonId != CurrentUserId &&
+            CurrentRole != "Admin" &&
+            (CurrentRole != "Accountant" || q.BranchId != CurrentBranchId))
+            return Forbid();
 
         if (q.Status != RequisitionStatus.Rejected)
             return Validation

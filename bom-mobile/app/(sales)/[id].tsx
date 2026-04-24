@@ -12,6 +12,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { SalesHeaderRight } from "@/components/SalesHeaderRight";
 import { SectionCard } from "@/components/SectionCard";
 import { ItemCardShell } from "@/components/ItemCardShell";
+import { ItemPriceBlock } from "@/components/ItemPriceBlock";
 import { formatShortDate } from "@/utils/dates";
 
 export default function RequisitionDetail() {
@@ -139,6 +140,16 @@ export default function RequisitionDetail() {
             <View style={{ marginTop: 6 }}>
               <ItemStageBadge status={r.status} />
             </View>
+            {r.status === "Approved" && r.approval?.items ? (() => {
+              const approvalItem = r.approval.items?.find(ai => ai.requisitionItemId === it.id);
+              return approvalItem ? (
+                <ItemPriceBlock
+                  expectedQty={it.expectedQty}
+                  pricePerKg={approvalItem.pricePerKg}
+                  currencyCode={r.currencyCode}
+                />
+              ) : null;
+            })() : null}
           </ItemCardShell>
         ))}
 

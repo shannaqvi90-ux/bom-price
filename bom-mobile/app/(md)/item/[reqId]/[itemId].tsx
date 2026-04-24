@@ -87,7 +87,14 @@ export default function MdItemDrillDown() {
         <Stack.Screen options={{ headerShown: false }} />
         <ScreenHeader title="Item details" right={HeaderRight} />
         <View style={{ padding: 16 }}>
-          <ErrorBanner message={message} onRetry={() => router.back()} />
+          <ErrorBanner
+            message={message}
+            onRetry={() => {
+              detailQ.refetch();
+              bomQ.refetch();
+              reviewQ.refetch();
+            }}
+          />
         </View>
       </View>
     );

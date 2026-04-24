@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   Text,
   View,
@@ -9,11 +10,15 @@ import {
 import { useRouter } from "expo-router";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import * as Haptics from "expo-haptics";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { SearchablePicker } from "@/components/SearchablePicker";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { CustomerQuickCreateSheet } from "@/components/CustomerQuickCreateSheet";
+import { ScreenHeader } from "@/components/ScreenHeader";
+import { SalesHeaderRight } from "@/components/SalesHeaderRight";
+import { SectionCard } from "@/components/SectionCard";
 import { useCustomers, useExchangeRates, useItems } from "@/api/lookups";
 import { useCreateRequisition } from "@/api/requisitions";
 import {
@@ -69,98 +74,158 @@ export default function NewRequisition() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      className="flex-1 bg-slate-50"
+      style={{ flex: 1, backgroundColor: "#f8fafc" }}
     >
-      <ScrollView contentContainerClassName="p-4">
-        <Text className="text-xl font-bold text-slate-900 mb-4">New requisition</Text>
+      <ScreenHeader title="New requisition" right={<SalesHeaderRight />} />
 
+      <ScrollView
+        contentContainerStyle={{ padding: 14, paddingBottom: 32 }}
+        keyboardShouldPersistTaps="handled"
+      >
         {topError ? (
           <ErrorBanner message={topError} onRetry={() => setTopError(null)} />
         ) : null}
 
-        <Controller
-          control={control}
-          name="customerId"
-          render={({ field }) => (
-            <View>
-              <SearchablePicker
-                label="Customer"
-                placeholder="Select customer..."
-                value={field.value || null}
-                onChange={field.onChange}
-                loading={customersQ.isPending}
-                options={
-                  (customersQ.data ?? []).map((c) => ({
+        <SectionCard title="Customer">
+          <Controller
+            control={control}
+            name="customerId"
+            render={({ field }) => (
+              <View>
+                <SearchablePicker
+                  label=""
+                  placeholder="Select customer..."
+                  value={field.value || null}
+                  onChange={field.onChange}
+                  loading={customersQ.isPending}
+                  options={(customersQ.data ?? []).map((c) => ({
                     id: c.id,
                     label: c.name,
                     sublabel: c.code,
-                  }))
-                }
-                error={errors.customerId?.message}
-              />
-              <Text
-                onPress={() => setAddSheetOpen(true)}
-                className="text-brand-600 font-semibold self-start mb-3"
-              >
-                + New customer
-              </Text>
-              <CustomerQuickCreateSheet
-                open={addSheetOpen}
-                onClose={() => setAddSheetOpen(false)}
-                onCreated={(c) => {
-                  field.onChange(c.id);
-                }}
-              />
-            </View>
-          )}
-        />
-
-        <Controller
-          control={control}
-          name="currencyCode"
-          render={({ field }) => (
-            <View className="mb-3">
-              <Text className="text-sm text-slate-700 mb-1">Currency</Text>
-              <View className="flex-row flex-wrap -mr-2">
-                {currencyOptions.map((opt) => {
-                  const selected = field.value === opt.code;
-                  return (
-                    <Text
-                      key={opt.code}
-                      onPress={() => field.onChange(opt.code)}
-                      className={`px-3 py-2 mr-2 mb-2 rounded-md border ${
-                        selected
-                          ? "bg-brand-600 border-brand-600 text-white"
-                          : "bg-white border-slate-300 text-slate-700"
-                      }`}
-                    >
-                      {opt.code}
-                    </Text>
-                  );
-                })}
+                  }))}
+                  error={errors.customerId?.message}
+                />
+                <Pressable
+                  onPress={async () => {
+                    await Haptics.selectionAsync();
+                    setAddSheetOpen(true);
+                  }}
+                  style={{ alignSelf: "flex-start", marginTop: 4 }}
+                >
+                  <Text style={{ color: "#1e40af", fontSize: 14, fontWeight: "600" }}>
+                    + New customer
+                  </Text>
+                </Pressable>
+                <CustomerQuickCreateSheet
+                  open={addSheetOpen}
+                  onClose={() => setAddSheetOpen(false)}
+                  onCreated={(c) => {
+                    field.onChange(c.id);
+                  }}
+                />
               </View>
-              {errors.currencyCode ? (
-                <Text className="text-xs text-rose-600 mt-1">
-                  {errors.currencyCode.message}
-                </Text>
-              ) : null}
-            </View>
-          )}
-        />
+            )}
+          />
+        </SectionCard>
 
-        <Text className="text-base font-semibold text-slate-900 mt-4 mb-2">Items</Text>
+        <SectionCard title="Currency">
+          <Controller
+            control={control}
+            name="currencyCode"
+            render={({ field }) => (
+              <View>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", marginRight: -8 }}>
+                  {currencyOptions.map((opt) => {
+                    const selected = field.value === opt.code;
+                    return (
+                      <Pressable
+                        key={opt.code}
+                        onPress={async () => {
+                          await Haptics.selectionAsync();
+                          field.onChange(opt.code);
+                        }}
+                        style={{
+                          paddingHorizontal: 14,
+                          paddingVertical: 8,
+                          marginRight: 8,
+                          marginBottom: 8,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          backgroundColor: selected ? "#1e40af" : "#ffffff",
+                          borderColor: selected ? "#1e40af" : "#cbd5e1",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: selected ? "#ffffff" : "#334155",
+                            fontSize: 14,
+                            fontWeight: "600",
+                          }}
+                        >
+                          {opt.code}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                {errors.currencyCode ? (
+                  <Text style={{ color: "#be123c", fontSize: 12, marginTop: 4 }}>
+                    {errors.currencyCode.message}
+                  </Text>
+                ) : null}
+              </View>
+            )}
+          />
+        </SectionCard>
+
+        <Text
+          style={{
+            fontSize: 13,
+            fontWeight: "700",
+            color: "#64748b",
+            marginBottom: 8,
+            marginTop: 4,
+            letterSpacing: 0.3,
+          }}
+        >
+          {`ITEMS (${fields.length})`}
+        </Text>
 
         {fields.map((f, idx) => (
-          <View key={f.id} className="bg-white border border-slate-200 rounded-md p-3 mb-3">
-            <View className="flex-row items-center justify-between mb-2">
-              <Text className="text-sm font-medium text-slate-700">Item {idx + 1}</Text>
+          <View
+            key={f.id}
+            style={{
+              backgroundColor: "#ffffff",
+              borderWidth: 1,
+              borderColor: "#e2e8f0",
+              borderRadius: 14,
+              padding: 14,
+              marginBottom: 10,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 8,
+              }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#334155" }}>
+                Item {idx + 1}
+              </Text>
               {fields.length > 1 ? (
-                <Text
-                  onPress={() => remove(idx)}
-                  className="text-rose-600 text-sm font-semibold"
+                <Pressable
+                  onPress={async () => {
+                    await Haptics.selectionAsync();
+                    remove(idx);
+                  }}
+                  hitSlop={6}
                 >
-                  Remove
-                </Text>
+                  <Text style={{ color: "#be123c", fontSize: 14, fontWeight: "600" }}>
+                    Remove
+                  </Text>
+                </Pressable>
               ) : null}
             </View>
 
@@ -174,13 +239,11 @@ export default function NewRequisition() {
                   value={field.value || null}
                   onChange={field.onChange}
                   loading={itemsQ.isPending}
-                  options={
-                    (itemsQ.data ?? []).map((it) => ({
-                      id: it.id,
-                      label: it.description,
-                      sublabel: it.code,
-                    }))
-                  }
+                  options={(itemsQ.data ?? []).map((it) => ({
+                    id: it.id,
+                    label: it.description,
+                    sublabel: it.code,
+                  }))}
                   error={errors.items?.[idx]?.itemId?.message}
                 />
               )}
@@ -205,18 +268,25 @@ export default function NewRequisition() {
           </View>
         ))}
 
-        <Text
-          onPress={() => append({ itemId: 0, expectedQty: 0 })}
-          className="text-brand-600 font-semibold self-start mb-2"
+        <Pressable
+          onPress={async () => {
+            await Haptics.selectionAsync();
+            append({ itemId: 0, expectedQty: 0 });
+          }}
+          style={{ alignSelf: "flex-start", marginBottom: 4 }}
         >
-          + Add another item
-        </Text>
+          <Text style={{ color: "#1e40af", fontSize: 14, fontWeight: "600" }}>
+            + Add another item
+          </Text>
+        </Pressable>
 
         {errors.items?.root ? (
-          <Text className="text-xs text-rose-600 mb-2">{errors.items.root.message}</Text>
+          <Text style={{ color: "#be123c", fontSize: 12, marginBottom: 8 }}>
+            {errors.items.root.message}
+          </Text>
         ) : null}
 
-        <View className="mt-6">
+        <View style={{ marginTop: 20 }}>
           <Button
             title="Create requisition"
             onPress={onSubmit}

@@ -9,6 +9,8 @@ import { Dialog } from "@/components/ui/Dialog";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { api } from "@/api/axios";
 import { useBom } from "@/features/bom/bomApi";
+import { useCustomerChangeHistory } from "@/features/requisitions/requisitionsApi";
+import { CustomerHistoryModal } from "@/features/requisitions/CustomerHistoryModal";
 import {
   useMdReview,
   useApproveRequisition,
@@ -45,6 +47,9 @@ export default function MdReviewPage() {
   const [showBom, setShowBom] = useState(false);
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [confirmReject, setConfirmReject] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyQ = useCustomerChangeHistory(requisitionId, true);
+  const historyCount = historyQ.data?.length ?? 0;
 
   const httpStatus = (error as { response?: { status?: number } } | null)
     ?.response?.status;
@@ -190,6 +195,15 @@ export default function MdReviewPage() {
             {data.customerName} · {data.currencyCode}
             {data.exchangeRate !== null && ` · Rate: ${data.exchangeRate}`}
           </p>
+          {historyCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setHistoryOpen(true)}
+              className="mt-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800 hover:bg-amber-200"
+            >
+              Customer changed ({historyCount})
+            </button>
+          )}
         </div>
         <Button variant="outline" onClick={() => setShowBom(true)}>
           View BOM
@@ -436,6 +450,12 @@ export default function MdReviewPage() {
         isPending={reject.isPending}
         onConfirm={handleRejectConfirmed}
         onCancel={() => setConfirmReject(false)}
+      />
+
+      <CustomerHistoryModal
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        requisitionId={requisitionId}
       />
     </div>
   );

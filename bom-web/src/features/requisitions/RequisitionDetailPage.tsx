@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { RequisitionTimeline } from "./components/RequisitionTimeline";
-import { useRequisition } from "./requisitionsApi";
+import { useRequisition, useCustomerChangeHistory } from "./requisitionsApi";
+import { CustomerHistoryModal } from "./CustomerHistoryModal";
 import { useAuthStore } from "@/store/authStore";
 import { formatRelative } from "@/utils/date";
 import type { RequisitionDetail, RequisitionStatus, UserRole } from "@/types/api";
@@ -41,6 +43,9 @@ export default function RequisitionDetailPage() {
   const { data, isLoading, error } = useRequisition(numericId);
   const role = useAuthStore((s) => s.user?.role);
   const navigate = useNavigate();
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyQ = useCustomerChangeHistory(numericId, true);
+  const historyCount = historyQ.data?.length ?? 0;
 
   const httpStatus = (error as { response?: { status?: number } } | null)?.response?.status;
 
@@ -127,7 +132,20 @@ export default function RequisitionDetailPage() {
 
         <div className="space-y-4">
           <Card>
-            <CardHeader><CardTitle>Customer</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                Customer
+                {historyCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setHistoryOpen(true)}
+                    className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800 hover:bg-amber-200"
+                  >
+                    Customer changed ({historyCount})
+                  </button>
+                )}
+              </CardTitle>
+            </CardHeader>
             <CardContent>
               <LabeledValue label="Name" value={r.customerName} />
               <LabeledValue label="Email" value={r.customerEmail} />
@@ -197,6 +215,12 @@ export default function RequisitionDetailPage() {
           </table>
         </CardContent>
       </Card>
+
+      <CustomerHistoryModal
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        requisitionId={numericId}
+      />
     </div>
   );
 }

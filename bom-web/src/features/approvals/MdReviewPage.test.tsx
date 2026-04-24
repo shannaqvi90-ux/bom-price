@@ -520,4 +520,30 @@ describe("MdReviewPage", () => {
     // Footer: totalCostPerKg from BOM item
     expect(screen.getAllByText(/2\.9500/).length).toBeGreaterThan(0);
   });
+
+  it("shows amber badge when customer change history has entries", async () => {
+    const historyEntry = {
+      id: 1,
+      oldCustomerId: 2,
+      oldCustomerName: "Old Corp",
+      newCustomerId: 3,
+      newCustomerName: "New Corp",
+      changedByUserId: 10,
+      changedByUserName: "Ali",
+      changedAt: "2026-04-20T10:00:00Z",
+      reason: null,
+    };
+    mockedApi.get.mockImplementation((url: string) => {
+      if ((url as string).includes("customer-history"))
+        return Promise.resolve({ data: [historyEntry] });
+      if ((url as string).includes("/bom/"))
+        return Promise.resolve({ data: null });
+      return Promise.resolve({ data: baseReview });
+    });
+
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByText(/Customer changed \(1\)/i)).toBeInTheDocument(),
+    );
+  });
 });

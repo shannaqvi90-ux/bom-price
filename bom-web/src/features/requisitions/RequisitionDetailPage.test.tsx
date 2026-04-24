@@ -120,7 +120,10 @@ describe("RequisitionDetailPage", () => {
       accessToken: "at", refreshToken: "rt",
       role: "Accountant", userId: 11, name: "Bob", branchId: null,
     });
-    vi.mocked(api.get).mockResolvedValue({ data: { ...sample, status: "CostingPending" } });
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.includes("customer-history")) return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: { ...sample, status: "CostingPending" } });
+    });
 
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
@@ -232,5 +235,28 @@ describe("RequisitionDetailPage", () => {
       expect(screen.queryByRole("button", { name: /edit & resubmit/i })).not.toBeInTheDocument();
       unmount();
     }
+  });
+
+  it("shows amber badge when customer change history has entries", async () => {
+    const historyEntry = {
+      id: 1,
+      oldCustomerId: 2,
+      oldCustomerName: "Old Corp",
+      newCustomerId: 3,
+      newCustomerName: "New Corp",
+      changedByUserId: 10,
+      changedByUserName: "Ali",
+      changedAt: "2026-04-20T10:00:00Z",
+      reason: "Customer request",
+    };
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if ((url as string).includes("customer-history"))
+        return Promise.resolve({ data: [historyEntry] });
+      return Promise.resolve({ data: sample });
+    });
+    render(wrap(<RequisitionDetailPage />));
+    await waitFor(() =>
+      expect(screen.getByText(/Customer changed \(1\)/i)).toBeInTheDocument(),
+    );
   });
 });

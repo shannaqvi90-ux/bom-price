@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import { notify } from "@/lib/notify";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -6,6 +6,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import CostingEntryPage from "./CostingEntryPage";
 import { api } from "@/api/axios";
+import { useAuthStore } from "@/store/authStore";
 
 vi.mock("@/api/axios", () => ({
   api: {
@@ -283,5 +284,36 @@ describe("CostingEntryPage", () => {
     await screen.findByLabelText(/Cost per kg for HDPE Granules/i);
     const btn = screen.getByRole("button", { name: /Submit Costing/i });
     expect(btn).not.toBeDisabled();
+  });
+
+  it("shows Change customer button for Accountant+CostingPending, hides for BomCreator", async () => {
+    const costing = makeCostingReview();
+    const pendingRequisition = { ...baseRequisition, status: "CostingPending" };
+
+    // Test 1: Accountant should see the button
+    useAuthStore.getState().setSession({
+      accessToken: "at", refreshToken: "rt",
+      role: "Accountant", userId: 11, name: "Sara", branchId: null,
+    });
+    defaultGetHandler(costing, pendingRequisition);
+    const { unmount } = renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Change customer/i })).toBeInTheDocument(),
+    );
+    unmount();
+
+    // Test 2: BomCreator should NOT see the button
+    useAuthStore.getState().setSession({
+      accessToken: "at", refreshToken: "rt",
+      role: "BomCreator", userId: 12, name: "Bob", branchId: 1,
+    });
+    defaultGetHandler(costing, pendingRequisition);
+    renderPage();
+    await waitFor(() =>
+      // Wait until page has loaded (Back link appears)
+      expect(screen.getByText(/Back to REQ-0005/i)).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole("button", { name: /Change customer/i })).not.toBeInTheDocument();
+    useAuthStore.getState().logout();
   });
 });

@@ -35,3 +35,13 @@ export const approveSchema = z.object({
 });
 
 export type ApproveInput = z.infer<typeof approveSchema>;
+
+export const createCustomerSchema = z.object({
+  code: z.string().trim().min(1, "Code is required").max(20, "Max 20 chars"),
+  name: z.string().trim().min(1, "Name is required").max(200, "Max 200 chars"),
+  address: z.string().max(500, "Max 500 chars").optional(),
+  email: z.string().email("Invalid email").or(z.literal("")).optional(),
+  phoneNumber: z.string().max(50, "Max 50 chars").optional(),
+});
+
+export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;

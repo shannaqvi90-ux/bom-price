@@ -13,6 +13,7 @@ import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { SearchablePicker } from "@/components/SearchablePicker";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { CustomerQuickCreateSheet } from "@/components/CustomerQuickCreateSheet";
 import { useCustomers, useExchangeRates, useItems } from "@/api/lookups";
 import { useCreateRequisition } from "@/api/requisitions";
 import {
@@ -27,6 +28,7 @@ export default function NewRequisition() {
   const ratesQ = useExchangeRates();
   const createMut = useCreateRequisition();
   const [topError, setTopError] = useState<string | null>(null);
+  const [addSheetOpen, setAddSheetOpen] = useState(false);
 
   const {
     control,
@@ -80,21 +82,36 @@ export default function NewRequisition() {
           control={control}
           name="customerId"
           render={({ field }) => (
-            <SearchablePicker
-              label="Customer"
-              placeholder="Select customer..."
-              value={field.value || null}
-              onChange={field.onChange}
-              loading={customersQ.isPending}
-              options={
-                (customersQ.data ?? []).map((c) => ({
-                  id: c.id,
-                  label: c.name,
-                  sublabel: c.code,
-                }))
-              }
-              error={errors.customerId?.message}
-            />
+            <View>
+              <SearchablePicker
+                label="Customer"
+                placeholder="Select customer..."
+                value={field.value || null}
+                onChange={field.onChange}
+                loading={customersQ.isPending}
+                options={
+                  (customersQ.data ?? []).map((c) => ({
+                    id: c.id,
+                    label: c.name,
+                    sublabel: c.code,
+                  }))
+                }
+                error={errors.customerId?.message}
+              />
+              <Text
+                onPress={() => setAddSheetOpen(true)}
+                className="text-brand-600 font-semibold self-start mb-3"
+              >
+                + New customer
+              </Text>
+              <CustomerQuickCreateSheet
+                open={addSheetOpen}
+                onClose={() => setAddSheetOpen(false)}
+                onCreated={(c) => {
+                  field.onChange(c.id);
+                }}
+              />
+            </View>
           )}
         />
 

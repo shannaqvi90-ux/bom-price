@@ -38,3 +38,14 @@ public record ResubmitRequisitionRequest(
 public record ChangeCustomerRequest(
     [Required] int CustomerId,
     [MaxLength(500)] string? Reason);
+
+public record CustomerChangeHistoryResponse(
+    int Id,
+    int OldCustomerId,
+    string OldCustomerName,
+    int NewCustomerId,
+    string NewCustomerName,
+    int ChangedByUserId,
+    string ChangedByUserName,
+    DateTime ChangedAt,
+    string? Reason);

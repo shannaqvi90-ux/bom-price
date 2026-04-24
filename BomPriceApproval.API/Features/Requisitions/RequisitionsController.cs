@@ -489,6 +489,27 @@ public class RequisitionsController(
         return NoContent();
     }
 
+    [HttpGet("{id}/customer-history")]
+    public async Task<IActionResult> GetCustomerHistory(int id)
+    {
+        var q = await db.QuotationRequests.FirstOrDefaultAsync(r => r.Id == id);
+        if (q is null) return NotFound();
+        if (!CanAccess(q)) return Forbid();
+
+        var entries = await db.CustomerChangeHistories
+            .Where(h => h.RequisitionId == id)
+            .OrderByDescending(h => h.ChangedAt)
+            .Select(h => new CustomerChangeHistoryResponse(
+                h.Id,
+                h.OldCustomerId, h.OldCustomer.Name,
+                h.NewCustomerId, h.NewCustomer.Name,
+                h.ChangedByUserId, h.ChangedBy.Name,
+                h.ChangedAt, h.Reason))
+            .ToListAsync();
+
+        return Ok(entries);
+    }
+
     private bool CanAccess(QuotationRequest q) => CurrentRole switch
     {
         "SalesPerson" => q.SalesPersonId == CurrentUserId,

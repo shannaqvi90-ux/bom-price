@@ -191,6 +191,78 @@ public class ChangeCustomerTests(WebApplicationFactory<Program> factory) : IClas
         patch.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    [Fact]
+    public async Task GetCustomerHistory_EmptyWhenNoChanges_Returns200()
+    {
+        var (reqId, _, _) = await SeedRequisitionAtCostingPending();
+
+        var acct = await LoginAsync("sara@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", acct.AccessToken);
+
+        var resp = await _client.GetAsync($"/api/requisitions/{reqId}/customer-history");
+        resp.StatusCode.Should().Be(HttpStatusCode.OK);
+        var list = (await resp.Content.ReadFromJsonAsync<List<HistoryEntry>>())!;
+        list.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetCustomerHistory_AfterChange_ReturnsOneEntryWithDetails()
+    {
+        var (reqId, origId, swapId) = await SeedRequisitionAtCostingPending();
+
+        var acct = await LoginAsync("sara@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", acct.AccessToken);
+
+        var patch = await _client.PatchAsJsonAsync($"/api/requisitions/{reqId}/customer", new
+        {
+            CustomerId = swapId,
+            Reason = "Corrected subsidiary"
+        });
+        patch.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var history = (await _client.GetFromJsonAsync<List<HistoryEntry>>(
+            $"/api/requisitions/{reqId}/customer-history"))!;
+
+        history.Should().HaveCount(1);
+        history[0].OldCustomerId.Should().Be(origId);
+        history[0].NewCustomerId.Should().Be(swapId);
+        history[0].ChangedByUserId.Should().Be(acct.UserId);
+        history[0].Reason.Should().Be("Corrected subsidiary");
+        history[0].OldCustomerName.Should().NotBeNullOrEmpty();
+        history[0].NewCustomerName.Should().NotBeNullOrEmpty();
+        history[0].ChangedByUserName.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task GetCustomerHistory_OrdersEntriesDescendingByChangedAt()
+    {
+        var (reqId, _, swapId) = await SeedRequisitionAtCostingPending();
+
+        var acct = await LoginAsync("sara@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", acct.AccessToken);
+
+        // First change
+        var customers = (await _client.GetFromJsonAsync<List<CustomerShort>>("/api/customers"))!;
+        customers.Count.Should().BeGreaterThanOrEqualTo(3, "need three customers for two consecutive changes");
+        var thirdId = customers[2].Id;
+
+        var p1 = await _client.PatchAsJsonAsync($"/api/requisitions/{reqId}/customer", new { CustomerId = swapId, Reason = (string?)null });
+        p1.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        // Small delay to ensure distinct ChangedAt timestamps
+        await Task.Delay(50);
+
+        var p2 = await _client.PatchAsJsonAsync($"/api/requisitions/{reqId}/customer", new { CustomerId = thirdId, Reason = (string?)null });
+        p2.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var history = (await _client.GetFromJsonAsync<List<HistoryEntry>>(
+            $"/api/requisitions/{reqId}/customer-history"))!;
+        history.Should().HaveCount(2);
+        history[0].ChangedAt.Should().BeAfter(history[1].ChangedAt, "newest first");
+        history[0].NewCustomerId.Should().Be(thirdId);
+        history[1].NewCustomerId.Should().Be(swapId);
+    }
+
     // Private records
     private record LoginResponse(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId);
     private record CustomerShort(int Id, string Name);
@@ -199,4 +271,10 @@ public class ChangeCustomerTests(WebApplicationFactory<Program> factory) : IClas
     private record ProcessShort(int Id, string Name);
     private record RequisitionItemShort(int Id, int ItemId, string ItemDescription, decimal ExpectedQty, int SortOrder);
     private record RequisitionDetailFull(int Id, int CustomerId, List<RequisitionItemShort> Items);
+    private record HistoryEntry(
+        int Id,
+        int OldCustomerId, string OldCustomerName,
+        int NewCustomerId, string NewCustomerName,
+        int ChangedByUserId, string ChangedByUserName,
+        DateTime ChangedAt, string? Reason);
 }

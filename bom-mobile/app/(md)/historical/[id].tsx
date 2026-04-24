@@ -149,40 +149,70 @@ export default function MdHistoricalDetail() {
           {`ITEMS (${r.items.length})`}
         </Text>
 
-        {r.items.map((it) => (
-          <ItemCardShell key={it.id}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "flex-start",
-                justifyContent: "space-between",
-              }}
-            >
-              <Text
-                style={{ flex: 1, paddingRight: 12, fontSize: 15, fontWeight: "600", color: "#0f172a" }}
-                numberOfLines={2}
+        {r.items.map((it) => {
+          const canDrillDown = r.status === "Approved" || r.status === "Rejected";
+          return (
+            <ItemCardShell key={it.id}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                }}
               >
-                {it.itemDescription}
-              </Text>
-              <Text style={{ fontSize: 15, color: "#334155", fontWeight: "600" }}>
-                {it.expectedQty}
-              </Text>
-            </View>
-            <View style={{ marginTop: 6 }}>
-              <ItemStageBadge status={r.status} />
-            </View>
-            {r.status === "Approved" && r.approval?.items ? (() => {
-              const approvalItem = r.approval.items?.find(ai => ai.requisitionItemId === it.id);
-              return approvalItem ? (
-                <ItemPriceBlock
-                  expectedQty={it.expectedQty}
-                  pricePerKg={approvalItem.pricePerKg}
-                  currencyCode={r.currencyCode}
-                />
-              ) : null;
-            })() : null}
-          </ItemCardShell>
-        ))}
+                <Text
+                  style={{ flex: 1, paddingRight: 12, fontSize: 15, fontWeight: "600", color: "#0f172a" }}
+                  numberOfLines={2}
+                >
+                  {it.itemDescription}
+                </Text>
+                <Text style={{ fontSize: 15, color: "#334155", fontWeight: "600" }}>
+                  {it.expectedQty}
+                </Text>
+              </View>
+              <View style={{ marginTop: 6 }}>
+                <ItemStageBadge status={r.status} />
+              </View>
+              {r.status === "Approved" && r.approval?.items
+                ? (() => {
+                    const approvalItem = r.approval.items?.find((ai) => ai.requisitionItemId === it.id);
+                    return approvalItem ? (
+                      <ItemPriceBlock
+                        expectedQty={it.expectedQty}
+                        pricePerKg={approvalItem.pricePerKg}
+                        currencyCode={r.currencyCode}
+                      />
+                    ) : null;
+                  })()
+                : null}
+              {canDrillDown ? (
+                <Pressable
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    router.push(`/(md)/item/${r.id}/${it.id}`);
+                  }}
+                  style={({ pressed }) => ({
+                    marginTop: 10,
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <View
+                    style={{
+                      backgroundColor: "#eff6ff",
+                      borderRadius: 10,
+                      paddingVertical: 10,
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text style={{ color: "#1e40af", fontSize: 14, fontWeight: "700" }}>
+                      View details ▸
+                    </Text>
+                  </View>
+                </Pressable>
+              ) : null}
+            </ItemCardShell>
+          );
+        })}
 
         {isApproved ? (
           <View style={{ marginTop: 20 }}>

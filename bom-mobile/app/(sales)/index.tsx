@@ -1,6 +1,7 @@
-import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, View } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRequisitionsList } from "@/api/requisitions";
 import { RequisitionCard } from "@/components/RequisitionCard";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -11,6 +12,7 @@ import { LoadingView } from "@/components/LoadingView";
 
 export default function SalesRequisitionsList() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const q = useRequisitionsList();
 
   if (q.isPending) return <LoadingView />;
@@ -60,25 +62,37 @@ export default function SalesRequisitionsList() {
           await Haptics.selectionAsync();
           router.push("/(sales)/new");
         }}
-        style={({ pressed }) => ({
+        style={{
           position: "absolute",
-          bottom: 24,
+          bottom: Math.max(16 + insets.bottom, 60),
           right: 24,
-          width: 56,
-          height: 56,
-          borderRadius: 28,
-          backgroundColor: "#1e40af",
-          alignItems: "center",
-          justifyContent: "center",
-          shadowColor: "#1e40af",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: pressed ? 0.25 : 0.35,
-          shadowRadius: 10,
-          elevation: 5,
-          opacity: pressed ? 0.9 : 1,
-        })}
+          width: 60,
+          height: 60,
+          zIndex: 100,
+        }}
       >
-        <Text style={{ color: "white", fontSize: 30, fontWeight: "700", lineHeight: 32 }}>+</Text>
+        {({ pressed }) => (
+          <View
+            style={{
+              flex: 1,
+              borderRadius: 30,
+              backgroundColor: "#1e40af",
+              borderWidth: 2,
+              borderColor: "#1e3a8a",
+              alignItems: "center",
+              justifyContent: "center",
+              elevation: 8,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              opacity: pressed ? 0.85 : 1,
+            }}
+          >
+            <View style={{ width: 24, height: 3, backgroundColor: "white", borderRadius: 2, position: "absolute" }} />
+            <View style={{ width: 3, height: 24, backgroundColor: "white", borderRadius: 2, position: "absolute" }} />
+          </View>
+        )}
       </Pressable>
     </View>
   );

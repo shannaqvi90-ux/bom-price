@@ -419,6 +419,76 @@ public class RequisitionsController(
         return Ok(new { q.Id, q.RefNo, Status = q.Status.ToString() });
     }
 
+    [HttpPatch("{id}/customer")]
+    [Authorize(Roles = "Accountant,Admin")]
+    public async Task<IActionResult> ChangeCustomer(int id, ChangeCustomerRequest req)
+    {
+        var q = await db.QuotationRequests.FirstOrDefaultAsync(r => r.Id == id);
+        if (q is null) return NotFound();
+
+        if (q.Status != RequisitionStatus.CostingPending &&
+            q.Status != RequisitionStatus.CostingInProgress)
+        {
+            return Validation
+                .Detail("Customer can only be changed during the costing stage.")
+                .Field("Status", "Not in a costing state.")
+                .Return();
+        }
+
+        if (req.CustomerId == q.CustomerId)
+        {
+            return Validation
+                .Detail("New customer is the same as the current customer.")
+                .Field("CustomerId", "No change.")
+                .Return();
+        }
+
+        var newCustomerExists = await db.Customers.AnyAsync(c => c.Id == req.CustomerId);
+        if (!newCustomerExists) return NotFound();
+
+        var oldCustomerId = q.CustomerId;
+
+        await using var tx = await db.Database.BeginTransactionAsync();
+
+        q.CustomerId = req.CustomerId;
+        q.UpdatedAt = DateTime.UtcNow;
+
+        db.CustomerChangeHistories.Add(new CustomerChangeHistory
+        {
+            RequisitionId = q.Id,
+            OldCustomerId = oldCustomerId,
+            NewCustomerId = req.CustomerId,
+            ChangedByUserId = CurrentUserId,
+            Reason = string.IsNullOrWhiteSpace(req.Reason) ? null : req.Reason.Trim()
+        });
+
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+
+        // Fire-and-forget notification (same try/catch pattern as Create / Resubmit)
+        try
+        {
+            var oldCust = await db.Customers.FindAsync(oldCustomerId);
+            var newCust = await db.Customers.FindAsync(req.CustomerId);
+            var actor = await db.Users.FindAsync(CurrentUserId);
+            var message = $"Customer on {q.RefNo} changed from {oldCust?.Name} to {newCust?.Name} by {actor?.Name}";
+
+            await notificationService.SendAsync(q.SalesPersonId, message, q.Id, "QuotationRequest");
+
+            var mds = await db.Users.Where(u => u.Role == UserRole.ManagingDirector && u.IsActive).ToListAsync();
+            foreach (var md in mds)
+                await notificationService.SendAsync(md.Id, message, q.Id, "QuotationRequest");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Notification dispatch failed after successful customer change for {Entity} {Id}",
+                "QuotationRequest", q.Id);
+        }
+
+        return NoContent();
+    }
+
     private bool CanAccess(QuotationRequest q) => CurrentRole switch
     {
         "SalesPerson" => q.SalesPersonId == CurrentUserId,

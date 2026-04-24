@@ -24,6 +24,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<BomCostLine> BomCostLines => Set<BomCostLine>();
     public DbSet<ItemLastCost> ItemLastCosts => Set<ItemLastCost>();
     public DbSet<RevokedJti> RevokedJtis => Set<RevokedJti>();
+    public DbSet<CustomerChangeHistory> CustomerChangeHistories => Set<CustomerChangeHistory>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -204,6 +205,36 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<RevokedJti>().Property(r => r.Jti).HasMaxLength(32);
         mb.Entity<RevokedJti>().HasIndex(r => r.Jti).IsUnique();
         mb.Entity<RevokedJti>().HasIndex(r => r.ExpiresAt);
+
+        mb.Entity<CustomerChangeHistory>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Reason).HasMaxLength(500);
+            e.Property(x => x.ChangedAt).HasDefaultValueSql("now() at time zone 'utc'");
+
+            e.HasOne(x => x.Requisition)
+                .WithMany()
+                .HasForeignKey(x => x.RequisitionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(x => x.OldCustomer)
+                .WithMany()
+                .HasForeignKey(x => x.OldCustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(x => x.NewCustomer)
+                .WithMany()
+                .HasForeignKey(x => x.NewCustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(x => x.ChangedBy)
+                .WithMany()
+                .HasForeignKey(x => x.ChangedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasIndex(x => x.RequisitionId);
+            e.HasIndex(x => x.ChangedAt).IsDescending();
+        });
 
         // Optimistic concurrency via PostgreSQL system xmin column.
         // No migration needed — xmin is always present on every row.

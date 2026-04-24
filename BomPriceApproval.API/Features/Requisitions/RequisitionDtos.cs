@@ -34,3 +34,7 @@ public record ApprovalSummary(bool IsApproved, string? Notes, DateTime ApprovedA
 
 public record ResubmitRequisitionRequest(
     [Required, MinLength(1)] List<RequisitionItemInput> Items);
+
+public record ChangeCustomerRequest(
+    [Required] int CustomerId,
+    [MaxLength(500)] string? Reason);

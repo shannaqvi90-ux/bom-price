@@ -11,6 +11,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { SalesHeaderRight } from "@/components/SalesHeaderRight";
 import { SectionCard } from "@/components/SectionCard";
+import { ItemCardShell } from "@/components/ItemCardShell";
 import { formatShortDate } from "@/utils/dates";
 
 export default function RequisitionDetail() {
@@ -117,17 +118,7 @@ export default function RequisitionDetail() {
         </Text>
 
         {r.items.map((it) => (
-          <View
-            key={it.id}
-            style={{
-              backgroundColor: "#ffffff",
-              borderWidth: 1,
-              borderColor: "#e2e8f0",
-              borderRadius: 14,
-              padding: 14,
-              marginBottom: 10,
-            }}
-          >
+          <ItemCardShell key={it.id}>
             <View
               style={{
                 flexDirection: "row",
@@ -148,7 +139,7 @@ export default function RequisitionDetail() {
             <View style={{ marginTop: 6 }}>
               <ItemStageBadge status={r.status} />
             </View>
-          </View>
+          </ItemCardShell>
         ))}
 
         {isApproved ? (

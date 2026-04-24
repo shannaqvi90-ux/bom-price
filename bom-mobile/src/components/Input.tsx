@@ -5,9 +5,10 @@ import { MotiView } from "moti";
 interface Props extends TextInputProps {
   label: string;
   error?: string;
+  marginBottom?: number;
 }
 
-export function Input({ label, error, onFocus, onBlur, ...rest }: Props) {
+export function Input({ label, error, onFocus, onBlur, marginBottom = 14, ...rest }: Props) {
   const [focused, setFocused] = useState(false);
   const borderColor = error
     ? "#dc2626"
@@ -16,7 +17,7 @@ export function Input({ label, error, onFocus, onBlur, ...rest }: Props) {
       : "#e2e8f0";
 
   return (
-    <View style={{ marginBottom: 14 }}>
+    <View style={{ marginBottom }}>
       <Text style={{ fontSize: 14, fontWeight: "600", color: "#334155", marginBottom: 6 }}>
         {label}
       </Text>

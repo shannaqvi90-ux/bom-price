@@ -22,10 +22,7 @@ export function NotificationBell() {
   }, [count, q.isSuccess]);
 
   return (
-    <Pressable
-      onPress={() => router.push("/notifications")}
-      style={{ paddingRight: 12 }}
-    >
+    <Pressable onPress={() => router.push("/notifications")}>
       <MotiView
         key={wiggleKey}
         from={{ rotate: "0deg" }}

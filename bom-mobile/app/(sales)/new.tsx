@@ -19,6 +19,7 @@ import { CustomerQuickCreateSheet } from "@/components/CustomerQuickCreateSheet"
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { SalesHeaderRight } from "@/components/SalesHeaderRight";
 import { SectionCard } from "@/components/SectionCard";
+import { ItemCardShell } from "@/components/ItemCardShell";
 import { useCustomers, useExchangeRates, useItems } from "@/api/lookups";
 import { useCreateRequisition } from "@/api/requisitions";
 import {
@@ -192,17 +193,7 @@ export default function NewRequisition() {
         </Text>
 
         {fields.map((f, idx) => (
-          <View
-            key={f.id}
-            style={{
-              backgroundColor: "#ffffff",
-              borderWidth: 1,
-              borderColor: "#e2e8f0",
-              borderRadius: 14,
-              padding: 14,
-              marginBottom: 10,
-            }}
-          >
+          <ItemCardShell key={f.id}>
             <View
               style={{
                 flexDirection: "row",
@@ -265,7 +256,7 @@ export default function NewRequisition() {
                 />
               )}
             />
-          </View>
+          </ItemCardShell>
         ))}
 
         <Pressable

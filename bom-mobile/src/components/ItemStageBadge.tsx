@@ -31,7 +31,7 @@ export function ItemStageBadge({ status }: Props) {
   const priceSet = status === "Approved";
 
   return (
-    <View className="flex-row flex-wrap mt-1">
+    <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 4 }}>
       <Badge label="BOM" done={bomDone} />
       <Badge label="Costing" done={costingDone} />
       <Badge label="Price" done={priceSet} />
@@ -42,12 +42,19 @@ export function ItemStageBadge({ status }: Props) {
 function Badge({ label, done }: { label: string; done: boolean }) {
   return (
     <View
-      className={`px-2 py-0.5 mr-1 rounded ${
-        done ? "bg-emerald-100" : "bg-slate-100"
-      }`}
+      style={{
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        marginRight: 4,
+        borderRadius: 4,
+        backgroundColor: done ? "#d1fae5" : "#f1f5f9",
+      }}
     >
       <Text
-        className={`text-xs ${done ? "text-emerald-700" : "text-slate-500"}`}
+        style={{
+          fontSize: 12,
+          color: done ? "#047857" : "#64748b",
+        }}
       >
         {done ? "✓" : "○"} {label}
       </Text>

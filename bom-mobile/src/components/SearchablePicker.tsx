@@ -8,7 +8,7 @@ interface Option {
 }
 
 interface Props {
-  label: string;
+  label?: string;
   placeholder?: string;
   value: number | null;
   options: Option[];
@@ -46,7 +46,7 @@ export function SearchablePicker({
 
   return (
     <View className="mb-3">
-      <Text className="text-sm text-slate-700 mb-1">{label}</Text>
+      {label ? <Text className="text-sm text-slate-700 mb-1">{label}</Text> : null}
       <Pressable
         onPress={() => setOpen(true)}
         className={`border rounded-md px-3 py-3 bg-white ${error ? "border-rose-500" : "border-slate-300"}`}

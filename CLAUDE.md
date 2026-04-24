@@ -74,8 +74,9 @@ Because worktrees accumulate and cause confusion when left uncleaned, Claude MUS
 
 - After every **5 commits** in a single session, stop and say:
   > ⚠️ 5 commits ban gaye is session mein. Review karna chahte ho? Yeh commits list hain: [list]. Aage badhoon ya ruk jaoon?
-- When working tree has **more than 50 changed files**, STOP before running `git add`. Ask user to review and confirm staging strategy.
-- If `git status` shows unexpected branch state (wrong branch checked out, uncommitted changes that user didn't make) — STOP and report to user. Do not auto-fix.
+  - **Exception:** when Auto Mode is active (user has explicitly opted into continuous autonomous execution), skip this 5-commit pause — only include a one-line running commit summary in the next status update and keep going. The per-commit CLAUDE.md safety procedure (show `git diff --stat` + propose commit message) still applies.
+- When working tree has **more than 50 changed files**, STOP before running `git add` (applies even in Auto Mode — this is a safety rule, not a cadence rule). Ask user to review and confirm staging strategy.
+- If `git status` shows unexpected branch state (wrong branch checked out, uncommitted changes that user didn't make) — STOP and report to user. Do not auto-fix. (Applies even in Auto Mode.)
 
 ### 📝 Commit message conventions
 

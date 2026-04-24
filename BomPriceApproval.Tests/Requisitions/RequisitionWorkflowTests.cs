@@ -269,6 +269,57 @@ public class RequisitionWorkflowTests(WebApplicationFactory<Program> factory)
             "searching by RefNo numeric part should return the seeded requisition");
     }
 
+    [Fact]
+    public async Task GetAll_AllInvalidStatuses_ReturnsUnfilteredResults()
+    {
+        // Documents current behavior: when every provided status value fails to parse,
+        // the filter is silently skipped and all branch-scoped requisitions are returned
+        // (rather than an empty list). This is intentional (tolerant of stale clients
+        // sending unknown values), but must be pinned — a future refactor could change
+        // this behavior and otherwise pass the existing suite.
+
+        // Seed one known requisition so we have something to assert against
+        int seededReqId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var salesPerson = db.Users.First(u => u.Email == "ali@test.com");
+            var customer = db.Customers.First();
+
+            var req = new QuotationRequest
+            {
+                BranchId = salesPerson.BranchId!.Value,
+                SalesPersonId = salesPerson.Id,
+                CustomerId = customer.Id,
+                CurrencyCode = "AED",
+                Status = RequisitionStatus.BomPending,
+            };
+            db.QuotationRequests.Add(req);
+            db.SaveChanges();
+            seededReqId = req.Id;
+        }
+
+        var client = factory.CreateClient();
+
+        // Log in as MD (null-branch, sees all)
+        var mdLogin = await client.PostAsJsonAsync("/api/auth/login",
+            new { Email = "md@test.com", Password = "Test@1234" });
+        mdLogin.EnsureSuccessStatusCode();
+        var mdTokens = (await mdLogin.Content.ReadFromJsonAsync<LoginResponse>())!;
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", mdTokens.AccessToken);
+
+        // Send only invalid status values — none will parse, so parsed.Length == 0,
+        // the inner guard is skipped, and the full branch-scoped list is returned
+        var res = await client.GetAsync("/api/requisitions?status=Garbage&status=NotAStatus");
+        res.StatusCode.Should().Be(HttpStatusCode.OK);
+        var list = await res.Content.ReadFromJsonAsync<List<ReqListItem>>();
+
+        list.Should().NotBeNull();
+        list.Should().Contain(r => r.Id == seededReqId,
+            "the seeded requisition must appear because invalid statuses are silently discarded, not treated as an empty filter");
+    }
+
     // Scoped private records (avoid name collisions with any existing records in the file):
     private record LoginResponse(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId);
     private record AcctCustomerShort(int Id, string Name);

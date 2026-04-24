@@ -8,6 +8,9 @@ import { StatusPill } from "@/components/StatusPill";
 import { ItemStageBadge } from "@/components/ItemStageBadge";
 import { LoadingView } from "@/components/LoadingView";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { ScreenHeader } from "@/components/ScreenHeader";
+import { SalesHeaderRight } from "@/components/SalesHeaderRight";
+import { SectionCard } from "@/components/SectionCard";
 import { formatShortDate } from "@/utils/dates";
 
 export default function RequisitionDetail() {
@@ -18,15 +21,19 @@ export default function RequisitionDetail() {
   const [pdfLoading, setPdfLoading] = useState(false);
 
   if (q.isPending) return <LoadingView />;
+
   if (q.isError || !q.data) {
     return (
-      <View className="flex-1 p-4 bg-slate-50">
-        <ErrorBanner
-          message={
-            q.error instanceof Error ? q.error.message : "Failed to load requisition"
-          }
-          onRetry={() => q.refetch()}
-        />
+      <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
+        <ScreenHeader title="Requisition" right={<SalesHeaderRight />} />
+        <View style={{ padding: 16 }}>
+          <ErrorBanner
+            message={
+              q.error instanceof Error ? q.error.message : "Failed to load requisition"
+            }
+            onRetry={() => q.refetch()}
+          />
+        </View>
       </View>
     );
   }
@@ -48,59 +55,128 @@ export default function RequisitionDetail() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-slate-50" contentContainerClassName="p-4">
-      <View className="flex-row items-center justify-between mb-2">
-        <Text className="text-2xl font-bold text-slate-900">{r.refNo}</Text>
-        <StatusPill status={r.status as Parameters<typeof StatusPill>[0]["status"]} />
-      </View>
-      <Text className="text-base text-slate-700">{r.customerName}</Text>
-      <Text className="text-xs text-slate-500 mb-4">
-        {r.branchName} · Created {formatShortDate(r.createdAt)} · {r.currencyCode}
-      </Text>
+    <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
+      <ScreenHeader
+        label="QUOTATION"
+        title={r.refNo}
+        right={
+          <>
+            <StatusPill status={r.status as Parameters<typeof StatusPill>[0]["status"]} />
+            <SalesHeaderRight />
+          </>
+        }
+      />
 
-      {isRejected && r.approval?.notes ? (
-        <View className="bg-rose-50 border border-rose-200 rounded-md p-3 mb-4">
-          <Text className="text-sm font-semibold text-rose-800 mb-1">
-            Rejection reason
-          </Text>
-          <Text className="text-sm text-rose-900">{r.approval.notes}</Text>
-        </View>
-      ) : null}
-
-      <Text className="text-base font-semibold text-slate-900 mb-2">Items</Text>
-      {r.items.map((it) => (
-        <View
-          key={it.id}
-          className="bg-white border border-slate-200 rounded-md p-3 mb-2"
-        >
-          <View className="flex-row justify-between">
-            <Text className="text-sm font-medium text-slate-900 flex-1 pr-2" numberOfLines={2}>
-              {it.itemDescription}
+      <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 32 }}>
+        {isRejected && r.approval?.notes ? (
+          <View
+            style={{
+              backgroundColor: "#fef2f2",
+              borderWidth: 1,
+              borderColor: "#fecaca",
+              borderRadius: 14,
+              padding: 14,
+              marginBottom: 12,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: "700",
+                color: "#991b1b",
+                letterSpacing: 0.3,
+                marginBottom: 6,
+              }}
+            >
+              REJECTION REASON
             </Text>
-            <Text className="text-sm text-slate-700">{it.expectedQty}</Text>
+            <Text style={{ fontSize: 15, color: "#7f1d1d" }}>{r.approval.notes}</Text>
           </View>
-          <ItemStageBadge status={r.status} />
-        </View>
-      ))}
+        ) : null}
 
-      {isApproved ? (
-        <View className="mt-6">
-          {pdfError ? (
-            <ErrorBanner message={pdfError} onRetry={() => setPdfError(null)} />
-          ) : null}
-          <Button
-            title={pdfLoading ? "Preparing PDF..." : "Download PDF"}
-            onPress={onDownload}
-            loading={pdfLoading}
-          />
-        </View>
-      ) : null}
+        <SectionCard title="Customer">
+          <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>
+            {r.customerName}
+          </Text>
+          <Text style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
+            {r.branchName} · {r.currencyCode} · Created {formatShortDate(r.createdAt)}
+          </Text>
+        </SectionCard>
 
-      {r.approval && isApproved ? (
-        <Text className="text-xs text-slate-500 text-center mt-4">
-          Approved on {formatShortDate(r.approval.approvedAt)}
+        <Text
+          style={{
+            fontSize: 13,
+            fontWeight: "700",
+            color: "#64748b",
+            marginBottom: 8,
+            marginTop: 4,
+            letterSpacing: 0.3,
+          }}
+        >
+          {`ITEMS (${r.items.length})`}
         </Text>
-      ) : null}
-    </ScrollView>
+
+        {r.items.map((it) => (
+          <View
+            key={it.id}
+            style={{
+              backgroundColor: "#ffffff",
+              borderWidth: 1,
+              borderColor: "#e2e8f0",
+              borderRadius: 14,
+              padding: 14,
+              marginBottom: 10,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+              }}
+            >
+              <Text
+                style={{ flex: 1, paddingRight: 12, fontSize: 15, fontWeight: "600", color: "#0f172a" }}
+                numberOfLines={2}
+              >
+                {it.itemDescription}
+              </Text>
+              <Text style={{ fontSize: 15, color: "#334155", fontWeight: "600" }}>
+                {it.expectedQty}
+              </Text>
+            </View>
+            <View style={{ marginTop: 6 }}>
+              <ItemStageBadge status={r.status} />
+            </View>
+          </View>
+        ))}
+
+        {isApproved ? (
+          <View style={{ marginTop: 20 }}>
+            {pdfError ? (
+              <ErrorBanner message={pdfError} onRetry={() => setPdfError(null)} />
+            ) : null}
+            <Button
+              title={pdfLoading ? "Preparing PDF..." : "Download PDF"}
+              onPress={onDownload}
+              loading={pdfLoading}
+            />
+          </View>
+        ) : null}
+
+        {r.approval && isApproved ? (
+          <Text
+            style={{
+              fontSize: 12,
+              color: "#64748b",
+              textAlign: "center",
+              marginTop: 12,
+            }}
+          >
+            Approved on {formatShortDate(r.approval.approvedAt)}
+          </Text>
+        ) : null}
+      </ScrollView>
+    </View>
   );
 }

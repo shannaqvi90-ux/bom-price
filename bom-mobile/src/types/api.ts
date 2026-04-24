@@ -66,10 +66,17 @@ export interface RequisitionItemDto {
   sortOrder: number;
 }
 
+export interface ApprovalItemPrice {
+  requisitionItemId: number;
+  pricePerKg: number;
+  pricePerKgForeign: number | null;
+}
+
 export interface ApprovalSummary {
   isApproved: boolean;
   notes: string | null;
   approvedAt: string;
+  items: ApprovalItemPrice[] | null;
 }
 
 export interface RequisitionDetail {

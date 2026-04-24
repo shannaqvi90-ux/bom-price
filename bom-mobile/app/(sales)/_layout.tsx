@@ -1,25 +1,6 @@
-import { Pressable, Text, View } from "react-native";
-import { Redirect, Stack, useRouter } from "expo-router";
-import { useAuth, useRoleGuard } from "@/auth/AuthContext";
+import { Redirect, Stack } from "expo-router";
+import { useRoleGuard } from "@/auth/AuthContext";
 import { LoadingView } from "@/components/LoadingView";
-import { NotificationBell } from "@/components/NotificationBell";
-
-function HeaderRight() {
-  const { logout } = useAuth();
-  const router = useRouter();
-  const onLogout = async () => {
-    await logout();
-    router.replace("/login");
-  };
-  return (
-    <View className="flex-row items-center">
-      <NotificationBell />
-      <Pressable onPress={onLogout} className="pr-3">
-        <Text className="text-brand-600 text-base font-semibold">Log out</Text>
-      </Pressable>
-    </View>
-  );
-}
 
 export default function SalesLayout() {
   const { status } = useRoleGuard(["SalesPerson"]);
@@ -28,8 +9,7 @@ export default function SalesLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShown: true,
-        headerRight: () => <HeaderRight />,
+        headerShown: false,
       }}
     />
   );

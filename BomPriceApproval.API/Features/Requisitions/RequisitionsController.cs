@@ -107,7 +107,7 @@ public class RequisitionsController(
             .Include(r => r.Items).ThenInclude(ri => ri.Item)
             .Include(r => r.Customer)
             .Include(r => r.Branch).Include(r => r.SalesPerson)
-            .Include(r => r.Approvals).ThenInclude(a => a.Items)
+            .Include(r => r.Approvals.Where(a => !a.IsSuperseded)).ThenInclude(a => a.Items)
             .FirstOrDefaultAsync(r => r.Id == id);
 
         if (q is null) return NotFound();

@@ -30,7 +30,16 @@ public record RequisitionDetail(
     List<RequisitionItemDto> Items,
     ApprovalSummary? Approval);
 
-public record ApprovalSummary(bool IsApproved, string? Notes, DateTime ApprovedAt);
+public record ApprovalSummary(
+    bool IsApproved,
+    string? Notes,
+    DateTime ApprovedAt,
+    List<ApprovalItemPrice>? Items);
+
+public record ApprovalItemPrice(
+    int RequisitionItemId,
+    decimal PricePerKg,
+    decimal? PricePerKgForeign);
 
 public record ResubmitRequisitionRequest(
     [Required, MinLength(1)] List<RequisitionItemInput> Items);

@@ -107,7 +107,7 @@ public class RequisitionsController(
             .Include(r => r.Items).ThenInclude(ri => ri.Item)
             .Include(r => r.Customer)
             .Include(r => r.Branch).Include(r => r.SalesPerson)
-            .Include(r => r.Approvals)
+            .Include(r => r.Approvals).ThenInclude(a => a.Items)
             .FirstOrDefaultAsync(r => r.Id == id);
 
         if (q is null) return NotFound();
@@ -123,7 +123,12 @@ public class RequisitionsController(
                 ri.Id, ri.ItemId, ri.Item.Description, ri.ExpectedQty, ri.SortOrder)).ToList(),
             q.Approvals
                 .Where(a => !a.IsSuperseded)
-                .Select(a => new ApprovalSummary(a.IsApproved, a.Notes, a.ApprovedAt))
+                .Select(a => new ApprovalSummary(
+                    a.IsApproved, a.Notes, a.ApprovedAt,
+                    a.Items.Select(ai => new ApprovalItemPrice(
+                        ai.RequisitionItemId,
+                        ai.SalesPricePerKgAed,
+                        ai.SalesPricePerKgForeign)).ToList()))
                 .FirstOrDefault()));
     }
 

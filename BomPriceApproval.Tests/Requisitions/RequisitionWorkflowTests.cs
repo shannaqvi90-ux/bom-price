@@ -320,6 +320,87 @@ public class RequisitionWorkflowTests(WebApplicationFactory<Program> factory)
             "the seeded requisition must appear because invalid statuses are silently discarded, not treated as an empty filter");
     }
 
+    [Fact]
+    public async Task GetById_ApprovedRequisition_IncludesItemPrices()
+    {
+        int reqId;
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var salesPerson = db.Users.First(u => u.Email == "ali@test.com");
+            var mdUser     = db.Users.First(u => u.Email == "md@test.com");
+            var customer   = db.Customers.First();
+            var items      = db.Items.Take(2).ToList();
+
+            // 1. Seed the QuotationRequest
+            var req = new QuotationRequest
+            {
+                BranchId     = salesPerson.BranchId!.Value,
+                SalesPersonId = salesPerson.Id,
+                CustomerId   = customer.Id,
+                CurrencyCode = "AED",
+                Status       = RequisitionStatus.Approved,
+            };
+            db.QuotationRequests.Add(req);
+            db.SaveChanges();
+            reqId = req.Id;
+
+            // 2. Seed 2 RequisitionItems (different ItemIds to satisfy unique constraint)
+            var ri1 = new RequisitionItem { QuotationRequestId = req.Id, ItemId = items[0].Id, ExpectedQty = 100m, SortOrder = 1 };
+            var ri2 = new RequisitionItem { QuotationRequestId = req.Id, ItemId = items[1].Id, ExpectedQty = 200m, SortOrder = 2 };
+            db.RequisitionItems.AddRange(ri1, ri2);
+            db.SaveChanges();
+
+            // 3. Seed QuotationApproval + 2 ApprovalItems
+            var approval = new QuotationApproval
+            {
+                QuotationRequestId = req.Id,
+                ApprovedByUserId   = mdUser.Id,
+                IsApproved         = true,
+                IsSuperseded       = false,
+                Notes              = "Test approval",
+                Items = new List<ApprovalItem>
+                {
+                    new() { RequisitionItemId = ri1.Id, SalesPricePerKgAed = 100m, SalesPricePerKgForeign = null, ProfitMarginPct = 10m, MaterialCostPct = 50m, OtherCostPct = 5m },
+                    new() { RequisitionItemId = ri2.Id, SalesPricePerKgAed = 250m, SalesPricePerKgForeign = null, ProfitMarginPct = 15m, MaterialCostPct = 55m, OtherCostPct = 6m },
+                }
+            };
+            db.QuotationApprovals.Add(approval);
+            db.SaveChanges();
+        }
+
+        var client = factory.CreateClient();
+
+        var mdLogin = await client.PostAsJsonAsync("/api/auth/login",
+            new { Email = "md@test.com", Password = "Test@1234" });
+        mdLogin.EnsureSuccessStatusCode();
+        var mdTokens = (await mdLogin.Content.ReadFromJsonAsync<LoginResponse>())!;
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", mdTokens.AccessToken);
+
+        var resp = await client.GetAsync($"/api/requisitions/{reqId}");
+        resp.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var detail = await resp.Content.ReadFromJsonAsync<ReqDetailWithApproval>();
+        detail.Should().NotBeNull();
+        detail!.Approval.Should().NotBeNull("approved requisition must include Approval summary");
+        detail.Approval!.Items.Should().NotBeNull("approval must expose item prices");
+        detail.Approval.Items!.Should().HaveCount(2, "both approval items must be returned");
+
+        // Verify both prices appear — order-independent
+        detail.Approval.Items.Should().ContainSingle(
+            ai => ai.PricePerKg == 100m,
+            "first approval item must have PricePerKg = 100");
+        detail.Approval.Items.Should().ContainSingle(
+            ai => ai.PricePerKg == 250m,
+            "second approval item must have PricePerKg = 250");
+
+        // Margin / cost breakdown must NOT be exposed
+        // (Verified structurally: ApprovalItemPriceDto has no Margin/Cost fields)
+    }
+
     // Scoped private records (avoid name collisions with any existing records in the file):
     private record LoginResponse(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId);
     private record AcctCustomerShort(int Id, string Name);
@@ -328,4 +409,9 @@ public class RequisitionWorkflowTests(WebApplicationFactory<Program> factory)
     private record AcctReqDetail(int Id, int BranchId);
     private record ReqListItem(int Id, string RefNo, string Status, int ItemCount, string CustomerName,
         string CurrencyCode, string BranchName, string SalesPersonName, DateTime CreatedAt);
+
+    // Records for Task 2 test deserialization
+    private record ApprovalItemPriceDto(int RequisitionItemId, decimal PricePerKg, decimal? PricePerKgForeign);
+    private record ApprovalSummaryDto(bool IsApproved, string? Notes, DateTime ApprovedAt, List<ApprovalItemPriceDto>? Items);
+    private record ReqDetailWithApproval(int Id, string RefNo, string Status, ApprovalSummaryDto? Approval);
 }

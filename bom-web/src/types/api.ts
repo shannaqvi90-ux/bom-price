@@ -365,3 +365,22 @@ export interface UpdateUserRequest {
   branchId: number | null;
   isActive: boolean;
 }
+
+// ─── Customer change history (Phase 2/3 of customer-creation feature) ────────
+
+export interface ChangeCustomerRequest {
+  customerId: number;
+  reason?: string | null;
+}
+
+export interface CustomerChangeHistoryEntry {
+  id: number;
+  oldCustomerId: number;
+  oldCustomerName: string;
+  newCustomerId: number;
+  newCustomerName: string;
+  changedByUserId: number;
+  changedByUserName: string;
+  changedAt: string;
+  reason: string | null;
+}

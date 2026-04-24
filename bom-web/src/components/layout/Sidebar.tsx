@@ -38,7 +38,7 @@ const NAV_ITEMS: NavItem[] = [
     to: "/customers",
     label: "Customers",
     icon: Contact,
-    roles: ["Admin", "SalesPerson"],
+    roles: ["Admin", "SalesPerson", "Accountant"],
   },
   {
     to: "/items",

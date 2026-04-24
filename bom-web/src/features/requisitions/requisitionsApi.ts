@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/axios";
 import type {
   AddRequisitionItemRequest,
+  ChangeCustomerRequest,
   CreateRequisitionRequest,
+  CustomerChangeHistoryEntry,
   RequisitionDetail,
   RequisitionListItem,
 } from "@/types/api";
@@ -11,6 +13,8 @@ export const requisitionKeys = {
   all: ["requisitions"] as const,
   list: () => [...requisitionKeys.all, "list"] as const,
   detail: (id: number) => [...requisitionKeys.all, "detail", id] as const,
+  customerHistory: (id: number) =>
+    [...requisitionKeys.all, "customer-history", id] as const,
 };
 
 export function useRequisitions() {
@@ -99,5 +103,29 @@ export function useResubmitRequisition(id: number) {
       qc.invalidateQueries({ queryKey: requisitionKeys.detail(id) });
       qc.invalidateQueries({ queryKey: requisitionKeys.list() });
     },
+  });
+}
+
+export function useChangeRequisitionCustomer(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ChangeCustomerRequest) =>
+      api.patch<void>(`/requisitions/${id}/customer`, body).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: requisitionKeys.detail(id) });
+      qc.invalidateQueries({ queryKey: requisitionKeys.list() });
+      qc.invalidateQueries({ queryKey: requisitionKeys.customerHistory(id) });
+    },
+  });
+}
+
+export function useCustomerChangeHistory(id: number, enabled = true) {
+  return useQuery({
+    queryKey: requisitionKeys.customerHistory(id),
+    queryFn: () =>
+      api
+        .get<CustomerChangeHistoryEntry[]>(`/requisitions/${id}/customer-history`)
+        .then((r) => r.data),
+    enabled: enabled && Number.isFinite(id) && id > 0,
   });
 }

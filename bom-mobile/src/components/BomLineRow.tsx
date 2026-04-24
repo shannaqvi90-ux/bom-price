@@ -13,12 +13,12 @@ export function BomLineRow({ line }: Props) {
     line.costPerKgInAed != null
       ? `${line.costPerKgInAed.toFixed(4)} AED/kg`
       : line.costPerKg != null
-      ? `${line.costPerKg.toFixed(4)} ${line.currencyCode ?? ""}`
-      : "—";
+      ? `${line.costPerKg.toFixed(4)} ${line.currencyCode ?? ""}/kg`
+      : "-";
   const contribDisplay =
     line.contributionAed != null
       ? `${line.contributionAed.toFixed(4)} AED`
-      : "—";
+      : "-";
 
   return (
     <View

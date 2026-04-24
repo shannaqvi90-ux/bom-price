@@ -1,10 +1,8 @@
 import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/api/client";
 import { Skeleton } from "./Skeleton";
 import { ErrorBanner } from "./ErrorBanner";
 import { stripTags } from "@/utils/text";
-import type { BomReviewResponse } from "@/types/api";
+import { useBomReview } from "@/api/bom";
 
 interface Props {
   visible: boolean;
@@ -12,18 +10,6 @@ interface Props {
   requisitionId: number;
   requisitionItemId: number;
   itemDescription: string;
-}
-
-function useBomReview(requisitionId: number, enabled: boolean) {
-  return useQuery({
-    queryKey: ["bom", "review", requisitionId],
-    queryFn: async () => {
-      const res = await api.get<BomReviewResponse>(`/api/bom/${requisitionId}`);
-      return res.data;
-    },
-    enabled: enabled && Number.isFinite(requisitionId) && requisitionId > 0,
-    staleTime: 30_000,
-  });
 }
 
 export function BomDetailSheet({

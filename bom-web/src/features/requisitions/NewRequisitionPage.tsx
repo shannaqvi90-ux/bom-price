@@ -189,7 +189,9 @@ export default function NewRequisitionPage() {
         open={addCustomerOpen}
         onClose={() => setAddCustomerOpen(false)}
         onCreated={(customer) => {
-          setValue("customer", { id: customer.id });
+          // Pass the full object so SearchableSelect's getLabel(c => c.name) renders.
+          // The zod schema only validates `{ id }` but Zod tolerates extra keys.
+          setValue("customer", customer as unknown as { id: number });
         }}
       />
     </div>

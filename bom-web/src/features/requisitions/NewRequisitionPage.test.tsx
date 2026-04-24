@@ -191,6 +191,67 @@ describe("NewRequisitionPage", () => {
     );
   });
 
+  it("opens AddCustomerModal when '+ Add new customer' is clicked, and auto-selects the created customer", async () => {
+    mockLookups();
+
+    // First post is /customers (create), second is /requisitions (submit)
+    const newCustomer = {
+      id: 99,
+      code: "NEW1",
+      name: "Newco",
+      address: "",
+      email: "",
+      phoneNumber: "",
+      branchId: 1,
+      salesPersonId: 10,
+      salesPersonName: "Ali",
+      createdByUserId: 10,
+    };
+    vi.mocked(api.post).mockImplementation((url: string) => {
+      if (url === "/customers") return Promise.resolve({ data: newCustomer });
+      if (url === "/requisitions")
+        return Promise.resolve({ data: { id: 77, refNo: "REQ-0077" } });
+      return Promise.reject(new Error(`unexpected post ${url}`));
+    });
+
+    const user = userEvent.setup();
+    render(wrap(<NewRequisitionPage />));
+    await waitFor(() => expect(screen.getByLabelText(/customer/i)).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: /add new customer/i }));
+
+    // Fill code + name in the modal
+    await user.type(screen.getByLabelText(/code/i), "NEW1");
+    await user.type(screen.getByLabelText(/name/i), "Newco");
+    await user.click(screen.getByRole("button", { name: /^Save$/i }));
+
+    // After save: modal closes + the new customer was posted + form value set
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith("/customers", {
+        code: "NEW1",
+        name: "Newco",
+        address: "",
+        email: "",
+        phoneNumber: "",
+      }),
+    );
+
+    // Submit the requisition — should go through with customerId 99 (auto-selected)
+    const itemBox = screen.getAllByPlaceholderText(/search items/i)[0];
+    fireEvent.focus(itemBox);
+    fireEvent.mouseDown(screen.getByText("HDPE Pipe 20mm"));
+    fireEvent.change(screen.getAllByPlaceholderText(/qty/i)[0], { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Create$/i }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith("/requisitions", {
+        customerId: 99,
+        items: [{ itemId: 2, expectedQty: 5 }],
+        currencyCode: "AED",
+      }),
+    );
+  });
+
   it("excludes already-selected items from the second row's picker", async () => {
     vi.mocked(api.get).mockImplementation((url: string) => {
       if (url.includes("/customers")) return Promise.resolve({ data: [{ id: 1, name: "ACME" }] });

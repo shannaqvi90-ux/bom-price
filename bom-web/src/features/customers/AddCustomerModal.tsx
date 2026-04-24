@@ -5,6 +5,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
+import type { Customer } from "@/types/api";
 import { useCreateCustomer } from "./customersApi";
 
 const schema = z.object({
@@ -20,9 +21,10 @@ type FormValues = z.infer<typeof schema>;
 interface Props {
   open: boolean;
   onClose: () => void;
+  onCreated?: (customer: Customer) => void;
 }
 
-export function AddCustomerModal({ open, onClose }: Props) {
+export function AddCustomerModal({ open, onClose, onCreated }: Props) {
   const create = useCreateCustomer();
   const {
     register,
@@ -36,7 +38,8 @@ export function AddCustomerModal({ open, onClose }: Props) {
 
   const onSubmit = handleSubmit(async (values) => {
     try {
-      await create.mutateAsync(values);
+      const created = await create.mutateAsync(values);
+      onCreated?.(created);
       reset();
       onClose();
     } catch {

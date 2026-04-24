@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import type { Path } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,6 +11,7 @@ import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { useCustomers, useItems, useActiveExchangeRates } from "@/api/lookups";
 import { useCreateRequisition } from "./requisitionsApi";
 import { RequisitionItemsEditor } from "./components/RequisitionItemsEditor";
+import { AddCustomerModal } from "@/features/customers/AddCustomerModal";
 import { notify } from "@/lib/notify";
 import { extractFieldErrors } from "@/lib/apiError";
 import type { Customer } from "@/types/api";
@@ -53,11 +55,14 @@ export default function NewRequisitionPage() {
   const ratesQ = useActiveExchangeRates();
   const create = useCreateRequisition();
 
+  const [addCustomerOpen, setAddCustomerOpen] = useState(false);
+
   const {
     control,
     handleSubmit,
     register,
     setError,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -109,9 +114,18 @@ export default function NewRequisitionPage() {
           ) : (
             <form onSubmit={onSubmit} className="space-y-4" noValidate>
               <div className="space-y-2">
-                <label htmlFor="customer" className="text-sm font-medium">
-                  Customer
-                </label>
+                <div className="flex items-center justify-between">
+                  <label htmlFor="customer" className="text-sm font-medium">
+                    Customer
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setAddCustomerOpen(true)}
+                    className="text-sm text-primary hover:underline"
+                  >
+                    + Add new customer
+                  </button>
+                </div>
                 <Controller
                   control={control}
                   name="customer"
@@ -170,6 +184,14 @@ export default function NewRequisitionPage() {
           )}
         </CardContent>
       </Card>
+
+      <AddCustomerModal
+        open={addCustomerOpen}
+        onClose={() => setAddCustomerOpen(false)}
+        onCreated={(customer) => {
+          setValue("customer", { id: customer.id });
+        }}
+      />
     </div>
   );
 }

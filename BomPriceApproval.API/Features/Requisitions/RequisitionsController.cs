@@ -24,7 +24,8 @@ public class RequisitionsController(
 
     [HttpGet]
     public async Task<IActionResult> GetAll(
-        [FromQuery] string? status = null,
+        [FromQuery(Name = "status")] string[]? statuses = null,
+        [FromQuery] string? search = null,
         [FromQuery] int? page = null,
         [FromQuery] int? pageSize = null)
     {
@@ -42,10 +43,23 @@ public class RequisitionsController(
             _ => query
         };
 
-        if (!string.IsNullOrWhiteSpace(status) &&
-            Enum.TryParse<RequisitionStatus>(status, ignoreCase: true, out var parsedStatus))
+        if (statuses is { Length: > 0 })
         {
-            query = query.Where(q => q.Status == parsedStatus);
+            var parsed = statuses
+                .Select(s => Enum.TryParse<RequisitionStatus>(s, ignoreCase: true, out var r) ? r : (RequisitionStatus?)null)
+                .Where(r => r.HasValue)
+                .Select(r => r!.Value)
+                .ToArray();
+            if (parsed.Length > 0)
+                query = query.Where(q => parsed.Contains(q.Status));
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(q =>
+                EF.Functions.ILike(q.RefNo, $"%{term}%") ||
+                EF.Functions.ILike(q.Customer.Name, $"%{term}%"));
         }
 
         var projected = query.OrderByDescending(q => q.CreatedAt)

@@ -1,8 +1,12 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using BomPriceApproval.API.Domain.Entities;
+using BomPriceApproval.API.Domain.Enums;
+using BomPriceApproval.API.Infrastructure.Data;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BomPriceApproval.Tests.Requisitions;
 
@@ -122,10 +126,155 @@ public class RequisitionWorkflowTests(WebApplicationFactory<Program> factory)
         add.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
+    [Fact]
+    public async Task GetAll_MultiStatus_ReturnsUnion()
+    {
+        // Seed requisitions directly via DbContext: 2 BomPending, 2 CostingPending, 1 Approved
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var salesPerson = db.Users.First(u => u.Email == "ali@test.com");
+            var customer = db.Customers.First();
+
+            var statuses = new[]
+            {
+                RequisitionStatus.BomPending,
+                RequisitionStatus.BomPending,
+                RequisitionStatus.CostingPending,
+                RequisitionStatus.CostingPending,
+                RequisitionStatus.Approved,
+            };
+
+            foreach (var status in statuses)
+            {
+                db.QuotationRequests.Add(new QuotationRequest
+                {
+                    BranchId = salesPerson.BranchId!.Value,
+                    SalesPersonId = salesPerson.Id,
+                    CustomerId = customer.Id,
+                    CurrencyCode = "AED",
+                    Status = status,
+                });
+            }
+
+            db.SaveChanges();
+        }
+
+        var client = factory.CreateClient();
+
+        // Log in as MD (null-branch, sees all)
+        var mdLogin = await client.PostAsJsonAsync("/api/auth/login",
+            new { Email = "md@test.com", Password = "Test@1234" });
+        mdLogin.EnsureSuccessStatusCode();
+        var mdTokens = (await mdLogin.Content.ReadFromJsonAsync<LoginResponse>())!;
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", mdTokens.AccessToken);
+
+        // Request multi-status filter
+        var res = await client.GetAsync("/api/requisitions?status=BomPending&status=CostingPending");
+        res.EnsureSuccessStatusCode();
+        var list = await res.Content.ReadFromJsonAsync<List<ReqListItem>>();
+
+        list.Should().NotBeNull();
+        list.Should().NotBeEmpty();
+        list!.Should().AllSatisfy(r =>
+            new[] { "BomPending", "CostingPending" }.Should().Contain(r.Status));
+        list.Should().NotContain(r => r.Status == "Approved");
+        // Both statuses must actually be present — proves union, not single-filter
+        list.Should().Contain(r => r.Status == "BomPending",
+            "BomPending rows must be included in multi-status result");
+        list.Should().Contain(r => r.Status == "CostingPending",
+            "CostingPending rows must be included in multi-status result");
+    }
+
+    [Fact]
+    public async Task GetAll_Search_MatchesRefNoAndCustomerName()
+    {
+        // Seed a customer with a unique name + a requisition for that customer
+        string uniqueCustomerName = $"UniqueCustomer_{Guid.NewGuid():N}";
+        int seededReqId;
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var salesPerson = db.Users.First(u => u.Email == "ali@test.com");
+
+            var newCustomer = new Customer
+            {
+                Code = $"UC-{Guid.NewGuid():N}"[..12],
+                Name = uniqueCustomerName,
+                Address = "Test Address",
+                Email = $"unique_{Guid.NewGuid():N}@test.com",
+                PhoneNumber = "+97100000001",
+                SalesPersonId = salesPerson.Id,
+                CreatedByUserId = salesPerson.Id,
+            };
+            db.Customers.Add(newCustomer);
+            db.SaveChanges();
+
+            var req = new QuotationRequest
+            {
+                BranchId = salesPerson.BranchId!.Value,
+                SalesPersonId = salesPerson.Id,
+                CustomerId = newCustomer.Id,
+                CurrencyCode = "AED",
+                Status = RequisitionStatus.BomPending,
+            };
+            db.QuotationRequests.Add(req);
+            db.SaveChanges();
+            seededReqId = req.Id;
+        }
+
+        var client = factory.CreateClient();
+
+        var mdLogin = await client.PostAsJsonAsync("/api/auth/login",
+            new { Email = "md@test.com", Password = "Test@1234" });
+        mdLogin.EnsureSuccessStatusCode();
+        var mdTokens = (await mdLogin.Content.ReadFromJsonAsync<LoginResponse>())!;
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", mdTokens.AccessToken);
+
+        // Search by first 12 chars of unique customer name (guaranteed to be unique)
+        var searchTerm = uniqueCustomerName[..12];
+        var byCustomer = await client.GetAsync(
+            $"/api/requisitions?search={Uri.EscapeDataString(searchTerm)}");
+        byCustomer.EnsureSuccessStatusCode();
+        var list1 = await byCustomer.Content.ReadFromJsonAsync<List<ReqListItem>>();
+
+        list1.Should().NotBeNull();
+        list1.Should().Contain(r => r.CustomerName == uniqueCustomerName,
+            "the seeded unique customer name should appear in results");
+        // search must filter — no rows for a completely different unique token should appear
+        var otherToken = $"ZZZOther_{Guid.NewGuid():N}";
+        list1.Should().NotContain(r => r.CustomerName.Contains(otherToken),
+            "unrelated tokens must not appear in search results");
+        // All returned rows must match the search term (either RefNo or CustomerName)
+        list1.Should().AllSatisfy(r =>
+            (r.CustomerName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+             r.RefNo.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+            .Should().BeTrue($"row {r.RefNo} should match search term '{searchTerm}'"));
+
+        // Search by RefNo — get the RefNo of our seeded req, then search partial
+        var seededItem = list1!.First(r => r.CustomerName == uniqueCustomerName);
+        var refNoPartial = seededItem.RefNo[4..]; // skip "REQ-", use numeric portion
+        var byRef = await client.GetAsync(
+            $"/api/requisitions?search={Uri.EscapeDataString(refNoPartial)}");
+        byRef.EnsureSuccessStatusCode();
+        var list2 = await byRef.Content.ReadFromJsonAsync<List<ReqListItem>>();
+
+        list2.Should().NotBeNull();
+        list2.Should().Contain(r => r.RefNo == seededItem.RefNo,
+            "searching by RefNo numeric part should return the seeded requisition");
+    }
+
     // Scoped private records (avoid name collisions with any existing records in the file):
     private record LoginResponse(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId);
     private record AcctCustomerShort(int Id, string Name);
     private record AcctItemShort(int Id, string Code, string Description);
     private record AcctCreateResponse(int Id, string RefNo);
     private record AcctReqDetail(int Id, int BranchId);
+    private record ReqListItem(int Id, string RefNo, string Status, int ItemCount, string CustomerName,
+        string CurrencyCode, string BranchName, string SalesPersonName, DateTime CreatedAt);
 }

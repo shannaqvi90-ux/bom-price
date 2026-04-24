@@ -97,7 +97,7 @@ const router = createBrowserRouter([
       {
         path: "requisitions/new",
         element: (
-          <ProtectedRoute allow={["Admin", "SalesPerson"]}>
+          <ProtectedRoute allow={["Admin", "SalesPerson", "Accountant"]}>
             <NewRequisitionPage />
           </ProtectedRoute>
         ),

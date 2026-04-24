@@ -426,6 +426,11 @@ public class RequisitionsController(
         var q = await db.QuotationRequests.FirstOrDefaultAsync(r => r.Id == id);
         if (q is null) return NotFound();
 
+        // Accountant is branch-scoped (matches AddItem/RemoveItem/Resubmit guards).
+        // Admin (null branch) bypasses.
+        if (CurrentRole == "Accountant" && q.BranchId != CurrentBranchId)
+            return Forbid();
+
         if (q.Status != RequisitionStatus.CostingPending &&
             q.Status != RequisitionStatus.CostingInProgress)
         {

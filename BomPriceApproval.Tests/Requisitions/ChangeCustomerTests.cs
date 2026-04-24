@@ -192,6 +192,40 @@ public class ChangeCustomerTests(WebApplicationFactory<Program> factory) : IClas
     }
 
     [Fact]
+    public async Task ChangeCustomer_AsAccountant_CrossBranch_Returns403()
+    {
+        // Seed a branch-1 requisition at CostingPending
+        var (reqId, _, swapId) = await SeedRequisitionAtCostingPending();
+
+        // Create a branch-2 accountant via admin
+        var adminLogin = await LoginAsync("admin@test.com", "Admin@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminLogin.AccessToken);
+
+        var acct2Email = $"acct2cc-{Guid.NewGuid():N}"[..22] + "@test.com";
+        var createUser = await _client.PostAsJsonAsync("/api/users", new
+        {
+            Name = "Branch2 Accountant CC",
+            Email = acct2Email,
+            Password = "Test@1234",
+            Role = 3, // UserRole.Accountant
+            BranchId = 2
+        });
+        createUser.EnsureSuccessStatusCode();
+
+        // Branch-2 accountant attempts to change customer on branch-1 requisition → 403
+        var acct2Login = await LoginAsync(acct2Email, "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", acct2Login.AccessToken);
+
+        var patch = await _client.PatchAsJsonAsync($"/api/requisitions/{reqId}/customer", new
+        {
+            CustomerId = swapId,
+            Reason = (string?)null
+        });
+
+        patch.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
     public async Task GetCustomerHistory_EmptyWhenNoChanges_Returns200()
     {
         var (reqId, _, _) = await SeedRequisitionAtCostingPending();

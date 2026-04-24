@@ -94,7 +94,7 @@ export default function RequisitionListPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Requisitions</h1>
-        {(role === "SalesPerson" || role === "Admin") && (
+        {(role === "SalesPerson" || role === "Admin" || role === "Accountant") && (
           <Button onClick={() => navigate("/requisitions/new")}>New Requisition</Button>
         )}
       </div>

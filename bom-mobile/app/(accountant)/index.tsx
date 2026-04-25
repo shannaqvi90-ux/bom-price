@@ -1,4 +1,5 @@
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { useCallback, useState } from "react";
+import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { MotiView } from "moti";
 import * as Haptics from "expo-haptics";
@@ -31,6 +32,16 @@ export default function AccountantDashboard() {
   const insets = useSafeAreaInsets();
   const statsQ = useAccountantDashboardStats();
   const unreadQ = useUnreadCount();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([statsQ.refetch(), unreadQ.refetch()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [statsQ, unreadQ]);
 
   const onLogout = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -77,15 +88,23 @@ export default function AccountantDashboard() {
           paddingBottom: Math.max(insets.bottom, 16) + 16,
         }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#1e40af"
+            colors={["#1e40af"]}
+          />
+        }
       >
-        {/* Hero: Pending Costing */}
+        {/* Hero: Costing to complete (CostingPending + CostingInProgress combined) */}
         <MotiView
           from={{ opacity: 0, translateY: 14 }}
           animate={{ opacity: 1, translateY: 0 }}
           transition={{ type: "spring", damping: 14, stiffness: 140, delay: 100 }}
         >
           <Pressable
-            onPress={() => navTo("/(accountant)/list?onlyStatus=CostingPending")}
+            onPress={() => navTo("/(accountant)/list?chip=Costing")}
             style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}
           >
             <View
@@ -102,14 +121,14 @@ export default function AccountantDashboard() {
               }}
             >
               <Text style={{ color: "#dbeafe", fontSize: 13, fontWeight: "600", letterSpacing: 0.5 }}>
-                PENDING COSTING
+                COSTING TO COMPLETE
               </Text>
               <View style={{ flexDirection: "row", alignItems: "flex-end", marginTop: 10 }}>
                 {statsQ.isPending ? (
                   <Skeleton width={80} height={44} radius={8} style={{ backgroundColor: "rgba(255,255,255,0.25)" }} />
                 ) : (
                   <Text style={{ color: "#ffffff", fontSize: 44, fontWeight: "800", letterSpacing: -1 }}>
-                    {statsQ.data?.pendingCosting ?? 0}
+                    {(statsQ.data?.pendingCosting ?? 0) + (statsQ.data?.inProgress ?? 0)}
                   </Text>
                 )}
                 <Text style={{ color: "#dbeafe", fontSize: 15, marginLeft: 10, marginBottom: 8 }}>
@@ -121,21 +140,12 @@ export default function AccountantDashboard() {
           </Pressable>
         </MotiView>
 
-        {/* Row: In Progress */}
-        <KpiRow
-          label="IN PROGRESS"
-          value={statsQ.data?.inProgress ?? 0}
-          loading={statsQ.isPending}
-          delay={180}
-          onPress={() => navTo("/(accountant)/list?onlyStatus=CostingInProgress")}
-        />
-
         {/* Row: Submitted This Month */}
         <KpiRow
           label="MD-BOUND THIS MONTH"
           value={statsQ.data?.submittedThisMonth ?? 0}
           loading={statsQ.isPending}
-          delay={260}
+          delay={180}
           onPress={() => navTo(`/(accountant)/list?chip=MD%20review&from=${monthStart}`)}
         />
 
@@ -144,7 +154,7 @@ export default function AccountantDashboard() {
           label="AWAITING MD"
           value={statsQ.data?.awaitingMd ?? 0}
           loading={statsQ.isPending}
-          delay={340}
+          delay={260}
           onPress={() => navTo("/(accountant)/list?chip=MD%20review")}
         />
 
@@ -152,7 +162,7 @@ export default function AccountantDashboard() {
         <MotiView
           from={{ opacity: 0, translateY: 14 }}
           animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: "spring", damping: 14, stiffness: 140, delay: 420 }}
+          transition={{ type: "spring", damping: 14, stiffness: 140, delay: 340 }}
         >
           <Pressable
             onPress={() => navTo("/notifications")}
@@ -196,7 +206,7 @@ export default function AccountantDashboard() {
         <MotiView
           from={{ opacity: 0, translateY: 14 }}
           animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: "spring", damping: 14, stiffness: 140, delay: 500 }}
+          transition={{ type: "spring", damping: 14, stiffness: 140, delay: 420 }}
         >
           <View
             style={{

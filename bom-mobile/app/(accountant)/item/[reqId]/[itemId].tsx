@@ -205,7 +205,7 @@ export default function CostingForm() {
     return (
       <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
         <Stack.Screen options={{ headerShown: false }} />
-        <ScreenHeader title="Costing" />
+        <ScreenHeader title="Costing" back />
         <ErrorBanner message="Failed to load costing data" onRetry={() => reviewQ.refetch()} />
       </View>
     );
@@ -214,7 +214,7 @@ export default function CostingForm() {
     return (
       <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
         <Stack.Screen options={{ headerShown: false }} />
-        <ScreenHeader title="Costing" />
+        <ScreenHeader title="Costing" back />
         <ErrorBanner message="Item not found in this requisition" onRetry={() => router.back()} />
       </View>
     );
@@ -226,6 +226,7 @@ export default function CostingForm() {
       <Stack.Screen options={{ headerShown: false }} />
       <ScreenHeader
         title={item.itemDescription}
+        back
         right={<SaveStatusBadge status={saveStatus} onRetry={() => fireSave(formRef.current)} />}
       />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 96 }}>

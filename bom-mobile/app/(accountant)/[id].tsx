@@ -85,7 +85,7 @@ export default function AccountantReqDetail() {
     return (
       <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
         <Stack.Screen options={{ headerShown: false }} />
-        <ScreenHeader title="Requisition" right={HeaderRight} />
+        <ScreenHeader title="Requisition" back right={HeaderRight} />
         <ErrorBanner
           message="Failed to load requisition"
           onRetry={() => { reqQ.refetch(); costQ.refetch(); }}
@@ -100,7 +100,7 @@ export default function AccountantReqDetail() {
   return (
     <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScreenHeader title={r.refNo} right={HeaderRight} />
+      <ScreenHeader title={r.refNo} back right={HeaderRight} />
       <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <Text style={{ fontSize: 14, color: "#64748b", flex: 1 }} numberOfLines={1}>

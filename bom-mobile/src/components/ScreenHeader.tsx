@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { MotiView } from "moti";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface Props {
@@ -8,10 +9,13 @@ interface Props {
   title: string;
   count?: number;
   right?: ReactNode;
+  /** When true, render a back arrow that calls router.back(). */
+  back?: boolean;
 }
 
-export function ScreenHeader({ label, title, count, right }: Props) {
+export function ScreenHeader({ label, title, count, right, back }: Props) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   return (
     <MotiView
       from={{ opacity: 0, translateY: -10 }}
@@ -26,6 +30,21 @@ export function ScreenHeader({ label, title, count, right }: Props) {
         justifyContent: "space-between",
       }}
     >
+      {back ? (
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={10}
+          style={({ pressed }) => ({
+            marginRight: 10,
+            paddingVertical: 4,
+            paddingHorizontal: 8,
+            borderRadius: 8,
+            backgroundColor: pressed ? "#e2e8f0" : "transparent",
+          })}
+        >
+          <Text style={{ fontSize: 22, color: "#1e40af", fontWeight: "600" }}>‹</Text>
+        </Pressable>
+      ) : null}
       <View style={{ flex: 1, flexShrink: 1 }}>
         {label ? (
           <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748b" }}>

@@ -26,8 +26,9 @@ export function ScreenHeader({ label, title, count, right, back }: Props) {
         paddingTop: insets.top + 12,
         paddingBottom: 14,
         flexDirection: "row",
-        alignItems: "flex-end",
+        alignItems: "center",
         justifyContent: "space-between",
+        gap: 12,
       }}
     >
       {back ? (
@@ -35,7 +36,6 @@ export function ScreenHeader({ label, title, count, right, back }: Props) {
           onPress={() => router.back()}
           hitSlop={12}
           style={({ pressed }) => ({
-            marginRight: 14,
             width: 40,
             height: 40,
             borderRadius: 20,

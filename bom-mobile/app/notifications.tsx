@@ -19,7 +19,9 @@ function pathForNotification(
 ): string | null {
   if (n.referenceType !== "QuotationRequest") return null;
   if (role === "ManagingDirector") return `/(md)/${n.referenceId}`;
-  if (role === "SalesPerson") return `/(sales)/${n.referenceId}`;
+  if (role === "SalesPerson")      return `/(sales)/${n.referenceId}`;
+  if (role === "Accountant")       return `/(accountant)/${n.referenceId}`;
+  // BomCreator: deferred — no (bom) route group exists yet (V2.3+)
   return null;
 }
 

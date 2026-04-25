@@ -1,4 +1,5 @@
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { useCallback, useState } from "react";
+import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { MotiView } from "moti";
 import * as Haptics from "expo-haptics";
@@ -24,6 +25,16 @@ export default function MdDashboard() {
   const insets = useSafeAreaInsets();
   const pendingQ = useMdPendingCount();
   const unreadQ = useUnreadCount();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([pendingQ.refetch(), unreadQ.refetch()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [pendingQ, unreadQ]);
 
   const onLogout = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -63,6 +74,14 @@ export default function MdDashboard() {
           paddingBottom: Math.max(insets.bottom, 16) + 16,
         }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#1e40af"
+            colors={["#1e40af"]}
+          />
+        }
       >
         {/* Primary: Pending approvals */}
         <MotiView

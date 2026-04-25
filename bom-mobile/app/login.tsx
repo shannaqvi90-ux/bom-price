@@ -18,7 +18,7 @@ import { Input } from "@/components/Input";
 import { loginSchema, type LoginInput } from "@/utils/validation";
 import { useAuth } from "@/auth/AuthContext";
 
-const ALLOWED_ROLES = ["SalesPerson", "ManagingDirector"] as const;
+const ALLOWED_ROLES = ["SalesPerson", "ManagingDirector", "Accountant"] as const;
 
 export default function Login() {
   const { login } = useAuth();
@@ -36,7 +36,7 @@ export default function Login() {
       const u = await login(values.email, values.password);
       if (!ALLOWED_ROLES.includes(u.role as typeof ALLOWED_ROLES[number])) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        Alert.alert("Not allowed", "This app is for Sales and Management only.");
+        Alert.alert("Not allowed", "This app is for Sales, Accountant, and Management only.");
         return;
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

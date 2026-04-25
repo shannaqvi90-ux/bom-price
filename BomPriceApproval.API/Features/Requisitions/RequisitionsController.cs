@@ -26,6 +26,8 @@ public class RequisitionsController(
     public async Task<IActionResult> GetAll(
         [FromQuery(Name = "status")] string[]? statuses = null,
         [FromQuery] string? search = null,
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null,
         [FromQuery] int? page = null,
         [FromQuery] int? pageSize = null)
     {
@@ -60,6 +62,19 @@ public class RequisitionsController(
             query = query.Where(q =>
                 EF.Functions.ILike(q.RefNo, $"%{term}%") ||
                 EF.Functions.ILike(q.Customer.Name, $"%{term}%"));
+        }
+
+        if (from.HasValue)
+        {
+            var fromUtc = DateTime.SpecifyKind(from.Value.Date, DateTimeKind.Utc);
+            query = query.Where(q => q.UpdatedAt >= fromUtc);
+        }
+
+        if (to.HasValue)
+        {
+            // Exclusive upper bound: < to + 1 day (includes the entire to-date)
+            var toUtc = DateTime.SpecifyKind(to.Value.Date.AddDays(1), DateTimeKind.Utc);
+            query = query.Where(q => q.UpdatedAt < toUtc);
         }
 
         var projected = query.OrderByDescending(q => q.CreatedAt)

@@ -33,16 +33,22 @@ export function ScreenHeader({ label, title, count, right, back }: Props) {
       {back ? (
         <Pressable
           onPress={() => router.back()}
-          hitSlop={10}
+          hitSlop={12}
           style={({ pressed }) => ({
-            marginRight: 10,
-            paddingVertical: 4,
-            paddingHorizontal: 8,
-            borderRadius: 8,
-            backgroundColor: pressed ? "#e2e8f0" : "transparent",
+            marginRight: 14,
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: pressed ? "#dbeafe" : "#eff6ff",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "#bfdbfe",
           })}
         >
-          <Text style={{ fontSize: 22, color: "#1e40af", fontWeight: "600" }}>‹</Text>
+          <Text style={{ fontSize: 22, color: "#1e40af", fontWeight: "800", lineHeight: 24 }}>
+            ←
+          </Text>
         </Pressable>
       ) : null}
       <View style={{ flex: 1, flexShrink: 1 }}>

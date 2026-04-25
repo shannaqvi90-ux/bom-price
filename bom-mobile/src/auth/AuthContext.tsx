@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { getAccess, getRefresh, getUser, clearTokens, saveUser } from "./secureStore";
 import { login as apiLogin, logout as apiLogout } from "@/api/auth";
-import type { AuthUser } from "@/types/api";
+import type { AuthUser, UserRole } from "@/types/api";
 
 interface AuthState {
   user: AuthUser | null;
@@ -60,7 +60,7 @@ export function useAuth() {
   return ctx;
 }
 
-export function useRoleGuard(allowed: Array<"SalesPerson" | "ManagingDirector">) {
+export function useRoleGuard(allowed: Array<UserRole>) {
   const { user, loading } = useAuth();
   const allowedSet = allowed as readonly string[];
   if (loading) return { status: "loading" as const };

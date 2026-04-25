@@ -54,8 +54,12 @@ export function CustomerSwapSheet({
 
   return (
     <Modal visible={open} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.4)", justifyContent: "flex-end" }}>
-        <View
+      <Pressable
+        onPress={onClose}
+        style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.4)", justifyContent: "flex-end" }}
+      >
+        <Pressable
+          onPress={() => {}}
           style={{
             backgroundColor: "#ffffff",
             borderTopLeftRadius: 18,
@@ -124,7 +128,7 @@ export function CustomerSwapSheet({
           {/* Error banner */}
           {error ? (
             <View style={{ marginTop: 12 }}>
-              <ErrorBanner message={error} onRetry={() => setError(null)} />
+              <ErrorBanner message={error} onRetry={handleSave} />
             </View>
           ) : null}
 
@@ -143,8 +147,8 @@ export function CustomerSwapSheet({
               />
             </View>
           </View>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }

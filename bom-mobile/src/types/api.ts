@@ -393,3 +393,10 @@ export interface UpdateUserRequest {
   branchId: number | null;
   isActive: boolean;
 }
+
+export interface AccountantDashboardStats {
+  pendingCosting: number;
+  inProgress: number;
+  submittedThisMonth: number;
+  awaitingMd: number;
+}

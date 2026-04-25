@@ -1,63 +1,34 @@
-import { useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  RefreshControl,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
-import { useInfiniteQuery } from "@tanstack/react-query";
 import { MotiView } from "moti";
 import * as Haptics from "expo-haptics";
-import { api } from "@/api/client";
-import { requisitionKeys } from "@/api/requisitions";
-import { RequisitionCard } from "@/components/RequisitionCard";
-import { ScreenHeader } from "@/components/ScreenHeader";
-import { EmptyState } from "@/components/EmptyState";
-import { ErrorBanner } from "@/components/ErrorBanner";
-import { LoadingView } from "@/components/LoadingView";
-import { NotificationBell } from "@/components/NotificationBell";
-import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/auth/AuthContext";
-import type { RequisitionListItem } from "@/types/api";
+import { useAccountantDashboardStats } from "@/api/stats";
+import { useUnreadCount } from "@/api/notifications";
+import { ScreenHeader } from "@/components/ScreenHeader";
+import { Skeleton } from "@/components/Skeleton";
+import { NotificationBell } from "@/components/NotificationBell";
 
-const PAGE_SIZE = 20;
-const STAGGER_CAP = 20;
-const PENDING_STATUSES = ["CostingPending", "CostingInProgress"];
-
-function useAccountantPending(search: string) {
-  return useInfiniteQuery({
-    queryKey: [...requisitionKeys.list(), "accountantPending", { search }],
-    queryFn: async ({ pageParam }) => {
-      const params = new URLSearchParams();
-      for (const s of PENDING_STATUSES) params.append("status", s);
-      if (search) params.append("search", search);
-      params.append("page", String(pageParam));
-      params.append("pageSize", String(PAGE_SIZE));
-
-      const res = await api.get<RequisitionListItem[]>(
-        `/api/requisitions?${params.toString()}`
-      );
-      return res.data;
-    },
-    initialPageParam: 1,
-    getNextPageParam: (lastPage, allPages) =>
-      lastPage.length < PAGE_SIZE ? undefined : allPages.length + 1,
-  });
+function greet(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  if (h < 21) return "Good evening";
+  return "Good night";
 }
 
-export default function AccountantPending() {
+function startOfMonthIsoDate(): string {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+}
+
+export default function AccountantDashboard() {
   const router = useRouter();
-  const { logout } = useAuth();
-
-  const [searchInput, setSearchInput] = useState("");
-  const debouncedSearch = useDebouncedValue(searchInput, 300);
-
-  const q = useAccountantPending(debouncedSearch);
-  const items: RequisitionListItem[] = q.data?.pages.flat() ?? [];
+  const { user, logout } = useAuth();
+  const insets = useSafeAreaInsets();
+  const statsQ = useAccountantDashboardStats();
+  const unreadQ = useUnreadCount();
 
   const onLogout = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -65,10 +36,7 @@ export default function AccountantPending() {
     router.replace("/login");
   };
 
-  const handleItemPress = (item: RequisitionListItem) => {
-    Haptics.selectionAsync();
-    router.push(`/(accountant)/${item.id}`);
-  };
+  const firstName = (user?.name ?? "").split(" ")[0] || "there";
 
   const HeaderRight = (
     <>
@@ -82,113 +50,217 @@ export default function AccountantPending() {
           backgroundColor: "#f1f5f9",
         }}
       >
-        <Text style={{ color: "#1e40af", fontSize: 15, fontWeight: "600" }}>
-          Log out
-        </Text>
+        <Text style={{ color: "#1e40af", fontSize: 15, fontWeight: "600" }}>Log out</Text>
       </Pressable>
     </>
   );
+
+  const navTo = (path: string) => {
+    Haptics.selectionAsync();
+    router.push(path as Parameters<typeof router.push>[0]);
+  };
+
+  const monthStart = startOfMonthIsoDate();
 
   return (
     <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <ScreenHeader
-        label="ACCOUNTANT"
-        title="Pending Costing"
-        count={items.length}
-        right={HeaderRight}
-      />
+      <ScreenHeader label="ACCOUNTANT" title={`${greet()}, ${firstName} 👋`} right={HeaderRight} />
 
-      <View style={{ paddingHorizontal: 14, paddingTop: 8, paddingBottom: 2, backgroundColor: "#f8fafc" }}>
-        <TextInput
-          value={searchInput}
-          onChangeText={setSearchInput}
-          placeholder="Search REQ-xxxx or customer..."
-          placeholderTextColor="#94a3b8"
-          style={{
-            borderWidth: 1,
-            borderColor: "#cbd5e1",
-            backgroundColor: "#ffffff",
-            borderRadius: 10,
-            paddingHorizontal: 12,
-            paddingVertical: 9,
-            fontSize: 14,
-            color: "#0f172a",
-          }}
-          autoCorrect={false}
-          autoCapitalize="none"
-        />
-      </View>
-
-      {q.isPending ? (
-        <LoadingView variant="list" />
-      ) : q.isError ? (
-        <View style={{ padding: 16 }}>
-          <ErrorBanner
-            message={q.error instanceof Error ? q.error.message : "Failed to load requisitions"}
-            onRetry={() => q.refetch()}
-          />
-        </View>
-      ) : (
-        <FlatList
-          data={items}
-          keyExtractor={(r) => String(r.id)}
-          contentContainerStyle={{ padding: 14, paddingTop: 6 }}
-          overScrollMode="never"
-          bounces={false}
-          onEndReached={() => { if (q.hasNextPage && !q.isFetchingNextPage) q.fetchNextPage(); }}
-          onEndReachedThreshold={0.5}
-          refreshControl={
-            <RefreshControl
-              refreshing={q.isRefetching && !q.isFetchingNextPage}
-              onRefresh={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                q.refetch();
-              }}
-              tintColor="#1e40af"
-              colors={["#1e40af"]}
-            />
-          }
-          renderItem={({ item, index }) => (
-            <MotiView
-              from={{ opacity: 0, translateY: 14 }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={{
-                type: "spring",
-                damping: 16,
-                stiffness: 140,
-                delay: index < STAGGER_CAP ? 200 + index * 80 : 0,
+      <ScrollView
+        contentContainerStyle={{
+          padding: 16,
+          paddingTop: 4,
+          paddingBottom: Math.max(insets.bottom, 16) + 16,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Hero: Pending Costing */}
+        <MotiView
+          from={{ opacity: 0, translateY: 14 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: "spring", damping: 14, stiffness: 140, delay: 100 }}
+        >
+          <Pressable
+            onPress={() => navTo("/(accountant)/list?onlyStatus=CostingPending")}
+            style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}
+          >
+            <View
+              style={{
+                backgroundColor: "#1e40af",
+                borderRadius: 16,
+                padding: 20,
+                marginBottom: 12,
+                shadowColor: "#1e40af",
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.3,
+                shadowRadius: 12,
+                elevation: 6,
               }}
             >
-              <RequisitionCard item={item} onPress={(_id) => handleItemPress(item)} />
-            </MotiView>
-          )}
-          ListFooterComponent={
-            q.isFetchingNextPage ? (
-              <View style={{ paddingVertical: 20, alignItems: "center" }}>
-                <ActivityIndicator color="#1e40af" />
-                <Text style={{ color: "#64748b", fontSize: 14, marginTop: 8 }}>Loading more…</Text>
+              <Text style={{ color: "#dbeafe", fontSize: 13, fontWeight: "600", letterSpacing: 0.5 }}>
+                PENDING COSTING
+              </Text>
+              <View style={{ flexDirection: "row", alignItems: "flex-end", marginTop: 10 }}>
+                {statsQ.isPending ? (
+                  <Skeleton width={80} height={44} radius={8} style={{ backgroundColor: "rgba(255,255,255,0.25)" }} />
+                ) : (
+                  <Text style={{ color: "#ffffff", fontSize: 44, fontWeight: "800", letterSpacing: -1 }}>
+                    {statsQ.data?.pendingCosting ?? 0}
+                  </Text>
+                )}
+                <Text style={{ color: "#dbeafe", fontSize: 15, marginLeft: 10, marginBottom: 8 }}>
+                  to review
+                </Text>
               </View>
-            ) : q.hasNextPage === false && items.length > PAGE_SIZE ? (
-              <View style={{ paddingVertical: 20, alignItems: "center" }}>
-                <Text style={{ color: "#94a3b8", fontSize: 13 }}>End of list · {items.length} total</Text>
-              </View>
-            ) : null
-          }
-          ListEmptyComponent={
-            <EmptyState
-              title="All caught up"
-              hint={
-                debouncedSearch
-                  ? `No matches for "${debouncedSearch}"`
-                  : "No requisitions awaiting costing."
-              }
-              icon={<Text style={{ fontSize: 32 }}>✓</Text>}
-            />
-          }
+              <Text style={{ color: "#dbeafe", fontSize: 14, marginTop: 14 }}>Tap to open the list →</Text>
+            </View>
+          </Pressable>
+        </MotiView>
+
+        {/* Row: In Progress */}
+        <KpiRow
+          label="IN PROGRESS"
+          value={statsQ.data?.inProgress ?? 0}
+          loading={statsQ.isPending}
+          delay={180}
+          onPress={() => navTo("/(accountant)/list?onlyStatus=CostingInProgress")}
         />
-      )}
+
+        {/* Row: Submitted This Month */}
+        <KpiRow
+          label="SUBMITTED THIS MONTH"
+          value={statsQ.data?.submittedThisMonth ?? 0}
+          loading={statsQ.isPending}
+          delay={260}
+          onPress={() => navTo(`/(accountant)/list?chip=MD%20review&from=${monthStart}`)}
+        />
+
+        {/* Row: Awaiting MD */}
+        <KpiRow
+          label="AWAITING MD"
+          value={statsQ.data?.awaitingMd ?? 0}
+          loading={statsQ.isPending}
+          delay={340}
+          onPress={() => navTo("/(accountant)/list?chip=MD%20review")}
+        />
+
+        {/* Notifications card */}
+        <MotiView
+          from={{ opacity: 0, translateY: 14 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: "spring", damping: 14, stiffness: 140, delay: 420 }}
+        >
+          <Pressable
+            onPress={() => navTo("/notifications")}
+            style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}
+          >
+            <View
+              style={{
+                backgroundColor: "#ffffff",
+                borderWidth: 1,
+                borderColor: "#e2e8f0",
+                borderRadius: 14,
+                padding: 16,
+                marginTop: 4,
+                marginBottom: 12,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: "#64748b", fontSize: 13, fontWeight: "600", letterSpacing: 0.5 }}>
+                  NOTIFICATIONS
+                </Text>
+                <View style={{ flexDirection: "row", alignItems: "baseline", marginTop: 4 }}>
+                  {unreadQ.isPending ? (
+                    <Skeleton width={40} height={24} />
+                  ) : (
+                    <Text style={{ color: "#0f172a", fontSize: 22, fontWeight: "700" }}>
+                      {unreadQ.data ?? 0}
+                    </Text>
+                  )}
+                  <Text style={{ color: "#64748b", fontSize: 14, marginLeft: 8 }}>unread</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 28 }}>🔔</Text>
+            </View>
+          </Pressable>
+        </MotiView>
+
+        {/* User card */}
+        <MotiView
+          from={{ opacity: 0, translateY: 14 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: "spring", damping: 14, stiffness: 140, delay: 500 }}
+        >
+          <View
+            style={{
+              backgroundColor: "#ffffff",
+              borderWidth: 1,
+              borderColor: "#e2e8f0",
+              borderRadius: 14,
+              padding: 16,
+            }}
+          >
+            <Text style={{ color: "#64748b", fontSize: 13, fontWeight: "600", letterSpacing: 0.5 }}>
+              SIGNED IN AS
+            </Text>
+            <Text style={{ color: "#0f172a", fontSize: 17, fontWeight: "700", marginTop: 6 }}>
+              {user?.name ?? "—"}
+            </Text>
+            <Text style={{ color: "#64748b", fontSize: 14, marginTop: 2 }}>Accountant</Text>
+          </View>
+        </MotiView>
+      </ScrollView>
     </View>
+  );
+}
+
+function KpiRow({
+  label, value, loading, delay, onPress,
+}: {
+  label: string;
+  value: number;
+  loading: boolean;
+  delay: number;
+  onPress: () => void;
+}) {
+  return (
+    <MotiView
+      from={{ opacity: 0, translateY: 14 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ type: "spring", damping: 14, stiffness: 140, delay }}
+    >
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}
+      >
+        <View
+          style={{
+            backgroundColor: "#ffffff",
+            borderWidth: 1,
+            borderColor: "#e2e8f0",
+            borderRadius: 14,
+            padding: 14,
+            marginBottom: 8,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <Text style={{ color: "#64748b", fontSize: 12, fontWeight: "700", letterSpacing: 0.5 }}>
+            {label}
+          </Text>
+          {loading ? (
+            <Skeleton width={36} height={26} />
+          ) : (
+            <Text style={{ color: "#0f172a", fontSize: 22, fontWeight: "800" }}>{value}</Text>
+          )}
+        </View>
+      </Pressable>
+    </MotiView>
   );
 }

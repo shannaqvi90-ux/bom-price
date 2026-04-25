@@ -96,6 +96,33 @@ public class ChangeCustomerTests(WebApplicationFactory<Program> factory) : IClas
     }
 
     [Fact]
+    public async Task ChangeCustomer_AsAccountant_InCostingInProgress_UpdatesCustomer()
+    {
+        var (reqId, _, swapId) = await SeedRequisitionAtCostingPending();
+
+        // Accountant starts costing on the only item to flip the requisition to CostingInProgress.
+        var acct = await LoginAsync("sara@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", acct.AccessToken);
+
+        var detail = (await _client.GetFromJsonAsync<RequisitionDetailFull>($"/api/requisitions/{reqId}"))!;
+        var reqItemId = detail.Items[0].Id;
+
+        var startCosting = await _client.PostAsync($"/api/costing/{reqId}/items/{reqItemId}/start", null);
+        startCosting.EnsureSuccessStatusCode();
+
+        var patch = await _client.PatchAsJsonAsync($"/api/requisitions/{reqId}/customer", new
+        {
+            CustomerId = swapId,
+            Reason = "Accountant correction during costing"
+        });
+
+        patch.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var after = (await _client.GetFromJsonAsync<RequisitionDetailFull>($"/api/requisitions/{reqId}"))!;
+        after.CustomerId.Should().Be(swapId);
+    }
+
+    [Fact]
     public async Task ChangeCustomer_SameCustomer_Returns400()
     {
         var (reqId, origId, _) = await SeedRequisitionAtCostingPending();
@@ -265,6 +292,35 @@ public class ChangeCustomerTests(WebApplicationFactory<Program> factory) : IClas
         history[0].OldCustomerName.Should().NotBeNullOrEmpty();
         history[0].NewCustomerName.Should().NotBeNullOrEmpty();
         history[0].ChangedByUserName.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task GetCustomerHistory_AsBomCreatorOtherBranch_Returns403()
+    {
+        // Seed branch-1 requisition (ali = branch 1, bob = branch 1)
+        var (reqId, _, _) = await SeedRequisitionAtCostingPending();
+
+        // Admin creates a branch-2 BomCreator
+        var adminLogin = await LoginAsync("admin@test.com", "Admin@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminLogin.AccessToken);
+
+        var bom2Email = $"bom2hist-{Guid.NewGuid():N}"[..22] + "@test.com";
+        var createUser = await _client.PostAsJsonAsync("/api/users", new
+        {
+            Name = "Branch2 BomCreator History",
+            Email = bom2Email,
+            Password = "Test@1234",
+            Role = 2, // UserRole.BomCreator
+            BranchId = 2
+        });
+        createUser.EnsureSuccessStatusCode();
+
+        // Branch-2 BomCreator tries to view branch-1 req's customer-history → 403 (CanAccess scopes BomCreator to own branch)
+        var bom2Login = await LoginAsync(bom2Email, "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bom2Login.AccessToken);
+
+        var resp = await _client.GetAsync($"/api/requisitions/{reqId}/customer-history");
+        resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     [Fact]

@@ -84,6 +84,36 @@ public class CustomersCrudTests(WebApplicationFactory<Program> factory) : IClass
     }
 
     [Fact]
+    public async Task Create_AsBomCreator_Returns403()
+    {
+        var login = await LoginAsync("bob@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
+
+        var code = $"BOMCUST-{Guid.NewGuid():N}".Substring(0, 20);
+        var resp = await _client.PostAsJsonAsync("/api/customers", new
+        {
+            Code = code, Name = "Bom Co", Address = "", Email = "", PhoneNumber = ""
+        });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Create_AsManagingDirector_Returns403()
+    {
+        var login = await LoginAsync("md@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
+
+        var code = $"MDCUST-{Guid.NewGuid():N}".Substring(0, 20);
+        var resp = await _client.PostAsJsonAsync("/api/customers", new
+        {
+            Code = code, Name = "MD Co", Address = "", Email = "", PhoneNumber = ""
+        });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
     public async Task Update_AsAccountant_Succeeds()
     {
         var adminLogin = await LoginAsync("admin@test.com", "Admin@1234");

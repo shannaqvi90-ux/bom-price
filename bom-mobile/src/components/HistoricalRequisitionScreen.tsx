@@ -17,7 +17,13 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { useAuth } from "@/auth/AuthContext";
 import { formatShortDate } from "@/utils/dates";
 
-export function HistoricalRequisitionScreen({ requisitionId }: { requisitionId: number }) {
+export function HistoricalRequisitionScreen({
+  requisitionId,
+  routePrefix = "/(md)",
+}: {
+  requisitionId: number;
+  routePrefix?: string;
+}) {
   const router = useRouter();
   const { logout } = useAuth();
   const id = requisitionId;
@@ -188,7 +194,7 @@ export function HistoricalRequisitionScreen({ requisitionId }: { requisitionId: 
                 <Pressable
                   onPress={() => {
                     Haptics.selectionAsync();
-                    router.push(`/(md)/item/${r.id}/${it.id}`);
+                    router.push(`${routePrefix}/item/${r.id}/${it.id}` as Parameters<typeof router.push>[0]);
                   }}
                   style={({ pressed }) => ({
                     marginTop: 10,

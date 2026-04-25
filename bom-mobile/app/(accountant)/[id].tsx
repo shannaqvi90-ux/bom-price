@@ -11,6 +11,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { ItemCardShell } from "@/components/ItemCardShell";
 import { StatusPill } from "@/components/StatusPill";
 import { NotificationBell } from "@/components/NotificationBell";
+import { HistoricalRequisitionScreen } from "@/components/HistoricalRequisitionScreen";
 
 const COST_STATUS_COLORS: Record<string, { bg: string; fg: string; label: string }> = {
   NotStarted: { bg: "#f1f5f9", fg: "#64748b", label: "Not started" },
@@ -106,6 +107,13 @@ export default function AccountantReqDetail() {
   }
 
   const r = reqQ.data;
+
+  // Smart-route branch: read-only historical for non-active statuses.
+  const isCostingActive =
+    r.status === "CostingPending" || r.status === "CostingInProgress";
+  if (!isCostingActive) {
+    return <HistoricalRequisitionScreen requisitionId={id} routePrefix="/(accountant)" />;
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>

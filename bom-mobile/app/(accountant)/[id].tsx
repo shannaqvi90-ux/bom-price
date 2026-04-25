@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -12,6 +12,7 @@ import { ItemCardShell } from "@/components/ItemCardShell";
 import { StatusPill } from "@/components/StatusPill";
 import { NotificationBell } from "@/components/NotificationBell";
 import { HistoricalRequisitionScreen } from "@/components/HistoricalRequisitionScreen";
+import { CustomerSwapSheet } from "@/components/CustomerSwapSheet";
 
 const COST_STATUS_COLORS: Record<string, { bg: string; fg: string; label: string }> = {
   NotStarted: { bg: "#f1f5f9", fg: "#64748b", label: "Not started" },
@@ -67,6 +68,7 @@ export default function AccountantReqDetail() {
   // (last item submitted). Plan §7 / smoke M10.
   const allSubmitted = costQ.data?.items.every((i) => i.costStatus === "Submitted") ?? false;
   const reqStatus = reqQ.data?.status;
+  const [swapOpen, setSwapOpen] = useState(false);
   useEffect(() => {
     if (allSubmitted && reqStatus === "MdReview") {
       const t = setTimeout(() => router.replace("/(accountant)"), 2000);
@@ -127,6 +129,25 @@ export default function AccountantReqDetail() {
           {r.status !== "Draft" ? <StatusPill status={r.status} /> : null}
         </View>
 
+        {r.status === "CostingPending" || r.status === "CostingInProgress" ? (
+          <View style={{ marginTop: 4, marginBottom: 8 }}>
+            <Pressable
+              onPress={() => setSwapOpen(true)}
+              style={{
+                alignSelf: "flex-start",
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: "#1e40af",
+                backgroundColor: "#eff6ff",
+              }}
+            >
+              <Text style={{ color: "#1e40af", fontWeight: "600", fontSize: 13 }}>Change customer</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         {allSubmitted && r.status === "MdReview" ? (
           <View
             style={{
@@ -171,6 +192,14 @@ export default function AccountantReqDetail() {
           );
         })}
       </ScrollView>
+
+      <CustomerSwapSheet
+        requisitionId={id}
+        currentCustomerId={r.customerId}
+        currentCustomerName={r.customerName}
+        open={swapOpen}
+        onClose={() => setSwapOpen(false)}
+      />
     </View>
   );
 }

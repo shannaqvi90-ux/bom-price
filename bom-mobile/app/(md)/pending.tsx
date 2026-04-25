@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { MotiView } from "moti";
 import * as Haptics from "expo-haptics";
 import { api } from "@/api/client";
@@ -52,11 +52,22 @@ function useMdRequisitions(statuses: string[], search: string) {
 export default function MdRequisitionsList() {
   const router = useRouter();
   const { logout } = useAuth();
+  const qc = useQueryClient();
+  const listRef = useRef<FlatList<RequisitionListItem>>(null);
 
   const [activeChip, setActiveChip] = useState<ChipLabel>("MD review");
   const [searchInput, setSearchInput] = useState("");
   const debouncedSearch = useDebouncedValue(searchInput, 300);
   const statuses = CHIP_TO_STATUSES[activeChip];
+
+  const handleChipChange = (label: ChipLabel) => {
+    // Reset cached pages so the new filter starts at page 1 (20 items),
+    // not the same pageCount the previous filter had loaded — useInfiniteQuery
+    // otherwise refetches all previously-loaded pages with the new key.
+    qc.removeQueries({ queryKey: [...requisitionKeys.list(), "mdList"] });
+    setActiveChip(label);
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+  };
 
   const q = useMdRequisitions(statuses, debouncedSearch);
   const items: RequisitionListItem[] = q.data?.pages.flat() ?? [];
@@ -129,7 +140,7 @@ export default function MdRequisitionsList() {
         />
       </View>
 
-      <StatusChipRow active={activeChip} onChange={setActiveChip} />
+      <StatusChipRow active={activeChip} onChange={handleChipChange} />
 
       {q.isPending ? (
         <LoadingView variant="list" />
@@ -142,6 +153,7 @@ export default function MdRequisitionsList() {
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           data={items}
           keyExtractor={(r) => String(r.id)}
           contentContainerStyle={{ padding: 14, paddingTop: 6 }}

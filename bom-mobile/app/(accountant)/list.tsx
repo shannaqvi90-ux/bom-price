@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { MotiView } from "moti";
 import * as Haptics from "expo-haptics";
 import { api } from "@/api/client";
@@ -75,6 +75,7 @@ function useAccountantList(
 export default function AccountantList() {
   const router = useRouter();
   const { logout } = useAuth();
+  const qc = useQueryClient();
   const search = useLocalSearchParams<{
     chip?: string; onlyStatus?: string; from?: string; to?: string; search?: string;
   }>();
@@ -86,13 +87,19 @@ export default function AccountantList() {
   const [onlyStatus, setOnlyStatus] = useState<RequisitionStatus | null>(initialOnlyStatus);
   const [searchInput, setSearchInput] = useState(search.search ?? "");
   const debouncedSearch = useDebouncedValue(searchInput, 300);
+  const listRef = useRef<FlatList<RequisitionListItem>>(null);
 
   // onlyStatus overrides chip's status set when present
   const statuses: string[] = onlyStatus ? [onlyStatus] : CHIP_TO_STATUSES[activeChip];
 
   const handleChipChange = (label: ChipLabel) => {
+    // Reset cached pages so the new filter starts at page 1 (20 items),
+    // not the same pageCount the previous filter had loaded — useInfiniteQuery
+    // otherwise refetches all previously-loaded pages with the new key.
+    qc.removeQueries({ queryKey: [...requisitionKeys.list(), "accountantList"] });
     setActiveChip(label);
     setOnlyStatus(null); // selecting a chip clears the dashboard's onlyStatus pin
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
   };
 
   const q = useAccountantList(statuses, debouncedSearch, search.from, search.to);
@@ -166,6 +173,7 @@ export default function AccountantList() {
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           data={items}
           keyExtractor={(r) => String(r.id)}
           contentContainerStyle={{ padding: 14, paddingTop: 6 }}

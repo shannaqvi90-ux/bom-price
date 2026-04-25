@@ -10,6 +10,10 @@ public class AccountantDashboardTests(WebApplicationFactory<Program> factory) : 
 {
     private readonly HttpClient _client = factory.CreateClient();
 
+    // Note: spec §8.1 lists "Empty DB → all zeros" as a required case, but the
+    // shared WebApplicationFactory always seeds and parallel tests dirty state,
+    // so the case is not asserted here. The >= 0 baseline assertions cover the spirit.
+
     private record LoginResponse(string AccessToken, string RefreshToken);
 
     private async Task<string> LoginAsync(string email, string password)

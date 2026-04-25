@@ -1,7 +1,9 @@
 import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from "@tanstack/react-query";
 import { api } from "./client";
 import type {
+  ChangeCustomerRequest,
   CreateRequisitionRequest,
+  CustomerChangeHistoryEntry,
   RequisitionDetail,
   RequisitionListItem,
 } from "@/types/api";
@@ -53,3 +55,30 @@ export function useCreateRequisition() {
 }
 
 export const requisitionKeys = keys;
+
+export function useChangeCustomer(requisitionId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ChangeCustomerRequest) =>
+      api.patch(`/api/requisitions/${requisitionId}/customer`, body).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.detail(requisitionId) });
+      qc.invalidateQueries({ queryKey: ["requisition", requisitionId, "customerHistory"] });
+      qc.invalidateQueries({ queryKey: keys.list() });
+    },
+  });
+}
+
+export function useCustomerChangeHistory(requisitionId: number, enabled = true) {
+  return useQuery({
+    queryKey: ["requisition", requisitionId, "customerHistory"],
+    queryFn: async () => {
+      const res = await api.get<CustomerChangeHistoryEntry[]>(
+        `/api/requisitions/${requisitionId}/customer-history`,
+      );
+      return res.data;
+    },
+    enabled: enabled && requisitionId > 0,
+    staleTime: 30_000,
+  });
+}

@@ -400,3 +400,22 @@ export interface AccountantDashboardStats {
   submittedThisMonth: number;
   awaitingMd: number;
 }
+
+// ─── Customer change (Feature X) ─────────────────────────────────────────────
+
+export interface ChangeCustomerRequest {
+  customerId: number;
+  reason?: string | null;
+}
+
+export interface CustomerChangeHistoryEntry {
+  id: number;
+  oldCustomerId: number;
+  oldCustomerName: string;
+  newCustomerId: number;
+  newCustomerName: string;
+  changedByUserId: number;
+  changedByUserName: string;
+  changedAt: string; // ISO datetime
+  reason: string | null;
+}

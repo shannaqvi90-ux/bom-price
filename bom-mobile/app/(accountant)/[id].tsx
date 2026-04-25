@@ -62,6 +62,17 @@ export default function AccountantReqDetail() {
     }
   }, [reqQ.data?.status, costQ.data, startItem]);
 
+  // Auto-pop to pending list 2 s after the requisition flips to MdReview
+  // (last item submitted). Plan §7 / smoke M10.
+  const allSubmitted = costQ.data?.items.every((i) => i.costStatus === "Submitted") ?? false;
+  const reqStatus = reqQ.data?.status;
+  useEffect(() => {
+    if (allSubmitted && reqStatus === "MdReview") {
+      const t = setTimeout(() => router.replace("/(accountant)"), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [allSubmitted, reqStatus, router]);
+
   const onLogout = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await logout();
@@ -95,7 +106,6 @@ export default function AccountantReqDetail() {
   }
 
   const r = reqQ.data;
-  const allSubmitted = costQ.data.items.every((i) => i.costStatus === "Submitted");
 
   return (
     <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>

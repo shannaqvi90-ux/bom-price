@@ -9,10 +9,12 @@ import {
 } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMdReview, useApproveRequisition, useRejectRequisition } from "@/api/approvals";
+import { useCustomerChangeHistory } from "@/api/requisitions";
 import { ApprovalItemRow } from "@/components/ApprovalItemRow";
 import { BomDetailSheet } from "@/components/BomDetailSheet";
 import { Button } from "@/components/Button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { CustomerChangeHistorySheet } from "@/components/CustomerChangeHistorySheet";
 import { RejectReasonPrompt } from "@/components/RejectReasonPrompt";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { LoadingView } from "@/components/LoadingView";
@@ -40,6 +42,9 @@ export default function MdApprovalDetail() {
     reqItemId: number;
     desc: string;
   } | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyQ = useCustomerChangeHistory(id, true);
+  const historyCount = historyQ.data?.length ?? 0;
 
   // Initialize price state from backend once data arrives
   useEffect(() => {
@@ -205,6 +210,23 @@ export default function MdApprovalDetail() {
               );
             })()}
             <Text style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>Customer</Text>
+            {historyCount > 0 ? (
+              <Pressable
+                onPress={() => setHistoryOpen(true)}
+                style={{
+                  alignSelf: "flex-start",
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 999,
+                  backgroundColor: "#fef3c7",
+                  marginTop: 8,
+                }}
+              >
+                <Text style={{ color: "#92400e", fontSize: 12, fontWeight: "600" }}>
+                  Customer changed ({historyCount})
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
 
           {/* Readiness warning */}
@@ -337,6 +359,12 @@ export default function MdApprovalDetail() {
           itemDescription={bomSheetItem.desc}
         />
       ) : null}
+
+      <CustomerChangeHistorySheet
+        requisitionId={id}
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+      />
     </View>
   );
 }

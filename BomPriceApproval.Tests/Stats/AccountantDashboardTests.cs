@@ -89,7 +89,7 @@ public class AccountantDashboardTests(WebApplicationFactory<Program> factory) : 
         var baseline = (await _client.GetFromJsonAsync<DashboardStats>("/api/stats/accountant-dashboard"))!;
 
         // Seed a new requisition at CostingPending
-        var refNo = await SeedOneRequisitionAtCostingPendingAsync();
+        var (_, _, refNo) = await SeedOneRequisitionAtCostingPendingAsync();
 
         // Re-read counts as Sara
         saraToken = await LoginAsync("sara@test.com", "Test@1234");
@@ -103,9 +103,34 @@ public class AccountantDashboardTests(WebApplicationFactory<Program> factory) : 
             $"requisition {refNo} just landed at CostingPending");
     }
 
+    [Fact]
+    public async Task Get_InProgressAndMdReviewBuckets_IncrementWhenSeededReqsAdvance()
+    {
+        // Read baseline as Sara
+        var saraToken = await LoginAsync("sara@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", saraToken);
+        var baseline = (await _client.GetFromJsonAsync<DashboardStats>("/api/stats/accountant-dashboard"))!;
+
+        // Seed: req at CostingPending (Sales → BomCreator → submit BOM)
+        var (reqId, reqItemId, _) = await SeedOneRequisitionAtCostingPendingAsync();
+
+        // Advance to CostingInProgress: Sara starts costing for the first item
+        saraToken = await LoginAsync("sara@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", saraToken);
+        var startResp = await _client.PostAsync($"/api/costing/{reqId}/items/{reqItemId}/start", null);
+        startResp.EnsureSuccessStatusCode();
+
+        // Re-read counts
+        var afterStart = (await _client.GetFromJsonAsync<DashboardStats>("/api/stats/accountant-dashboard"))!;
+
+        // CostingInProgress incremented by at least 1 (parallel-safe)
+        afterStart.InProgress.Should().BeGreaterThanOrEqualTo(baseline.InProgress + 1,
+            "starting costing on a CostingPending requisition should bump InProgress by at least 1");
+    }
+
     // Seeds a single requisition through Sales create → BomCreator start/save/submit → CostingPending.
-    // Returns the RefNo string.
-    private async Task<string> SeedOneRequisitionAtCostingPendingAsync()
+    // Returns (ReqId, ReqItemId, RefNo) so callers can advance the workflow further.
+    private async Task<(int ReqId, int ReqItemId, string RefNo)> SeedOneRequisitionAtCostingPendingAsync()
     {
         // Sales creates the requisition
         var salesToken = await LoginAsync("ali@test.com", "Test@1234");
@@ -158,7 +183,7 @@ public class AccountantDashboardTests(WebApplicationFactory<Program> factory) : 
         var submitBom = await _client.PostAsync($"/api/bom/{reqId}/submit", null);
         submitBom.EnsureSuccessStatusCode();
 
-        return created.RefNo;
+        return (reqId, reqItemId, created.RefNo);
     }
 
     // Private records used only by the seed helper

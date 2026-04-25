@@ -19,8 +19,10 @@ function greet(): string {
 }
 
 function startOfMonthIsoDate(): string {
+  // UTC start-of-month — must match backend's `new DateTime(UtcNow.Year, UtcNow.Month, 1, Utc)`.
+  // Building in LOCAL time and ISO-formatting causes a mismatch near month boundaries.
   const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
 }
 
 export default function AccountantDashboard() {
@@ -130,7 +132,7 @@ export default function AccountantDashboard() {
 
         {/* Row: Submitted This Month */}
         <KpiRow
-          label="SUBMITTED THIS MONTH"
+          label="MD-BOUND THIS MONTH"
           value={statsQ.data?.submittedThisMonth ?? 0}
           loading={statsQ.isPending}
           delay={260}

@@ -305,6 +305,27 @@ export interface CostingReviewResponse {
   items: CostingItemResponse[];
 }
 
+// Request body shapes (used by Accountant V2.1 mobile hooks).
+export interface RawMaterialCostInput {
+  bomLineId: number;
+  costPerKg: number;
+  currencyCode: string;
+}
+
+export interface SaveCostingDraftRequest {
+  lines: RawMaterialCostInput[];
+  landedCostType: LandedCostType;
+  landedCostValue: number;
+  fohAmount: number;
+}
+
+export interface SubmitCostingRequest {
+  rawMaterialCosts: RawMaterialCostInput[];
+  landedCostType: LandedCostType;
+  landedCostValue: number;
+  fohAmount: number;
+}
+
 // ─── MD Review ───────────────────────────────────────────────────────────────
 
 export interface MdReviewItemCost {

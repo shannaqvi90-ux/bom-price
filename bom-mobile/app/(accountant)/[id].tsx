@@ -3,7 +3,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useCostingReview, useStartCostingItem } from "@/api/costing";
-import { useRequisitionDetail } from "@/api/requisitions";
+import { useCustomerChangeHistory, useRequisitionDetail } from "@/api/requisitions";
 import { useAuth } from "@/auth/AuthContext";
 import { LoadingView } from "@/components/LoadingView";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -13,6 +13,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { NotificationBell } from "@/components/NotificationBell";
 import { HistoricalRequisitionScreen } from "@/components/HistoricalRequisitionScreen";
 import { CustomerSwapSheet } from "@/components/CustomerSwapSheet";
+import { CustomerChangeHistorySheet } from "@/components/CustomerChangeHistorySheet";
 
 const COST_STATUS_COLORS: Record<string, { bg: string; fg: string; label: string }> = {
   NotStarted: { bg: "#f1f5f9", fg: "#64748b", label: "Not started" },
@@ -69,6 +70,9 @@ export default function AccountantReqDetail() {
   const allSubmitted = costQ.data?.items.every((i) => i.costStatus === "Submitted") ?? false;
   const reqStatus = reqQ.data?.status;
   const [swapOpen, setSwapOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyQ = useCustomerChangeHistory(id, true);
+  const historyCount = historyQ.data?.length ?? 0;
   useEffect(() => {
     if (allSubmitted && reqStatus === "MdReview") {
       const t = setTimeout(() => router.replace("/(accountant)"), 2000);
@@ -145,6 +149,23 @@ export default function AccountantReqDetail() {
             >
               <Text style={{ color: "#1e40af", fontWeight: "600", fontSize: 13 }}>Change customer</Text>
             </Pressable>
+            {historyCount > 0 ? (
+              <Pressable
+                onPress={() => setHistoryOpen(true)}
+                style={{
+                  alignSelf: "flex-start",
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 999,
+                  backgroundColor: "#fef3c7",
+                  marginTop: 6,
+                }}
+              >
+                <Text style={{ color: "#92400e", fontSize: 12, fontWeight: "600" }}>
+                  Customer changed ({historyCount})
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         ) : null}
 
@@ -199,6 +220,11 @@ export default function AccountantReqDetail() {
         currentCustomerName={r.customerName}
         open={swapOpen}
         onClose={() => setSwapOpen(false)}
+      />
+      <CustomerChangeHistorySheet
+        requisitionId={id}
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
       />
     </View>
   );

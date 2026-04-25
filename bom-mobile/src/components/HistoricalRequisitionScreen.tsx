@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { useRequisitionDetail } from "@/api/requisitions";
+import { useCustomerChangeHistory, useRequisitionDetail } from "@/api/requisitions";
 import { downloadRequisitionPdf } from "@/api/pdf";
 import { Button } from "@/components/Button";
 import { StatusPill } from "@/components/StatusPill";
@@ -14,6 +14,7 @@ import { SectionCard } from "@/components/SectionCard";
 import { ItemCardShell } from "@/components/ItemCardShell";
 import { ItemPriceBlock } from "@/components/ItemPriceBlock";
 import { NotificationBell } from "@/components/NotificationBell";
+import { CustomerChangeHistorySheet } from "@/components/CustomerChangeHistorySheet";
 import { useAuth } from "@/auth/AuthContext";
 import { formatShortDate } from "@/utils/dates";
 
@@ -30,6 +31,9 @@ export function HistoricalRequisitionScreen({
   const q = useRequisitionDetail(id);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyQ = useCustomerChangeHistory(id, true);
+  const historyCount = historyQ.data?.length ?? 0;
 
   const onLogout = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -139,6 +143,23 @@ export function HistoricalRequisitionScreen({
           <Text style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
             {r.branchName} · {r.currencyCode} · Created {formatShortDate(r.createdAt)}
           </Text>
+          {historyCount > 0 ? (
+            <Pressable
+              onPress={() => setHistoryOpen(true)}
+              style={{
+                alignSelf: "flex-start",
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 999,
+                backgroundColor: "#fef3c7",
+                marginTop: 6,
+              }}
+            >
+              <Text style={{ color: "#92400e", fontSize: 12, fontWeight: "600" }}>
+                Customer changed ({historyCount})
+              </Text>
+            </Pressable>
+          ) : null}
         </SectionCard>
 
         <Text
@@ -245,6 +266,12 @@ export function HistoricalRequisitionScreen({
           </Text>
         ) : null}
       </ScrollView>
+
+      <CustomerChangeHistorySheet
+        requisitionId={id}
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+      />
     </View>
   );
 }

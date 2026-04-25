@@ -157,7 +157,9 @@ The list query (`useInfiniteQuery` in `list.tsx`) accepts `from` and `to` from U
 
 **Route:** `(accountant)/index.tsx`
 
-**Layout (matches V2.0 MD pattern):**
+> **Post-smoke deviation (2026-04-26, commit `14cb05e`):** the originally-spec'd 4 KPIs were reduced to 3 at the user's request — "Pending Costing" + "In Progress" merged into a single hero "COSTING TO COMPLETE" because the Accountant treats both as the same workflow goal ("kaam jo complete karna hai"). Backend stats endpoint still returns all 4 fields (`pendingCosting`, `inProgress`, `submittedThisMonth`, `awaitingMd`); mobile sums the first two on the client. Layout + tap table below reflect the as-shipped behavior.
+
+**Layout:**
 
 ```
 ┌──────────────────────────────────────┐
@@ -165,15 +167,12 @@ The list query (`useInfiniteQuery` in `list.tsx`) accepts `from` and `to` from U
 │ Good morning, Sara 👋                │
 ├──────────────────────────────────────┤
 │ ╔══════════════════════════════════╗ │
-│ ║ PENDING COSTING                  ║ │  Hero card (#1e40af blue)
-│ ║ 5                  to review     ║ │  → /(accountant)/list?onlyStatus=CostingPending
-│ ║ Tap to open list →               ║ │
+│ ║ COSTING TO COMPLETE              ║ │  Hero card (#1e40af blue)
+│ ║ 7                  to review     ║ │  → /(accountant)/list?chip=Costing
+│ ║ Tap to open list →               ║ │  count = pendingCosting + inProgress
 │ ╚══════════════════════════════════╝ │
 │ ┌──────────────────────────────────┐ │
-│ │ IN PROGRESS                  2   │ │  → /(accountant)/list?onlyStatus=CostingInProgress
-│ └──────────────────────────────────┘ │
-│ ┌──────────────────────────────────┐ │
-│ │ SUBMITTED THIS MONTH        23   │ │  → /(accountant)/list?chip=MD%20review&from=YYYY-MM-01
+│ │ MD-BOUND THIS MONTH         23   │ │  → /(accountant)/list?chip=MD%20review&from=YYYY-MM-01
 │ └──────────────────────────────────┘ │
 │ ┌──────────────────────────────────┐ │
 │ │ AWAITING MD                  7   │ │  → /(accountant)/list?chip=MD%20review
@@ -190,16 +189,15 @@ The list query (`useInfiniteQuery` in `list.tsx`) accepts `from` and `to` from U
 └──────────────────────────────────────┘
 ```
 
-**KPI tap behavior (exact filter — Q4=C):**
+**KPI tap behavior:**
 
 | KPI | Tap target |
 |---|---|
-| Pending Costing | `(accountant)/list?onlyStatus=CostingPending` |
-| In Progress | `(accountant)/list?onlyStatus=CostingInProgress` |
-| Submitted This Month | `(accountant)/list?chip=MD%20review&from=<start-of-current-month>` |
+| Costing to complete | `(accountant)/list?chip=Costing` |
+| MD-bound this month | `(accountant)/list?chip=MD%20review&from=<start-of-current-month>` |
 | Awaiting MD | `(accountant)/list?chip=MD%20review` |
 
-`onlyStatus` is a list-screen query param that overrides the chip's status set with a single status, used when the dashboard wants a precise filter that the chip groupings cannot express.
+`onlyStatus` is a list-screen query param that overrides the chip's status set with a single status. After the dashboard merge above, no in-app tap target spawns `?onlyStatus=`; the parameter is reserved for future deep-link use cases (e.g. notification → exact-status filter).
 
 **Loading:** `<Skeleton>` for each count (matches existing MD pattern in `(md)/index.tsx`).
 
@@ -395,20 +393,20 @@ UI gating is **defense in depth** — the source of truth is server enforcement.
 
 Smoke checklist (also reproduced in the implementation plan):
 
-**Dashboard:**
+**Dashboard:** *(updated 2026-04-26 to match the post-merge 3-KPI layout in §5.1)*
 
 1. Login as Accountant → land on dashboard. ScreenHeader shows correct greeting + role label. NotificationBell + Log out visible.
-2. Hero card "Pending Costing" shows correct count from `useAccountantDashboardStats()`. Tap → list filtered to `onlyStatus=CostingPending`, count matches.
-3. Each of the 3 stacked KPIs taps to the right list filter (verify URL params + visible items).
-4. "Submitted This Month" → list shows MdReview items submitted on/after start of current month only; cross-check by changing device date if practical.
-5. Pull-to-refresh on dashboard refetches all 4 counts.
+2. Hero card "COSTING TO COMPLETE" shows correct count = `pendingCosting + inProgress` from `useAccountantDashboardStats()`. Tap → list filtered to `chip=Costing` (combined Pending + InProgress).
+3. Each of the 2 stacked KPIs (MD-bound this month, Awaiting MD) taps to the right list filter (verify URL params + visible items).
+4. "MD-bound this month" → list shows MdReview items submitted on/after start of current month UTC only.
+5. Pull-to-refresh on dashboard refetches all 4 backend stats fields + unread count.
 
 **All-list:**
 
 6. Default chip = "Costing", count matches Pending+InProgress total.
 7. Each chip ("All", "BOM", "Costing", "MD review", "Approved", "Rejected") changes the result set correctly.
 8. Search filters in combination with chip.
-9. `onlyStatus` URL param overrides the chip; switching chip clears it.
+9. ~~`onlyStatus` URL param overrides the chip; switching chip clears it.~~ **N/A in current design (2026-04-26).** The dashboard merge (§5.1) eliminated the only in-app paths that emitted `?onlyStatus=`. The `onlyStatus` parser is retained in `list.tsx` for future deep-link callers (e.g. notifications), so this item only matters when a future feature reintroduces an `onlyStatus` URL.
 10. Pagination: scrolling beyond 20 items triggers `fetchNextPage`.
 
 **Smart `[id]`:**

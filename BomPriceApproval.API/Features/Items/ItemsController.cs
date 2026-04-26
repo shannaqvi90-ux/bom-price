@@ -26,9 +26,6 @@ public class ItemsController(AppDbContext db) : ControllerBase
     {
         var query = db.Items.AsQueryable();
 
-        // JWT-based branch isolation: branch-assigned users only see their own branch
-        if (CurrentBranchId.HasValue) query = query.Where(i => i.BranchId == CurrentBranchId);
-
         // V23a: SP role server-enforces FinishedGood-only (defense-in-depth — UI also filters)
         if (CurrentRole == "SalesPerson")
         {
@@ -39,9 +36,12 @@ public class ItemsController(AppDbContext db) : ControllerBase
             query = query.Where(i => i.Type == parsed);
         }
 
-        // Optional branchId filter (useful for admin users who are not auto-scoped)
+        // Branch scoping: an explicit ?branchId= param takes precedence (SP cross-branch picker).
+        // Without it, JWT-bound users fall back to their own branch.
         if (branchId.HasValue)
             query = query.Where(i => i.BranchId == branchId.Value);
+        else if (CurrentBranchId.HasValue)
+            query = query.Where(i => i.BranchId == CurrentBranchId);
 
         if (!includeInactive)
             query = query.Where(i => i.IsActive);

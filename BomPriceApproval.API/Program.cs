@@ -223,6 +223,11 @@ using (var scope = app.Services.CreateScope())
             {
                 Code = "RM-PE100", Description = "PE100 Resin (Raw Material)",
                 Type = ItemType.RawMaterial, BranchId = fujairahBranchId, IsActive = true
+            },
+            new Item
+            {
+                Code = "PVC-30", Description = "PVC Bottle 30ml",
+                Type = ItemType.FinishedGood, BranchId = 2, IsActive = true
             }
         );
 
@@ -281,6 +286,17 @@ using (var scope = app.Services.CreateScope())
             });
             await db.SaveChangesAsync();
         }
+    }
+
+    // V2.3-A: add branch-2 finished-good item so SP cross-branch test (Task 8) has data
+    if (!db.Items.Any(i => i.Code == "PVC-30"))
+    {
+        db.Items.Add(new Item
+        {
+            Code = "PVC-30", Description = "PVC Bottle 30ml",
+            Type = ItemType.FinishedGood, BranchId = 2, IsActive = true
+        });
+        await db.SaveChangesAsync();
     }
 }
 

@@ -220,5 +220,41 @@ public class AdminController(AppDbContext db, AdminAuditLogger audit, Notificati
         return Ok(new { req.Id, req.Status });
     }
 
+    [HttpPost("requisitions/{id}/unlock-costing")]
+    public async Task<IActionResult> UnlockCosting(int id, [FromBody] UnlockCostingRequest? body)
+    {
+        if (body is null)
+            return BadRequest(new { error = "Request body is required" });
+        if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Length < 5)
+            return BadRequest(new { error = "Reason is required (min 5 chars)" });
+
+        var req = await db.QuotationRequests.FindAsync(id);
+        if (req is null) return NotFound();
+
+        if (!Infrastructure.Authorization.AdminOverrideAuthorization.CanUnlockCosting(req.Status))
+            return BadRequest(new { error = $"Cannot unlock costing from status {req.Status}" });
+
+        var before = new { req.Id, req.Status };
+        req.Status = RequisitionStatus.CostingInProgress;
+        var after = new { req.Id, req.Status };
+
+        audit.Log(CurrentUserId, AdminActionType.UnlockCosting, "Requisition", id, body.Reason, before, after);
+        await db.SaveChangesAsync();
+
+        var recipientIds = await db.Users
+            .Where(u => (u.BranchId == req.BranchId && u.Role == UserRole.Accountant) || u.Role == UserRole.ManagingDirector)
+            .Select(u => u.Id).ToListAsync();
+
+        foreach (var uid in recipientIds)
+        {
+            await notify.SendAsync(uid,
+                $"Costing for requisition {req.RefNo} has been unlocked by Admin",
+                referenceId: id,
+                referenceType: nameof(NotificationType.CostingUnlocked));
+        }
+
+        return Ok(new { req.Id, req.Status });
+    }
+
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
 }

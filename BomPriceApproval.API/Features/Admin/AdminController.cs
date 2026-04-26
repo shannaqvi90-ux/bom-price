@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using BomPriceApproval.API.Domain.Enums;
 using BomPriceApproval.API.Infrastructure.Data;
+using BomPriceApproval.API.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +11,7 @@ namespace BomPriceApproval.API.Features.Admin;
 [ApiController]
 [Route("api/admin")]
 [Authorize(Roles = "Admin")]
-public class AdminController(AppDbContext db) : ControllerBase
+public class AdminController(AppDbContext db, AdminAuditLogger audit, NotificationService notify) : ControllerBase
 {
     [HttpGet("audit-log")]
     public async Task<IActionResult> GetAuditLog(
@@ -52,6 +53,56 @@ public class AdminController(AppDbContext db) : ControllerBase
             .ToListAsync();
 
         return Ok(new AuditLogPagedResponse(items, total, page, pageSize));
+    }
+
+    [HttpDelete("requisitions/{id}")]
+    public async Task<IActionResult> DeleteRequisition(int id, [FromBody] DeleteRequisitionRequest body)
+    {
+        if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Length < 5)
+            return BadRequest(new { error = "Reason is required (min 5 chars)" });
+
+        var req = await db.QuotationRequests
+            .Include(r => r.Items)
+            .FirstOrDefaultAsync(r => r.Id == id);
+        if (req is null) return NotFound();
+
+        var snapshot = new
+        {
+            req.Id,
+            req.RefNo,
+            req.Status,
+            req.SalesPersonId,
+            req.BranchId,
+            req.CustomerId,
+            ItemCount = req.Items.Count,
+            BomHeaderCount = await db.BomHeaders.CountAsync(b => b.RequisitionItem.QuotationRequestId == id),
+            ApprovalCount = await db.QuotationApprovals.CountAsync(a => a.QuotationRequestId == id)
+        };
+
+        var spId = req.SalesPersonId;
+        var branchId = req.BranchId;
+        var refNo = req.RefNo;
+
+        db.QuotationRequests.Remove(req);
+        audit.Log(CurrentUserId, AdminActionType.DeleteRequisition, "Requisition", id, body.Reason, snapshot, after: (object?)null);
+        await db.SaveChangesAsync();
+
+        // Notify SP + branch BomCreators/Accountants + all MDs
+        var recipientIds = await db.Users
+            .Where(u => (u.Id == spId)
+                || (u.BranchId == branchId && (u.Role == UserRole.BomCreator || u.Role == UserRole.Accountant))
+                || u.Role == UserRole.ManagingDirector)
+            .Select(u => u.Id)
+            .ToListAsync();
+
+        foreach (var uid in recipientIds)
+        {
+            await notify.SendAsync(uid, $"Requisition {refNo} was deleted by Admin",
+                referenceId: id,
+                referenceType: nameof(NotificationType.RequisitionDeleted));
+        }
+
+        return NoContent();
     }
 
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");

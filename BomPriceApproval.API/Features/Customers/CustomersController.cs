@@ -43,7 +43,12 @@ public class CustomersController(AppDbContext db) : ControllerBase
     {
         var c = await db.Customers.Include(c => c.SalesPerson).FirstOrDefaultAsync(x => x.Id == id);
         if (c is null) return NotFound();
-        if (CurrentRole == "SalesPerson" && c.SalesPersonId != CurrentUserId) return Forbid();
+        if (CurrentRole == "SalesPerson")
+        {
+            var me = await db.Users.FirstAsync(u => u.Id == CurrentUserId);
+            var visibleIds = SalesAuthorization.VisibleSalesPersonIds(me, db);
+            if (!c.SalesPersonId.HasValue || !visibleIds.Contains(c.SalesPersonId.Value)) return Forbid();
+        }
         return Ok(new CustomerResponse(
             c.Id, c.Code, c.Name, c.Address, c.Email, c.PhoneNumber,
             c.SalesPersonId, c.SalesPerson?.Name, c.CreatedByUserId));
@@ -86,7 +91,12 @@ public class CustomersController(AppDbContext db) : ControllerBase
     {
         var c = await db.Customers.FindAsync(id);
         if (c is null) return NotFound();
-        if (CurrentRole == "SalesPerson" && c.SalesPersonId != CurrentUserId) return Forbid();
+        if (CurrentRole == "SalesPerson")
+        {
+            var me = await db.Users.FirstAsync(u => u.Id == CurrentUserId);
+            var visibleIds = SalesAuthorization.VisibleSalesPersonIds(me, db);
+            if (!c.SalesPersonId.HasValue || !visibleIds.Contains(c.SalesPersonId.Value)) return Forbid();
+        }
 
         c.Name = req.Name;
         c.Address = req.Address;

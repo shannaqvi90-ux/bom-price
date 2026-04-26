@@ -113,13 +113,22 @@ public class RequisitionsController(
     {
         var query = db.QuotationRequests.AsQueryable();
 
-        query = CurrentRole switch
+        if (CurrentRole == "SalesPerson")
         {
-            "SalesPerson" => query.Where(q => q.SalesPersonId == CurrentUserId),
-            "BomCreator" => query.Where(q => q.BranchId == CurrentBranchId),
-            _ when CurrentBranchId.HasValue => query.Where(q => q.BranchId == CurrentBranchId),
-            _ => query
-        };
+            var me = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == CurrentUserId);
+            if (me is null) return Forbid();
+            var visibleSpIds = SalesAuthorization.VisibleSalesPersonIds(me, db);
+            query = query.Where(q => visibleSpIds.Contains(q.SalesPersonId));
+        }
+        else
+        {
+            query = CurrentRole switch
+            {
+                "BomCreator" => query.Where(q => q.BranchId == CurrentBranchId),
+                _ when CurrentBranchId.HasValue => query.Where(q => q.BranchId == CurrentBranchId),
+                _ => query
+            };
+        }
 
         if (!string.IsNullOrWhiteSpace(status) &&
             Enum.TryParse<RequisitionStatus>(status, ignoreCase: true, out var parsedStatus))
@@ -237,9 +246,22 @@ public class RequisitionsController(
                 .Field("Items", $"Items not in branch {branchId}: {string.Join(", ", mismatched.Select(m => m.Code))}")
                 .Return();
 
-        var customerExists = await db.Customers.AnyAsync(c =>
-            c.Id == req.CustomerId &&
-            (!CurrentBranchId.HasValue || CurrentRole == "Accountant" || c.SalesPersonId == CurrentUserId));
+        bool customerExists;
+        if (CurrentRole == "SalesPerson")
+        {
+            var spUser = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == CurrentUserId);
+            if (spUser is null) return Forbid();
+            var visibleSpIds = SalesAuthorization.VisibleSalesPersonIds(spUser, db);
+            customerExists = await db.Customers.AnyAsync(c =>
+                c.Id == req.CustomerId &&
+                c.SalesPersonId.HasValue && visibleSpIds.Contains(c.SalesPersonId.Value));
+        }
+        else
+        {
+            customerExists = await db.Customers.AnyAsync(c =>
+                c.Id == req.CustomerId &&
+                (!CurrentBranchId.HasValue || CurrentRole == "Accountant" || c.SalesPersonId == CurrentUserId));
+        }
         if (!customerExists)
             return Validation
                 .Detail("Customer not found.")
@@ -712,13 +734,23 @@ public class RequisitionsController(
         return Ok(entries);
     }
 
-    private bool CanAccess(QuotationRequest q) => CurrentRole switch
+    private bool CanAccess(QuotationRequest q)
     {
-        "SalesPerson" => q.SalesPersonId == CurrentUserId,
-        "BomCreator" => q.BranchId == CurrentBranchId,
-        "Accountant" => true,
-        "ManagingDirector" => true,
-        "Admin" => true,
-        _ => false
-    };
+        if (CurrentRole == "SalesPerson")
+        {
+            var currentUser = db.Users.FirstOrDefault(u => u.Id == CurrentUserId);
+            if (currentUser is null) return false;
+            var visibleIds = SalesAuthorization.VisibleSalesPersonIds(currentUser, db);
+            return visibleIds.Contains(q.SalesPersonId);
+        }
+
+        return CurrentRole switch
+        {
+            "BomCreator" => q.BranchId == CurrentBranchId,
+            "Accountant" => true,
+            "ManagingDirector" => true,
+            "Admin" => true,
+            _ => false
+        };
+    }
 }

@@ -12,6 +12,7 @@ import { BranchChangeHistoryModal } from "./BranchChangeHistoryModal";
 import { useAuthStore } from "@/store/authStore";
 import { formatRelative } from "@/utils/date";
 import type { RequisitionDetail, RequisitionStatus, UserRole } from "@/types/api";
+import { AdminActionsCard } from "@/features/admin/AdminActionsCard";
 
 function LabeledValue({ label, value }: { label: string; value: string | number | null | undefined }) {
   return (
@@ -246,6 +247,8 @@ export default function RequisitionDetailPage() {
           </table>
         </CardContent>
       </Card>
+
+      <AdminActionsCard requisition={{ id: r.id, refNo: r.refNo, status: r.status }} />
 
       <CustomerHistoryModal
         open={historyOpen}

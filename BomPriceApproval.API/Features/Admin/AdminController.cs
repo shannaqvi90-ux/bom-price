@@ -108,5 +108,43 @@ public class AdminController(AppDbContext db, AdminAuditLogger audit, Notificati
         return NoContent();
     }
 
+    [HttpPost("requisitions/{id}/rollback-status")]
+    public async Task<IActionResult> RollbackStatus(int id, [FromBody] RollbackStatusRequest? body)
+    {
+        if (body is null)
+            return BadRequest(new { error = "Request body is required" });
+        if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Length < 5)
+            return BadRequest(new { error = "Reason is required (min 5 chars)" });
+
+        var req = await db.QuotationRequests.FindAsync(id);
+        if (req is null) return NotFound();
+
+        if (!Infrastructure.Authorization.AdminOverrideAuthorization.CanRollback(req.Status, body.TargetStatus))
+            return BadRequest(new { error = $"Cannot rollback {req.Status} → {body.TargetStatus}" });
+
+        var before = new { req.Id, req.Status };
+        req.Status = body.TargetStatus;
+        var after = new { req.Id, req.Status };
+
+        audit.Log(CurrentUserId, AdminActionType.RollbackStatus, "Requisition", id, body.Reason, before, after);
+        await db.SaveChangesAsync();
+
+        var recipientIds = await db.Users
+            .Where(u => u.Id == req.SalesPersonId
+                || (u.BranchId == req.BranchId && (u.Role == UserRole.BomCreator || u.Role == UserRole.Accountant))
+                || u.Role == UserRole.ManagingDirector)
+            .Select(u => u.Id).ToListAsync();
+
+        foreach (var uid in recipientIds)
+        {
+            await notify.SendAsync(uid,
+                $"Requisition {req.RefNo} status rolled back to {req.Status} by Admin",
+                referenceId: id,
+                referenceType: nameof(NotificationType.StatusRolledBack));
+        }
+
+        return Ok(new { req.Id, req.Status });
+    }
+
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
 }

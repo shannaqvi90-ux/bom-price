@@ -42,6 +42,7 @@ describe("ProtectedRoute", () => {
       userId: 1,
       name: "A",
       branchId: null,
+      mustChangePassword: false,
     });
     renderAt("/admin");
     expect(screen.getByText("ADMIN")).toBeInTheDocument();
@@ -55,6 +56,7 @@ describe("ProtectedRoute", () => {
       userId: 1,
       name: "A",
       branchId: 1,
+      mustChangePassword: false,
     });
     renderAt("/admin", ["Admin"]);
     expect(screen.getByText("DASH")).toBeInTheDocument();
@@ -68,6 +70,7 @@ describe("ProtectedRoute", () => {
       userId: 1,
       name: "A",
       branchId: null,
+      mustChangePassword: false,
     });
     renderAt("/admin", ["Admin"]);
     expect(screen.getByText("ADMIN")).toBeInTheDocument();

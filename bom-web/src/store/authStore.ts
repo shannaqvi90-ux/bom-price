@@ -9,6 +9,7 @@ interface AuthState {
   refreshToken: string | null;
   setSession: (res: LoginResponse) => void;
   updateTokens: (accessToken: string, refreshToken: string) => void;
+  clearMustChangePassword: () => void;
   logout: () => void;
   isAuthenticated: () => boolean;
   initAuth: () => void;
@@ -29,10 +30,15 @@ export const useAuthStore = create<AuthState>()(
             name: res.name,
             role: res.role,
             branchId: res.branchId,
+            mustChangePassword: res.mustChangePassword,
           },
         }),
       updateTokens: (accessToken, refreshToken) =>
         set({ accessToken, refreshToken }),
+      clearMustChangePassword: () =>
+        set((s) => ({
+          user: s.user ? { ...s.user, mustChangePassword: false } : null,
+        })),
       logout: () =>
         set({ user: null, accessToken: null, refreshToken: null }),
       isAuthenticated: () => get().accessToken !== null && get().user !== null,

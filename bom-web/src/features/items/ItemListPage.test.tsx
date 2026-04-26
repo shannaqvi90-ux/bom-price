@@ -34,7 +34,7 @@ describe("ItemListPage", () => {
   it("shows Add, Import, and Import from Ledger buttons for Admin", async () => {
     useAuthStore.getState().setSession({
       accessToken: "at", refreshToken: "rt",
-      role: "Admin", userId: 1, name: "Admin", branchId: null,
+      role: "Admin", userId: 1, name: "Admin", branchId: null, mustChangePassword: false,
     });
     vi.mocked(api.get).mockResolvedValue(emptyItems);
 
@@ -48,7 +48,7 @@ describe("ItemListPage", () => {
   it("shows only Add Item for SalesPerson", async () => {
     useAuthStore.getState().setSession({
       accessToken: "at", refreshToken: "rt",
-      role: "SalesPerson", userId: 2, name: "Ali", branchId: 1,
+      role: "SalesPerson", userId: 2, name: "Ali", branchId: 1, mustChangePassword: false,
     });
     vi.mocked(api.get).mockResolvedValue(emptyItems);
 
@@ -62,7 +62,7 @@ describe("ItemListPage", () => {
   it("shows no action buttons for BomCreator", async () => {
     useAuthStore.getState().setSession({
       accessToken: "at", refreshToken: "rt",
-      role: "BomCreator", userId: 3, name: "Bob", branchId: 1,
+      role: "BomCreator", userId: 3, name: "Bob", branchId: 1, mustChangePassword: false,
     });
     vi.mocked(api.get).mockResolvedValue(emptyItems);
 
@@ -79,7 +79,7 @@ describe("ItemListPage", () => {
   it("shows Edit and Deactivate buttons for Admin on each row", async () => {
     useAuthStore.getState().setSession({
       accessToken: "at", refreshToken: "rt",
-      role: "Admin", userId: 1, name: "Admin", branchId: null,
+      role: "Admin", userId: 1, name: "Admin", branchId: null, mustChangePassword: false,
     });
     vi.mocked(api.get).mockResolvedValue({
       data: [
@@ -96,7 +96,7 @@ describe("ItemListPage", () => {
   it("shows no Edit/Deactivate buttons for BomCreator", async () => {
     useAuthStore.getState().setSession({
       accessToken: "at", refreshToken: "rt",
-      role: "BomCreator", userId: 3, name: "Bob", branchId: 1,
+      role: "BomCreator", userId: 3, name: "Bob", branchId: 1, mustChangePassword: false,
     });
     vi.mocked(api.get).mockResolvedValue({
       data: [
@@ -116,7 +116,7 @@ describe("ItemListPage", () => {
   it("hides inactive items by default and shows them when 'Show inactive' is toggled", async () => {
     useAuthStore.getState().setSession({
       accessToken: "at", refreshToken: "rt",
-      role: "Admin", userId: 1, name: "Admin", branchId: null,
+      role: "Admin", userId: 1, name: "Admin", branchId: null, mustChangePassword: false,
     });
     vi.mocked(api.get).mockResolvedValue({
       data: [

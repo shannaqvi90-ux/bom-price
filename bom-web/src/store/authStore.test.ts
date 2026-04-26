@@ -23,6 +23,7 @@ describe("authStore", () => {
       userId: 5,
       name: "Alice",
       branchId: 2,
+      mustChangePassword: false,
     });
 
     const state = useAuthStore.getState();
@@ -33,6 +34,7 @@ describe("authStore", () => {
       name: "Alice",
       role: "SalesPerson",
       branchId: 2,
+      mustChangePassword: false,
     });
     expect(state.isAuthenticated()).toBe(true);
   });
@@ -45,6 +47,7 @@ describe("authStore", () => {
       userId: 1,
       name: "Admin",
       branchId: null,
+      mustChangePassword: false,
     });
 
     useAuthStore.getState().updateTokens("at.2", "rt.2");
@@ -71,6 +74,7 @@ describe("authStore", () => {
         name: "Admin",
         role: "Admin",
         branchId: null,
+        mustChangePassword: false,
       },
     });
 
@@ -97,6 +101,7 @@ describe("authStore", () => {
         name: "Admin",
         role: "Admin",
         branchId: null,
+        mustChangePassword: false,
       },
     });
 
@@ -104,6 +109,25 @@ describe("authStore", () => {
 
     expect(useAuthStore.getState().accessToken).toBe(validJwt);
     expect(useAuthStore.getState().user).not.toBeNull();
+  });
+
+  it("clearMustChangePassword flips flag to false without touching other fields", () => {
+    useAuthStore.getState().setSession({
+      accessToken: "at.1",
+      refreshToken: "rt.1",
+      role: "Admin",
+      userId: 1,
+      name: "Admin",
+      branchId: null,
+      mustChangePassword: true,
+    });
+
+    useAuthStore.getState().clearMustChangePassword();
+
+    const state = useAuthStore.getState();
+    expect(state.user?.mustChangePassword).toBe(false);
+    expect(state.user?.userId).toBe(1);
+    expect(state.accessToken).toBe("at.1");
   });
 
   it("logout clears everything", () => {
@@ -114,6 +138,7 @@ describe("authStore", () => {
       userId: 1,
       name: "Admin",
       branchId: null,
+      mustChangePassword: false,
     });
 
     useAuthStore.getState().logout();

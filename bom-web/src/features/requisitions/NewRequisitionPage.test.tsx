@@ -76,6 +76,7 @@ describe("NewRequisitionPage", () => {
       userId: 10,
       name: "Ali",
       branchId: 1,
+      mustChangePassword: false,
     });
   });
 

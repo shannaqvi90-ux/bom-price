@@ -55,6 +55,7 @@ function loginAs(role: UserRole) {
     userId: 1,
     name: "Test User",
     branchId: null,
+    mustChangePassword: false,
   });
 }
 

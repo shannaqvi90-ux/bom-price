@@ -45,6 +45,7 @@ describe("ExchangeRatesPage", () => {
       userId: 1,
       name: "Alice",
       branchId: null,
+      mustChangePassword: false,
     });
   });
 
@@ -75,6 +76,7 @@ describe("ExchangeRatesPage", () => {
       userId: 2,
       name: "Bob",
       branchId: 1,
+      mustChangePassword: false,
     });
     vi.mocked(api.get).mockResolvedValueOnce({ data: sampleRates });
     wrap(<ExchangeRatesPage />);
@@ -153,6 +155,7 @@ describe("ExchangeRatesPage", () => {
       userId: 3,
       name: "MD",
       branchId: null,
+      mustChangePassword: false,
     });
     vi.mocked(api.get).mockResolvedValueOnce({ data: sampleRates });
     wrap(<ExchangeRatesPage />);

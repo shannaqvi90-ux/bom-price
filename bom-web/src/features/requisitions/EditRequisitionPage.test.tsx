@@ -59,7 +59,7 @@ describe("EditRequisitionPage", () => {
     vi.mocked(api.post).mockReset();
     useAuthStore.getState().setSession({
       accessToken: "at", refreshToken: "rt",
-      role: "SalesPerson", userId: 10, name: "Ali", branchId: 1,
+      role: "SalesPerson", userId: 10, name: "Ali", branchId: 1, mustChangePassword: false,
     });
   });
 
@@ -88,7 +88,7 @@ describe("EditRequisitionPage", () => {
   it("blocks non-owning SalesPerson", async () => {
     useAuthStore.getState().setSession({
       accessToken: "at", refreshToken: "rt",
-      role: "SalesPerson", userId: 99, name: "Other", branchId: 1,
+      role: "SalesPerson", userId: 99, name: "Other", branchId: 1, mustChangePassword: false,
     });
     mockLookups();
     render(wrap(<EditRequisitionPage />));

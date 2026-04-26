@@ -131,7 +131,7 @@ describe("BomEntryPage", () => {
     vi.mocked(api.put).mockReset();
     useAuthStore.getState().setSession({
       accessToken: "at", refreshToken: "rt",
-      role: "BomCreator", userId: 3, name: "Bob", branchId: 1,
+      role: "BomCreator", userId: 3, name: "Bob", branchId: 1, mustChangePassword: false,
     });
   });
 

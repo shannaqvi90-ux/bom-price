@@ -25,6 +25,7 @@ describe("axios client with refresh interceptor", () => {
       userId: 1,
       name: "Admin",
       branchId: null,
+      mustChangePassword: false,
     });
 
     let seenAuth: string | undefined;
@@ -53,6 +54,7 @@ describe("axios client with refresh interceptor", () => {
       userId: 1,
       name: "Admin",
       branchId: null,
+      mustChangePassword: false,
     });
 
     const calls: Array<{ url?: string; auth?: string; data?: unknown }> = [];
@@ -75,6 +77,7 @@ describe("axios client with refresh interceptor", () => {
             userId: 1,
             name: "Admin",
             branchId: null,
+            mustChangePassword: false,
           },
           status: 200,
           statusText: "OK",

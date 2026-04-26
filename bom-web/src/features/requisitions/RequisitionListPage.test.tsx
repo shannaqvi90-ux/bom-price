@@ -62,6 +62,7 @@ describe("RequisitionListPage", () => {
       userId: 10,
       name: "Ali",
       branchId: 1,
+      mustChangePassword: false,
     });
   });
 
@@ -95,6 +96,7 @@ describe("RequisitionListPage", () => {
       userId: 11,
       name: "Bob",
       branchId: 1,
+      mustChangePassword: false,
     });
     vi.mocked(api.get).mockResolvedValueOnce({ data: [] });
     render(wrap(<RequisitionListPage />));

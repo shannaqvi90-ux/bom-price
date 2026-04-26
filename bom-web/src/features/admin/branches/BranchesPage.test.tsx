@@ -39,6 +39,7 @@ function loginAsAdmin() {
     userId: 1,
     name: "Test Admin",
     branchId: null,
+    mustChangePassword: false,
   });
 }
 

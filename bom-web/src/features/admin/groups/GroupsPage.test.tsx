@@ -39,6 +39,7 @@ function loginAsAdmin() {
     userId: 1,
     name: "Test Admin",
     branchId: null,
+    mustChangePassword: false,
   });
 }
 
@@ -50,6 +51,7 @@ function loginAsAccountant() {
     userId: 2,
     name: "Test Accountant",
     branchId: null,
+    mustChangePassword: false,
   });
 }
 

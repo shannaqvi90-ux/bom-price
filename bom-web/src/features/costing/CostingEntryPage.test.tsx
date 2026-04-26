@@ -293,7 +293,7 @@ describe("CostingEntryPage", () => {
     // Test 1: Accountant should see the button
     useAuthStore.getState().setSession({
       accessToken: "at", refreshToken: "rt",
-      role: "Accountant", userId: 11, name: "Sara", branchId: null,
+      role: "Accountant", userId: 11, name: "Sara", branchId: null, mustChangePassword: false,
     });
     defaultGetHandler(costing, pendingRequisition);
     const { unmount } = renderPage();
@@ -305,7 +305,7 @@ describe("CostingEntryPage", () => {
     // Test 2: BomCreator should NOT see the button
     useAuthStore.getState().setSession({
       accessToken: "at", refreshToken: "rt",
-      role: "BomCreator", userId: 12, name: "Bob", branchId: 1,
+      role: "BomCreator", userId: 12, name: "Bob", branchId: 1, mustChangePassword: false,
     });
     defaultGetHandler(costing, pendingRequisition);
     renderPage();

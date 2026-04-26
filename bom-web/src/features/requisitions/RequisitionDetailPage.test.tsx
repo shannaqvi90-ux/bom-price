@@ -62,6 +62,7 @@ describe("RequisitionDetailPage", () => {
       userId: 11,
       name: "Bob",
       branchId: 1,
+      mustChangePassword: false,
     });
   });
 
@@ -94,6 +95,7 @@ describe("RequisitionDetailPage", () => {
       userId: 10,
       name: "Ali",
       branchId: 1,
+      mustChangePassword: false,
     });
     vi.mocked(api.get).mockResolvedValueOnce({ data: sample });
     render(wrap(<RequisitionDetailPage />));
@@ -122,7 +124,7 @@ describe("RequisitionDetailPage", () => {
   it("Start Costing button navigates to the costing page", async () => {
     useAuthStore.getState().setSession({
       accessToken: "at", refreshToken: "rt",
-      role: "Accountant", userId: 11, name: "Bob", branchId: null,
+      role: "Accountant", userId: 11, name: "Bob", branchId: null, mustChangePassword: false,
     });
     vi.mocked(api.get).mockImplementation((url: string) => {
       if (url.includes("customer-history")) return Promise.resolve({ data: [] });
@@ -165,7 +167,7 @@ describe("RequisitionDetailPage", () => {
   it("renders rejection reason block when approval.isApproved is false", async () => {
     useAuthStore.getState().setSession({
       accessToken: "at", refreshToken: "rt",
-      role: "SalesPerson", userId: 10, name: "Ali", branchId: 1,
+      role: "SalesPerson", userId: 10, name: "Ali", branchId: 1, mustChangePassword: false,
     });
     const rejected: RequisitionDetail = {
       ...sample,
@@ -207,7 +209,7 @@ describe("RequisitionDetailPage", () => {
   it('shows "Edit & Resubmit" button for the owning SalesPerson when status is Rejected', async () => {
     useAuthStore.getState().setSession({
       accessToken: "at", refreshToken: "rt",
-      role: "SalesPerson", userId: 10, name: "Ali", branchId: 1,
+      role: "SalesPerson", userId: 10, name: "Ali", branchId: 1, mustChangePassword: false,
     });
     vi.mocked(api.get).mockResolvedValueOnce({
       data: {
@@ -232,7 +234,7 @@ describe("RequisitionDetailPage", () => {
       });
       useAuthStore.getState().setSession({
         accessToken: "at", refreshToken: "rt",
-        role, userId: 99, name: "X", branchId: 1,
+        role, userId: 99, name: "X", branchId: 1, mustChangePassword: false,
       });
       const { unmount } = render(wrap(<RequisitionDetailPage />));
       await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
@@ -267,7 +269,7 @@ describe("RequisitionDetailPage", () => {
   it("shows Change-branch button for Accountant in CostingPending", async () => {
     useAuthStore.getState().setSession({
       accessToken: "at", refreshToken: "rt",
-      role: "Accountant", userId: 11, name: "Sara", branchId: null,
+      role: "Accountant", userId: 11, name: "Sara", branchId: null, mustChangePassword: false,
     });
     vi.mocked(api.get).mockImplementation((url: string) => {
       if (url.includes("branch-history")) return Promise.resolve({ data: [] });
@@ -283,7 +285,7 @@ describe("RequisitionDetailPage", () => {
   it("hides Change-branch button for Accountant in CostingInProgress", async () => {
     useAuthStore.getState().setSession({
       accessToken: "at", refreshToken: "rt",
-      role: "Accountant", userId: 11, name: "Sara", branchId: null,
+      role: "Accountant", userId: 11, name: "Sara", branchId: null, mustChangePassword: false,
     });
     vi.mocked(api.get).mockImplementation((url: string) => {
       if (url.includes("branch-history")) return Promise.resolve({ data: [] });
@@ -299,7 +301,7 @@ describe("RequisitionDetailPage", () => {
   it("shows 'Branch changed (1)' badge when history > 0; click opens BranchChangeHistoryModal", async () => {
     useAuthStore.getState().setSession({
       accessToken: "at", refreshToken: "rt",
-      role: "Accountant", userId: 11, name: "Sara", branchId: null,
+      role: "Accountant", userId: 11, name: "Sara", branchId: null, mustChangePassword: false,
     });
     const branchHistoryEntry = {
       id: 1,

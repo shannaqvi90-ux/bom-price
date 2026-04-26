@@ -20,6 +20,8 @@ import ExchangeRatesPage from "@/features/exchange-rates/ExchangeRatesPage";
 import UsersPage from "@/features/users/UsersPage";
 import BranchesPage from "@/features/admin/branches/BranchesPage";
 import GroupsPage from "@/features/admin/groups/GroupsPage";
+import ChangePasswordPage from "@/features/auth/ChangePasswordPage";
+import { ForceChangePasswordGuard } from "@/features/auth/ForceChangePasswordGuard";
 
 function NavigatorBridge() {
   const n = useNavigate();
@@ -30,11 +32,21 @@ function NavigatorBridge() {
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   {
+    path: "/change-password",
+    element: (
+      <ProtectedRoute>
+        <ChangePasswordPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: "/",
     element: (
       <ProtectedRoute>
-        <NavigatorBridge />
-        <AppShell />
+        <ForceChangePasswordGuard>
+          <NavigatorBridge />
+          <AppShell />
+        </ForceChangePasswordGuard>
       </ProtectedRoute>
     ),
     children: [

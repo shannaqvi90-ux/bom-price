@@ -10,6 +10,7 @@ export interface AuthUser {
   name: string;
   role: UserRole;
   branchId: number | null;
+  mustChangePassword: boolean;
 }
 
 export interface LoginRequest {
@@ -24,6 +25,7 @@ export interface LoginResponse {
   userId: number;
   name: string;
   branchId: number | null;
+  mustChangePassword: boolean;
 }
 
 export interface RefreshRequest {

@@ -19,6 +19,7 @@ import NotificationsPage from "@/features/notifications/NotificationsPage";
 import ExchangeRatesPage from "@/features/exchange-rates/ExchangeRatesPage";
 import UsersPage from "@/features/users/UsersPage";
 import BranchesPage from "@/features/admin/branches/BranchesPage";
+import GroupsPage from "@/features/admin/groups/GroupsPage";
 
 function NavigatorBridge() {
   const n = useNavigate();
@@ -90,6 +91,14 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute allow={["Admin"]}>
             <BranchesPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "admin/groups",
+        element: (
+          <ProtectedRoute allow={["Admin", "Accountant"]}>
+            <GroupsPage />
           </ProtectedRoute>
         ),
       },

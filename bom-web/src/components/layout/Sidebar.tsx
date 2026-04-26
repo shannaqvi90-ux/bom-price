@@ -6,6 +6,7 @@ import {
   FileText,
   Bell,
   Users,
+  Users2,
   Building2,
   Coins,
   Package,
@@ -52,6 +53,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Branches",
     icon: Building2,
     roles: ["Admin"],
+  },
+  {
+    to: "/admin/groups",
+    label: "Groups",
+    icon: Users2,
+    roles: ["Admin", "Accountant"],
   },
   { to: "/exchange-rates", label: "Exchange Rates", icon: Coins },
 ];

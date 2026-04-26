@@ -343,3 +343,166 @@ describe("EditUserModal", () => {
     );
   });
 });
+
+// ─── Branch column ────────────────────────────────────────────────────────────
+
+const sampleBranches = [
+  { id: 1, name: "Dubai Main", isActive: true },
+  { id: 2, name: "Abu Dhabi", isActive: true },
+];
+
+const usersWithBranch = [
+  {
+    id: 1,
+    name: "Alice Admin",
+    email: "alice@example.com",
+    role: "Admin",
+    branchId: null,
+    branchName: null,
+    isActive: true,
+  },
+  {
+    id: 3,
+    name: "Sara Sales",
+    email: "sara@example.com",
+    role: "SalesPerson",
+    branchId: 1,
+    branchName: "Dubai Main",
+    isActive: true,
+  },
+  {
+    id: 4,
+    name: "Ana Accountant",
+    email: "ana@example.com",
+    role: "Accountant",
+    branchId: null,
+    branchName: null,
+    isActive: true,
+  },
+];
+
+describe("Branch column", () => {
+  it("shows dash for Admin with null branchId", async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === "/users") return Promise.resolve({ data: usersWithBranch });
+      if (url === "/branches") return Promise.resolve({ data: sampleBranches });
+      if (/\/users\/\d+\/branches/.test(url)) return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: [] });
+    });
+    wrap(<UsersPage />);
+    await waitFor(() => expect(screen.getByText("Alice Admin")).toBeInTheDocument());
+    // Admin row should have at least one em-dash for branch column
+    const dashes = screen.getAllByText("—");
+    expect(dashes.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("shows branch name for SalesPerson with branchId", async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === "/users") return Promise.resolve({ data: usersWithBranch });
+      if (url === "/branches") return Promise.resolve({ data: sampleBranches });
+      if (/\/users\/\d+\/branches/.test(url)) return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: [] });
+    });
+    wrap(<UsersPage />);
+    await waitFor(() => expect(screen.getByText("Sara Sales")).toBeInTheDocument());
+    expect(screen.getByText("Dubai Main")).toBeInTheDocument();
+  });
+
+  it("shows comma-separated branch names for Accountant row", async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === "/users") return Promise.resolve({ data: usersWithBranch });
+      if (url === "/branches") return Promise.resolve({ data: sampleBranches });
+      if (url === "/users/4/branches") return Promise.resolve({ data: [1, 2] });
+      return Promise.resolve({ data: [] });
+    });
+    wrap(<UsersPage />);
+    await waitFor(() => expect(screen.getByText("Ana Accountant")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Dubai Main, Abu Dhabi")).toBeInTheDocument(),
+    );
+  });
+});
+
+// ─── EditUserModal — Accountant multi-branch ──────────────────────────────────
+
+describe("EditUserModal — Accountant multi-branch", () => {
+  const accountantUser = {
+    id: 4,
+    name: "Ana Accountant",
+    email: "ana@example.com",
+    role: "Accountant",
+    branchId: null,
+    branchName: null,
+    isActive: true,
+  };
+
+  it("renders branch checkboxes when editing an Accountant", async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === "/users") return Promise.resolve({ data: [accountantUser] });
+      if (url === "/branches") return Promise.resolve({ data: sampleBranches });
+      if (url === "/users/4/branches") return Promise.resolve({ data: [1] });
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    wrap(<UsersPage />);
+    await waitFor(() => expect(screen.getByText("Ana Accountant")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /Edit Ana Accountant/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "Edit User" })).toBeInTheDocument(),
+    );
+    expect(screen.getByLabelText("Dubai Main")).toBeInTheDocument();
+    expect(screen.getByLabelText("Abu Dhabi")).toBeInTheDocument();
+  });
+
+  it("pre-checks existing branch assignments", async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === "/users") return Promise.resolve({ data: [accountantUser] });
+      if (url === "/branches") return Promise.resolve({ data: sampleBranches });
+      if (url === "/users/4/branches") return Promise.resolve({ data: [1] });
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    wrap(<UsersPage />);
+    await waitFor(() => expect(screen.getByText("Ana Accountant")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /Edit Ana Accountant/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "Edit User" })).toBeInTheDocument(),
+    );
+    await waitFor(() => expect(screen.getByLabelText("Dubai Main")).toBeChecked());
+    expect(screen.getByLabelText("Abu Dhabi")).not.toBeChecked();
+  });
+
+  it("calls PUT /users/:id and PUT /users/:id/branches on save", async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === "/users") return Promise.resolve({ data: [accountantUser] });
+      if (url === "/branches") return Promise.resolve({ data: sampleBranches });
+      if (url === "/users/4/branches") return Promise.resolve({ data: [1] });
+      return Promise.resolve({ data: [] });
+    });
+    vi.mocked(api.put as ReturnType<typeof vi.fn>).mockResolvedValue({ status: 204 });
+    const user = userEvent.setup();
+    wrap(<UsersPage />);
+    await waitFor(() => expect(screen.getByText("Ana Accountant")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /Edit Ana Accountant/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "Edit User" })).toBeInTheDocument(),
+    );
+    // Check Abu Dhabi (id=2) in addition to the pre-checked Dubai Main (id=1)
+    await waitFor(() => expect(screen.getByLabelText("Dubai Main")).toBeChecked());
+    await user.click(screen.getByLabelText("Abu Dhabi"));
+    await user.click(screen.getByRole("button", { name: /^Save$/i }));
+
+    await waitFor(() =>
+      expect(vi.mocked(api.put as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(
+        "/users/4",
+        expect.objectContaining({ role: "Accountant" }),
+      ),
+    );
+    await waitFor(() =>
+      expect(vi.mocked(api.put as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(
+        "/users/4/branches",
+        expect.objectContaining({ branchIds: expect.arrayContaining([1, 2]) }),
+      ),
+    );
+  });
+});

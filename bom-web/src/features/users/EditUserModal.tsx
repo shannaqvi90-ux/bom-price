@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { useUpdateUser } from "./usersApi";
 import { useBranches } from "@/api/lookups";
+import { useUserBranches, useSetUserBranches } from "@/api/userBranches";
 import type { User, UserRole } from "@/types/api";
 
 const BRANCH_SCOPED_ROLES = new Set<UserRole>(["SalesPerson", "BomCreator"]);
@@ -37,6 +38,11 @@ interface Props {
 export function EditUserModal({ open, user, onClose }: Props) {
   const update = useUpdateUser();
   const { data: branches = [] } = useBranches({ enabled: open });
+  // Accountant multi-branch support
+  const { data: existingBranchIds = [] } = useUserBranches(user?.id ?? 0, open && user?.role === "Accountant");
+  const setUserBranches = useSetUserBranches(user?.id ?? 0);
+  const [selectedBranchIds, setSelectedBranchIds] = useState<number[]>([]);
+
   const {
     register,
     handleSubmit,
@@ -59,11 +65,27 @@ export function EditUserModal({ open, user, onClose }: Props) {
     }
   }, [user, reset]);
 
+  // Sync selected branches when existing ones load or modal opens with an Accountant
+  useEffect(() => {
+    if (open && user?.role === "Accountant") {
+      setSelectedBranchIds(existingBranchIds);
+    }
+  }, [open, user?.role, existingBranchIds]);
+
   const role = watch("role") as UserRole | "";
   const branchRequired = role !== "" && BRANCH_SCOPED_ROLES.has(role as UserRole);
+  const isAccountant = role === "Accountant";
+
+  function toggleBranch(id: number) {
+    setSelectedBranchIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
 
   function handleClose() {
     update.reset();
+    setUserBranches.reset();
+    setSelectedBranchIds([]);
     onClose();
   }
 
@@ -80,10 +102,16 @@ export function EditUserModal({ open, user, onClose }: Props) {
           isActive: values.isActive,
         },
       });
+      // For Accountant: also persist the multi-branch selection
+      if (isAccountant) {
+        await setUserBranches.mutateAsync(selectedBranchIds);
+      }
       update.reset();
+      setUserBranches.reset();
+      setSelectedBranchIds([]);
       onClose();
     } catch {
-      // error displayed via update.isError
+      // error displayed via update.isError or setUserBranches.isError
     }
   });
 
@@ -136,6 +164,35 @@ export function EditUserModal({ open, user, onClose }: Props) {
             </select>
             {errors.branchId && (
               <p className="text-xs text-destructive">{errors.branchId.message}</p>
+            )}
+          </div>
+        )}
+
+        {isAccountant && (
+          <div className="space-y-1">
+            <Label>Visible Branches</Label>
+            <div className="rounded-md border border-input bg-background p-3 space-y-2 max-h-48 overflow-y-auto">
+              {branches.length === 0 && (
+                <p className="text-xs text-muted-foreground">No branches available.</p>
+              )}
+              {branches.map((b) => (
+                <label key={b.id} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-input"
+                    checked={selectedBranchIds.includes(b.id)}
+                    onChange={() => toggleBranch(b.id)}
+                    aria-label={b.name}
+                  />
+                  <span className="text-sm">{b.name}</span>
+                </label>
+              ))}
+            </div>
+            {setUserBranches.isError && (
+              <p className="text-xs text-destructive">
+                {(setUserBranches.error as { response?: { data?: { message?: string } } })
+                  ?.response?.data?.message ?? "Failed to update branch access"}
+              </p>
             )}
           </div>
         )}

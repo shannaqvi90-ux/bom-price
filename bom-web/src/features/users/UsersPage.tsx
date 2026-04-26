@@ -8,7 +8,31 @@ import { Dialog } from "@/components/ui/Dialog";
 import { useUsers, useDeactivateUser } from "./usersApi";
 import { AddUserModal } from "./AddUserModal";
 import { EditUserModal } from "./EditUserModal";
+import { useUserBranches } from "@/api/userBranches";
+import { useBranches } from "@/api/branches";
 import type { User } from "@/types/api";
+
+// ─── AccountantBranchCell ─────────────────────────────────────────────────────
+// Renders the comma-separated branch names for an Accountant row.
+// Uses per-row query (N+1 acceptable for small user lists).
+
+interface AccountantBranchCellProps {
+  userId: number;
+}
+
+function AccountantBranchCell({ userId }: AccountantBranchCellProps) {
+  const { data: branchIds = [], isLoading } = useUserBranches(userId);
+  const { data: allBranches = [] } = useBranches();
+
+  if (isLoading) return <span className="text-muted-foreground text-xs">…</span>;
+  if (branchIds.length === 0) return <span className="text-muted-foreground">—</span>;
+
+  const names = branchIds
+    .map((id) => allBranches.find((b) => b.id === id)?.name ?? String(id))
+    .join(", ");
+
+  return <span className="text-sm">{names}</span>;
+}
 
 export default function UsersPage() {
   const { data, isLoading, isError, refetch } = useUsers();
@@ -29,11 +53,26 @@ export default function UsersPage() {
     }
   }
 
+  const { data: allBranches = [] } = useBranches();
+
   const columns = useMemo<ColumnDef<User>[]>(
     () => [
       { accessorKey: "name", header: "Name" },
       { accessorKey: "email", header: "Email" },
       { accessorKey: "role", header: "Role" },
+      {
+        id: "branch",
+        header: "Branch",
+        cell: ({ row }: { row: { original: User } }) => {
+          const u = row.original;
+          if (u.role === "Accountant") {
+            return <AccountantBranchCell userId={u.id} />;
+          }
+          if (u.branchId === null) return <span className="text-muted-foreground">—</span>;
+          const name = allBranches.find((b) => b.id === u.branchId)?.name ?? u.branchName;
+          return <span className="text-sm">{name ?? String(u.branchId)}</span>;
+        },
+      },
       {
         accessorKey: "isActive",
         header: "Status",
@@ -78,7 +117,7 @@ export default function UsersPage() {
         },
       },
     ],
-    [],
+    [allBranches],
   );
 
   return (

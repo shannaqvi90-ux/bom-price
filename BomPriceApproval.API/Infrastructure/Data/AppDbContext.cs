@@ -25,12 +25,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ItemLastCost> ItemLastCosts => Set<ItemLastCost>();
     public DbSet<RevokedJti> RevokedJtis => Set<RevokedJti>();
     public DbSet<CustomerChangeHistory> CustomerChangeHistories => Set<CustomerChangeHistory>();
+    public DbSet<UserBranch> UserBranches => Set<UserBranch>();
+    public DbSet<BranchChangeHistory> BranchChangeHistories => Set<BranchChangeHistory>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
         mb.Entity<Branch>().HasData(
-            new Branch { Id = 1, Name = "Fujairah" },
-            new Branch { Id = 2, Name = "Al Ain" }
+            new Branch { Id = 1, Name = "Fujairah", IsActive = true },
+            new Branch { Id = 2, Name = "Al Ain", IsActive = true }
         );
 
         mb.Entity<QuotationRequest>()
@@ -234,6 +236,31 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
             e.HasIndex(x => x.RequisitionId);
             e.HasIndex(x => x.ChangedAt).IsDescending();
+        });
+
+        mb.Entity<UserBranch>(e =>
+        {
+            e.HasKey(ub => new { ub.UserId, ub.BranchId });
+            e.HasOne(ub => ub.User)
+                .WithMany()
+                .HasForeignKey(ub => ub.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(ub => ub.Branch)
+                .WithMany()
+                .HasForeignKey(ub => ub.BranchId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        mb.Entity<BranchChangeHistory>(e =>
+        {
+            e.HasOne(h => h.Requisition)
+                .WithMany()
+                .HasForeignKey(h => h.RequisitionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(h => h.OldBranch).WithMany().HasForeignKey(h => h.OldBranchId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(h => h.NewBranch).WithMany().HasForeignKey(h => h.NewBranchId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(h => h.ChangedBy).WithMany().HasForeignKey(h => h.ChangedByUserId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(h => h.ChangedAt).HasColumnType("timestamptz");
         });
 
         // Optimistic concurrency via PostgreSQL system xmin column.

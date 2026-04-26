@@ -21,7 +21,9 @@ import { SalesHeaderRight } from "@/components/SalesHeaderRight";
 import { SectionCard } from "@/components/SectionCard";
 import { ItemCardShell } from "@/components/ItemCardShell";
 import { useCustomers, useExchangeRates, useItems } from "@/api/lookups";
+import { useBranches } from "@/api/branches";
 import { useCreateRequisition } from "@/api/requisitions";
+import { useAuth } from "@/auth/AuthContext";
 import {
   createRequisitionSchema,
   type CreateRequisitionInput,
@@ -29,8 +31,9 @@ import {
 
 export default function NewRequisition() {
   const router = useRouter();
+  const { user } = useAuth();
   const customersQ = useCustomers();
-  const itemsQ = useItems();
+  const branchesQ = useBranches();
   const ratesQ = useExchangeRates();
   const createMut = useCreateRequisition();
   const [topError, setTopError] = useState<string | null>(null);
@@ -39,15 +42,20 @@ export default function NewRequisition() {
   const {
     control,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<CreateRequisitionInput>({
     resolver: zodResolver(createRequisitionSchema),
     defaultValues: {
+      branchId: user?.branchId ?? 0,
       customerId: 0,
       currencyCode: "AED",
       items: [{ itemId: 0, expectedQty: 0 }],
     },
   });
+
+  const pickedBranchId = watch("branchId");
+  const itemsQ = useItems({ branchId: pickedBranchId || undefined, type: "FinishedGood" });
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
 
@@ -86,6 +94,27 @@ export default function NewRequisition() {
         {topError ? (
           <ErrorBanner message={topError} onRetry={() => setTopError(null)} />
         ) : null}
+
+        <SectionCard title="Branch">
+          <Controller
+            control={control}
+            name="branchId"
+            render={({ field }) => (
+              <View>
+                <SearchablePicker
+                  placeholder="Select branch..."
+                  value={field.value || null}
+                  onChange={field.onChange}
+                  loading={branchesQ.isPending}
+                  options={(branchesQ.data ?? [])
+                    .filter((b) => b.isActive)
+                    .map((b) => ({ id: b.id, label: b.name }))}
+                  error={errors.branchId?.message}
+                />
+              </View>
+            )}
+          />
+        </SectionCard>
 
         <SectionCard title="Customer">
           <Controller

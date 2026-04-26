@@ -8,6 +8,7 @@ export const loginSchema = z.object({
 export type LoginInput = z.infer<typeof loginSchema>;
 
 export const createRequisitionSchema = z.object({
+  branchId: z.number().int().positive("Pick a branch"),
   customerId: z.number().int().positive("Customer is required"),
   currencyCode: z.string().min(1, "Currency is required"),
   items: z

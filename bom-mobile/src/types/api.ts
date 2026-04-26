@@ -106,6 +106,7 @@ export interface RequisitionItemInput {
 }
 
 export interface CreateRequisitionRequest {
+  branchId: number;
   customerId: number;
   items: RequisitionItemInput[];
   currencyCode: string;

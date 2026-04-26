@@ -54,6 +54,7 @@ export interface RequisitionListItem {
   customerName: string;
   currencyCode: string;
   branchName: string;
+  salesPersonId: number;
   salesPersonName: string;
   createdAt: string;
 }

@@ -8,44 +8,60 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { useAuthStore } from "@/store/authStore";
+import { OwnedByBadge } from "@/components/OwnedByBadge";
 import { formatRelative } from "@/utils/date";
 import type { RequisitionListItem } from "@/types/api";
-
-const columns: ColumnDef<RequisitionListItem>[] = [
-  {
-    accessorKey: "refNo",
-    header: "Ref No",
-    cell: (info) => (
-      <span className="font-mono text-xs">{info.getValue() as string}</span>
-    ),
-  },
-  {
-    accessorKey: "status",
-    header: "Status",
-    cell: (info) => <StatusBadge status={info.getValue() as RequisitionListItem["status"]} />,
-  },
-  {
-    accessorKey: "itemCount",
-    header: "Items",
-    cell: (info) => {
-      const count = info.getValue() as number;
-      return <span>{count} {count === 1 ? "item" : "items"}</span>;
-    },
-  },
-  { accessorKey: "customerName", header: "Customer" },
-  { accessorKey: "branchName", header: "Branch" },
-  {
-    accessorKey: "createdAt",
-    header: "Created",
-    cell: (info) => formatRelative(info.getValue() as string),
-  },
-];
 
 const EMPTY_FILTERS: Filters = { status: "", from: "", to: "" };
 
 export default function RequisitionListPage() {
   const role = useAuthStore((s) => s.user?.role);
   const branchId = useAuthStore((s) => s.user?.branchId);
+  const currentUserId = useAuthStore((s) => s.user?.userId);
+
+  const columns = useMemo<ColumnDef<RequisitionListItem>[]>(() => [
+    {
+      accessorKey: "refNo",
+      header: "Ref No",
+      cell: (info) => (
+        <span className="font-mono text-xs">{info.getValue() as string}</span>
+      ),
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: (info) => <StatusBadge status={info.getValue() as RequisitionListItem["status"]} />,
+    },
+    {
+      accessorKey: "itemCount",
+      header: "Items",
+      cell: (info) => {
+        const count = info.getValue() as number;
+        return <span>{count} {count === 1 ? "item" : "items"}</span>;
+      },
+    },
+    {
+      accessorKey: "customerName",
+      header: "Customer",
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <span>
+            {row.customerName}
+            {currentUserId !== undefined && row.salesPersonId !== currentUserId && (
+              <OwnedByBadge ownerName={row.salesPersonName} prefix="by" />
+            )}
+          </span>
+        );
+      },
+    },
+    { accessorKey: "branchName", header: "Branch" },
+    {
+      accessorKey: "createdAt",
+      header: "Created",
+      cell: (info) => formatRelative(info.getValue() as string),
+    },
+  ], [currentUserId]);
   const navigate = useNavigate();
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
 
@@ -56,7 +72,7 @@ export default function RequisitionListPage() {
       return columns.filter((c) => (c as { accessorKey?: string }).accessorKey !== "branchName");
     }
     return columns;
-  }, [branchId]);
+  }, [branchId, columns]);
 
   const filtered = useMemo(() => {
     if (!data) return [];

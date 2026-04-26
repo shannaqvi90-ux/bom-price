@@ -1,29 +1,45 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/DataTable";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { useAuthStore } from "@/store/authStore";
+import { OwnedByBadge } from "@/components/OwnedByBadge";
 import { useCustomers } from "./customersApi";
 import { AddCustomerModal } from "./AddCustomerModal";
 import { ImportCustomersModal } from "./ImportCustomersModal";
 import type { Customer } from "@/types/api";
 
-const columns: ColumnDef<Customer>[] = [
-  { accessorKey: "code", header: "Code", cell: (info) => <span className="font-mono text-xs">{info.getValue() as string}</span> },
-  { accessorKey: "name", header: "Name" },
-  { accessorKey: "email", header: "Email" },
-  { accessorKey: "phoneNumber", header: "Phone" },
-  {
-    id: "salesPerson",
-    header: "Sales Person",
-    accessorFn: (row) => row.salesPersonName ?? "—",
-  },
-];
-
 export default function CustomerListPage() {
   const role = useAuthStore((s) => s.user?.role);
+  const currentUserId = useAuthStore((s) => s.user?.userId);
   const { data, isLoading, isError, refetch } = useCustomers();
+
+  const columns = useMemo<ColumnDef<Customer>[]>(() => [
+    { accessorKey: "code", header: "Code", cell: (info) => <span className="font-mono text-xs">{info.getValue() as string}</span> },
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <span>
+            {row.name}
+            {currentUserId !== undefined && row.salesPersonId !== null && row.salesPersonId !== currentUserId && row.salesPersonName && (
+              <OwnedByBadge ownerName={row.salesPersonName} prefix="owned by" />
+            )}
+          </span>
+        );
+      },
+    },
+    { accessorKey: "email", header: "Email" },
+    { accessorKey: "phoneNumber", header: "Phone" },
+    {
+      id: "salesPerson",
+      header: "Sales Person",
+      accessorFn: (row) => row.salesPersonName ?? "—",
+    },
+  ], [currentUserId]);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 

@@ -12,8 +12,10 @@ import { useCustomers, useItems, useActiveExchangeRates } from "@/api/lookups";
 import { useCreateRequisition } from "./requisitionsApi";
 import { RequisitionItemsEditor } from "./components/RequisitionItemsEditor";
 import { AddCustomerModal } from "@/features/customers/AddCustomerModal";
+import { BranchPicker } from "@/components/BranchPicker";
 import { notify } from "@/lib/notify";
 import { extractFieldErrors } from "@/lib/apiError";
+import { useAuthStore } from "@/store/authStore";
 import type { Customer } from "@/types/api";
 
 const itemRowSchema = z.object({
@@ -50,8 +52,11 @@ type FormValues = z.infer<typeof schema>;
 
 export default function NewRequisitionPage() {
   const navigate = useNavigate();
+  const userBranchId = useAuthStore((s) => s.user?.branchId ?? null);
+  const [pickedBranchId, setPickedBranchId] = useState<number | null>(userBranchId);
+
   const customersQ = useCustomers();
-  const itemsQ = useItems();
+  const itemsQ = useItems({ branchId: pickedBranchId ?? undefined, type: "FinishedGood" });
   const ratesQ = useActiveExchangeRates();
   const create = useCreateRequisition();
 
@@ -88,6 +93,7 @@ export default function NewRequisitionPage() {
           expectedQty: row.expectedQty,
         })),
         currencyCode: values.currencyCode,
+        branchId: pickedBranchId,
       });
       notify.success("Requisition created");
       navigate(`/requisitions/${created.id}`, { replace: true });
@@ -113,6 +119,11 @@ export default function NewRequisitionPage() {
             <p className="text-sm text-destructive">Failed to load form data. Please refresh.</p>
           ) : (
             <form onSubmit={onSubmit} className="space-y-4" noValidate>
+              <div className="mb-4">
+                <label htmlFor="branch-picker" className="block text-sm font-medium text-slate-700 mb-1">Branch</label>
+                <BranchPicker id="branch-picker" value={pickedBranchId} onChange={setPickedBranchId} />
+              </div>
+
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label htmlFor="customer" className="text-sm font-medium">

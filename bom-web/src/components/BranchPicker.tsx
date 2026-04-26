@@ -1,17 +1,19 @@
 import { useBranches } from "@/api/branches";
 
 interface Props {
+  id?: string;
   value: number | null;
   onChange: (branchId: number) => void;
   disabled?: boolean;
 }
 
-export function BranchPicker({ value, onChange, disabled }: Props) {
+export function BranchPicker({ id, value, onChange, disabled }: Props) {
   const { data: branches, isPending } = useBranches();
   const active = (branches ?? []).filter((b) => b.isActive);
 
   return (
     <select
+      id={id}
       className="border border-slate-300 rounded-md px-3 py-2 text-sm bg-white disabled:bg-slate-100"
       value={value ?? ""}
       disabled={disabled || isPending}

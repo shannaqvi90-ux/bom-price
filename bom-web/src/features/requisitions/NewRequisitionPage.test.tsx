@@ -16,6 +16,16 @@ vi.mock("@/api/axios", () => ({
   api: { get: vi.fn(), post: vi.fn() },
 }));
 
+vi.mock("@/api/branches", () => ({
+  useBranches: () => ({
+    data: [
+      { id: 1, name: "Fujairah", isActive: true },
+      { id: 2, name: "Al Ain", isActive: true },
+    ],
+    isPending: false,
+  }),
+}));
+
 vi.mock("@/lib/notify", () => ({
   notify: {
     error: vi.fn(),
@@ -46,7 +56,7 @@ const rates = [{ id: 3, currencyCode: "USD", currencyName: "US Dollar", rateToAe
 function mockLookups() {
   vi.mocked(api.get).mockImplementation((url: string) => {
     if (url === "/customers") return Promise.resolve({ data: customers });
-    if (url === "/items") return Promise.resolve({ data: items });
+    if (url.startsWith("/items")) return Promise.resolve({ data: items });
     if (url === "/exchange-rates/active") return Promise.resolve({ data: rates });
     return Promise.reject(new Error(`unexpected url ${url}`));
   });
@@ -121,6 +131,7 @@ describe("NewRequisitionPage", () => {
         customerId: 1,
         items: [{ itemId: 2, expectedQty: 100 }],
         currencyCode: "AED",
+        branchId: 1,
       }),
     );
     await waitFor(() =>
@@ -248,7 +259,51 @@ describe("NewRequisitionPage", () => {
         customerId: 99,
         items: [{ itemId: 2, expectedQty: 5 }],
         currencyCode: "AED",
+        branchId: 1,
       }),
+    );
+  });
+
+  it("BranchPicker defaults to user's branchId and submitting includes branchId in payload", async () => {
+    mockLookups();
+    vi.mocked(api.post).mockResolvedValueOnce({ data: { id: 55, refNo: "REQ-0055" } });
+
+    render(wrap(<NewRequisitionPage />));
+    await waitFor(() => expect(screen.getByLabelText(/customer/i)).toBeInTheDocument());
+
+    // Branch picker should default to user's branchId (1 = Fujairah)
+    const branchSelect = screen.getByLabelText(/branch/i);
+    expect((branchSelect as HTMLSelectElement).value).toBe("1");
+
+    // Fill the form
+    fireEvent.focus(screen.getByLabelText(/customer/i));
+    fireEvent.mouseDown(screen.getByText("ACME"));
+
+    const itemBox = screen.getByPlaceholderText(/search items/i);
+    fireEvent.focus(itemBox);
+    fireEvent.mouseDown(screen.getByText("HDPE Pipe 20mm"));
+
+    fireEvent.change(screen.getByPlaceholderText(/qty/i), { target: { value: "50" } });
+    fireEvent.click(screen.getByRole("button", { name: /create/i }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith("/requisitions", expect.objectContaining({ branchId: 1 })),
+    );
+  });
+
+  it("changing branch refetches items with new branchId query param", async () => {
+    mockLookups();
+    render(wrap(<NewRequisitionPage />));
+    await waitFor(() => expect(screen.getByLabelText(/customer/i)).toBeInTheDocument());
+
+    // Change branch picker from 1 to 2
+    const branchSelect = screen.getByLabelText(/branch/i);
+    fireEvent.change(branchSelect, { target: { value: "2" } });
+
+    await waitFor(() =>
+      expect(vi.mocked(api.get)).toHaveBeenCalledWith(
+        expect.stringContaining("branchId=2"),
+      ),
     );
   });
 

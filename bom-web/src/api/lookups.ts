@@ -22,10 +22,21 @@ export function useCustomers() {
   });
 }
 
-export function useItems() {
+export interface UseItemsOptions {
+  branchId?: number;
+  type?: "FinishedGood" | "RawMaterial";
+}
+
+export function useItems(opts: UseItemsOptions = {}) {
+  const params = new URLSearchParams();
+  if (opts.branchId) params.append("branchId", String(opts.branchId));
+  if (opts.type) params.append("type", opts.type);
+  const qs = params.toString();
+
   return useQuery({
-    queryKey: ["items"],
-    queryFn: () => api.get<Item[]>("/items").then((r) => r.data),
+    queryKey: ["items", "list", { branchId: opts.branchId, type: opts.type }],
+    queryFn: async () =>
+      (await api.get<Item[]>(`/items${qs ? `?${qs}` : ""}`)).data,
     staleTime: FIVE_MINUTES,
   });
 }

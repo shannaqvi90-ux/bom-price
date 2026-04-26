@@ -181,6 +181,21 @@ Each feature folder under `Features/` is self-contained: a controller and its DT
 
 Every data-access query must scope results to the user's `BranchId` extracted from JWT claims. Admins, Accountants, and the MD have `null` BranchId and see all branches. SalesPersons are isolated to their own branch **and** to their own requisitions only.
 
+### V2.3-A Branch model (post-2026-04-26)
+
+`User.BranchId` semantics now depend on role:
+
+- **SalesPerson**: "default pre-fill hint" for the new-requisition branch picker. SP picks the branch per-req (UI dropdown). Backend accepts `BranchId` in `POST /api/requisitions` payload, with a 1-release transition fallback to `User.BranchId` when payload omits it (logged warning).
+- **BomCreator**: binding constraint (single branch — unchanged).
+- **Accountant**: ignored — source of truth is `UserBranches` table (M:N join). One Accountant can be assigned to multiple branches via admin `PUT /api/users/{id}/branches`.
+- **ManagingDirector / Admin**: cross-branch (unchanged).
+
+Branch authorization is centralized in `BranchAuthorization.UserAuthorizedForBranch(user, branchId, db)`.
+
+Branch reassignment: Accountant + Admin can call `PATCH /api/requisitions/{id}/branch` for reqs in BomPending / BomInProgress / CostingPending. Items must already belong to the new branch (strict block — caller removes mismatched items first).
+
+Branches admin CRUD via `POST/PUT/DELETE /api/branches` (Admin only). DELETE soft-deletes (`IsActive=false`) and 409s if branch is in use.
+
 ### Multi-Item Requisition Model
 
 A `QuotationRequest` contains multiple `RequisitionItem` entries (each with an `Item` + `ExpectedQty`). BOM and costing are tracked per-item via `BomHeader.RequisitionItemId`. Approval uses `ApprovalItem` (per-item price/margin on `QuotationApproval`).
@@ -302,4 +317,4 @@ Always follow this order — no exceptions:
 
 ## Maintenance
 
-This file drifts over time as the codebase evolves. Re-audit it every ~2 months by running a "reality audit" session (compare each claim against the actual codebase). The last audit was **2026-04-18**.
+This file drifts over time as the codebase evolves. Re-audit it every ~2 months by running a "reality audit" session (compare each claim against the actual codebase). The last audit was **2026-04-26**.

@@ -20,6 +20,7 @@ import ExchangeRatesPage from "@/features/exchange-rates/ExchangeRatesPage";
 import UsersPage from "@/features/users/UsersPage";
 import BranchesPage from "@/features/admin/branches/BranchesPage";
 import GroupsPage from "@/features/admin/groups/GroupsPage";
+import { AuditLogPage } from "@/features/admin/audit-log/AuditLogPage";
 import ChangePasswordPage from "@/features/auth/ChangePasswordPage";
 import { ForceChangePasswordGuard } from "@/features/auth/ForceChangePasswordGuard";
 
@@ -111,6 +112,14 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute allow={["Admin", "Accountant"]}>
             <GroupsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "admin/audit-log",
+        element: (
+          <ProtectedRoute allow={["Admin"]}>
+            <AuditLogPage />
           </ProtectedRoute>
         ),
       },

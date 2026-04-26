@@ -11,6 +11,7 @@ import {
   Coins,
   Package,
   Contact,
+  ScrollText,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -59,6 +60,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Groups",
     icon: Users2,
     roles: ["Admin", "Accountant"],
+  },
+  {
+    to: "/admin/audit-log",
+    label: "Audit Log",
+    icon: ScrollText,
+    roles: ["Admin"],
   },
   { to: "/exchange-rates", label: "Exchange Rates", icon: Coins },
 ];

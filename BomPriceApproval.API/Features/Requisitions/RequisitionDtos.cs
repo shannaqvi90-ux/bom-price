@@ -59,3 +59,16 @@ public record CustomerChangeHistoryResponse(
     string ChangedByUserName,
     DateTime ChangedAt,
     string? Reason);
+
+public record ChangeBranchRequest(int BranchId, string? Reason);
+
+public record BranchChangeHistoryResponse(
+    int Id,
+    int OldBranchId,
+    string OldBranchName,
+    int NewBranchId,
+    string NewBranchName,
+    int ChangedByUserId,
+    string ChangedByUserName,
+    DateTime ChangedAt,
+    string? Reason);

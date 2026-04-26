@@ -564,6 +564,98 @@ public class RequisitionsController(
         return NoContent();
     }
 
+    [HttpPatch("{id}/branch")]
+    [Authorize(Roles = "Accountant,Admin")]
+    public async Task<IActionResult> ChangeBranch(int id, ChangeBranchRequest req)
+    {
+        var q = await db.QuotationRequests.FirstOrDefaultAsync(r => r.Id == id);
+        if (q is null) return NotFound();
+
+        // Status guard — only allowed up to CostingPending
+        var allowed = new[] { RequisitionStatus.BomPending, RequisitionStatus.BomInProgress, RequisitionStatus.CostingPending };
+        if (!allowed.Contains(q.Status))
+            return Validation
+                .Detail($"Branch change not allowed for status {q.Status}.")
+                .Field("Status", "Invalid status for branch change.")
+                .Return();
+
+        // Branch authorization for the actor — Accountant must be assigned to the CURRENT (old) branch
+        if (CurrentRole == "Accountant")
+        {
+            var actorAuthorized = await db.UserBranches.AnyAsync(ub => ub.UserId == CurrentUserId && ub.BranchId == q.BranchId);
+            if (!actorAuthorized) return Forbid();
+        }
+
+        // New branch must exist + be active
+        var newBranch = await db.Branches.FindAsync(req.BranchId);
+        if (newBranch is null || !newBranch.IsActive) return NotFound();
+
+        // Same-branch rejection
+        if (req.BranchId == q.BranchId)
+            return Validation
+                .Detail("New branch is the same as current.")
+                .Field("BranchId", "Pick a different branch.")
+                .Return();
+
+        // Strict block: any req item must already belong to the new branch
+        var reqItemIds = await db.RequisitionItems
+            .Where(ri => ri.QuotationRequestId == id)
+            .Select(ri => ri.ItemId)
+            .ToListAsync();
+        var dbItems = await db.Items.Where(i => reqItemIds.Contains(i.Id)).ToListAsync();
+        var mismatched = dbItems.Where(i => i.BranchId != req.BranchId).ToList();
+        if (mismatched.Any())
+            return Validation
+                .Detail($"{mismatched.Count} item(s) do not belong to branch {req.BranchId}.")
+                .Field("Items", $"Mismatched items in branch {req.BranchId}: {string.Join(", ", mismatched.Select(m => m.Code))}")
+                .Return();
+
+        // Mutate + write history
+        var oldBranchId = q.BranchId;
+        q.BranchId = req.BranchId;
+        q.UpdatedAt = DateTime.UtcNow;
+        db.BranchChangeHistories.Add(new BranchChangeHistory
+        {
+            RequisitionId = id,
+            OldBranchId = oldBranchId,
+            NewBranchId = req.BranchId,
+            ChangedByUserId = CurrentUserId,
+            Reason = string.IsNullOrWhiteSpace(req.Reason) ? null : req.Reason.Trim()
+        });
+        await db.SaveChangesAsync();
+
+        // Notify SP + old/new branch's BomCreator + Accountant + all MDs
+        try
+        {
+            var oldBranch = await db.Branches.FindAsync(oldBranchId);
+            var actor = await db.Users.FindAsync(CurrentUserId);
+            var msg = $"Branch on {q.RefNo} changed from {oldBranch?.Name} to {newBranch.Name} by {actor?.Name}";
+
+            await notificationService.SendAsync(q.SalesPersonId, msg, q.Id, "QuotationRequest");
+
+            var mds = await db.Users.Where(u => u.Role == UserRole.ManagingDirector && u.IsActive).ToListAsync();
+            foreach (var md in mds) await notificationService.SendAsync(md.Id, msg, q.Id, "QuotationRequest");
+
+            var allUsers = await db.Users
+                .Where(u => u.IsActive && (u.Role == UserRole.BomCreator || u.Role == UserRole.Accountant))
+                .ToListAsync();
+            foreach (var u in allUsers)
+            {
+                if (BranchAuthorization.UserAuthorizedForBranch(u, oldBranchId, db) ||
+                    BranchAuthorization.UserAuthorizedForBranch(u, req.BranchId, db))
+                {
+                    await notificationService.SendAsync(u.Id, msg, q.Id, "QuotationRequest");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Notification dispatch failed after successful branch change for {Entity} {Id}", "QuotationRequest", q.Id);
+        }
+
+        return NoContent();
+    }
+
     [HttpGet("{id}/customer-history")]
     public async Task<IActionResult> GetCustomerHistory(int id)
     {

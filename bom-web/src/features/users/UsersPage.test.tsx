@@ -211,6 +211,29 @@ describe("UsersPage", () => {
     // Dialog stays open
     expect(screen.getByText(/Are you sure you want to deactivate/i)).toBeInTheDocument();
   });
+
+  it("shows Reset password button for Admin role, hidden for non-Admin", async () => {
+    mockUsersGet(sampleUsers);
+    wrap(<UsersPage />);
+    await waitFor(() => expect(screen.getByText("Alice Admin")).toBeInTheDocument());
+    // Admin is logged in (loginAsAdmin in beforeEach) — buttons should be visible
+    const resetButtons = screen.getAllByRole("button", { name: /Reset password/i });
+    expect(resetButtons.length).toBeGreaterThanOrEqual(1);
+
+    // Log in as non-Admin and re-render
+    useAuthStore.getState().setSession({
+      accessToken: "at2",
+      refreshToken: "rt2",
+      role: "BomCreator",
+      userId: 50,
+      name: "Not Admin",
+      branchId: null,
+      mustChangePassword: false,
+    });
+    wrap(<UsersPage />);
+    await waitFor(() => expect(screen.getAllByText("Alice Admin").length).toBeGreaterThanOrEqual(1));
+    expect(screen.queryByRole("button", { name: /Reset password/i })).not.toBeInTheDocument();
+  });
 });
 
 // ─── AddUserModal ─────────────────────────────────────────────────────────────

@@ -8,9 +8,11 @@ import { Dialog } from "@/components/ui/Dialog";
 import { useUsers, useDeactivateUser } from "./usersApi";
 import { AddUserModal } from "./AddUserModal";
 import { EditUserModal } from "./EditUserModal";
+import { ResetPasswordModal } from "./ResetPasswordModal";
 import { useUserBranches } from "@/api/userBranches";
 import { useBranches } from "@/api/branches";
 import { SalesGroupCell } from "@/components/SalesGroupCell";
+import { useAuthStore } from "@/store/authStore";
 import type { User } from "@/types/api";
 
 // ─── AccountantBranchCell ─────────────────────────────────────────────────────
@@ -38,10 +40,12 @@ function AccountantBranchCell({ userId }: AccountantBranchCellProps) {
 export default function UsersPage() {
   const { data, isLoading, isError, refetch } = useUsers();
   const deactivate = useDeactivateUser();
+  const currentUserRole = useAuthStore((s) => s.user?.role);
 
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<User | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<User | null>(null);
+  const [resetTarget, setResetTarget] = useState<User | null>(null);
 
   async function handleConfirmDeactivate() {
     if (!deactivateTarget) return;
@@ -103,6 +107,16 @@ export default function UsersPage() {
           const u = row.original;
           return (
             <div className="flex justify-end gap-1">
+              {currentUserRole === "Admin" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-label={`Reset password ${u.name}`}
+                  onClick={() => setResetTarget(u)}
+                >
+                  Reset password
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -126,7 +140,7 @@ export default function UsersPage() {
         },
       },
     ],
-    [allBranches],
+    [allBranches, currentUserRole],
   );
 
   return (
@@ -160,6 +174,9 @@ export default function UsersPage() {
         user={editTarget}
         onClose={() => setEditTarget(null)}
       />
+      {resetTarget && (
+        <ResetPasswordModal user={resetTarget} onClose={() => setResetTarget(null)} />
+      )}
 
       <Dialog
         open={deactivateTarget !== null}

@@ -196,6 +196,19 @@ Branch reassignment: Accountant + Admin can call `PATCH /api/requisitions/{id}/b
 
 Branches admin CRUD via `POST/PUT/DELETE /api/branches` (Admin only). DELETE soft-deletes (`IsActive=false`) and 409s if branch is in use.
 
+### V2.3-B Sales Groups (post-2026-04-26)
+
+SalesPersons can be grouped into flat peer "sales groups". All members of a group share full visibility + edit/create rights on each other's customers and requisitions. Groups are branch-agnostic.
+
+- **`User.GroupId`** (nullable FK to `SalesGroups`): only meaningful for SalesPerson role. Other roles are unaffected by group membership.
+- **Visibility computation:** `SalesAuthorization.VisibleSalesPersonIds(user, db)` returns either `[user.Id]` (solo SP) or all SP members of the user's group. Used in `RequisitionsController.GetAll`/`Count`/`CanAccess`/`Create`, `CustomersController.GetAll`/`Get`/`Update`.
+- **Group management:** Admin + Accountant roles via `POST/PUT/DELETE /api/groups` (soft-delete with in-use guard returning 409 Conflict) and `PUT /api/users/{id}/group` (SP-only target; non-SP target rejected 400).
+- **Notifications stay routed by original `SalesPersonId`** — group peers do not receive notifs about each other's reqs (Q8).
+- **Q11 clean cut on remove:** clearing `User.GroupId` immediately revokes group visibility in both directions.
+- **OwnedByBadge** (web + mobile): non-self requisitions and customers display "by/owned by <SalesPersonName>" subtle text so SPs can attribute peer-pool items at a glance.
+
+> On-device smoke pending — user runs spec §12 11-item checklist when phone tunnel ready.
+
 ### Multi-Item Requisition Model
 
 A `QuotationRequest` contains multiple `RequisitionItem` entries (each with an `Item` + `ExpectedQty`). BOM and costing are tracked per-item via `BomHeader.RequisitionItemId`. Approval uses `ApprovalItem` (per-item price/margin on `QuotationApproval`).

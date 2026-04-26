@@ -28,6 +28,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<UserBranch> UserBranches => Set<UserBranch>();
     public DbSet<BranchChangeHistory> BranchChangeHistories => Set<BranchChangeHistory>();
     public DbSet<SalesGroup> SalesGroups => Set<SalesGroup>();
+    public DbSet<AdminAuditLog> AdminAuditLogs => Set<AdminAuditLog>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -281,6 +282,24 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .OnDelete(DeleteBehavior.Restrict);  // group with members can't be deleted
 
         mb.Entity<User>().HasIndex(u => u.GroupId);
+
+        mb.Entity<AdminAuditLog>(e =>
+        {
+            e.Property(x => x.EntityType).HasMaxLength(50).IsRequired();
+            e.Property(x => x.Reason).HasMaxLength(2000).IsRequired();
+            e.Property(x => x.BeforeJson).HasColumnType("jsonb").IsRequired();
+            e.Property(x => x.AfterJson).HasColumnType("jsonb");
+            e.Property(x => x.ActionType).HasConversion<string>().HasMaxLength(50);
+
+            e.HasOne(x => x.AdminUser)
+                .WithMany()
+                .HasForeignKey(x => x.AdminUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasIndex(x => new { x.EntityType, x.EntityId });
+            e.HasIndex(x => new { x.AdminUserId, x.CreatedAt }).IsDescending(false, true);
+            e.HasIndex(x => x.CreatedAt).IsDescending();
+        });
 
         // Optimistic concurrency via PostgreSQL system xmin column.
         // No migration needed — xmin is always present on every row.

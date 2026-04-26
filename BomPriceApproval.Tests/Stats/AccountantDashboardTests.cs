@@ -137,11 +137,11 @@ public class AccountantDashboardTests(WebApplicationFactory<Program> factory) : 
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", salesToken);
 
         var customers = (await _client.GetFromJsonAsync<List<SeedCustomerShort>>("/api/customers"))!;
-        var items = (await _client.GetFromJsonAsync<List<SeedItemShort>>("/api/items"))!;
+        // SP sees FinishedGood only (server-enforced)
+        var spItems = (await _client.GetFromJsonAsync<List<SeedItemShort>>("/api/items"))!;
 
         var customer = customers.First();
-        var finishedGood = items.First(i => i.Type == "FinishedGood");
-        var rawMaterial = items.First(i => i.Type == "RawMaterial");
+        var finishedGood = spItems.First(i => i.Type == "FinishedGood");
 
         var createResp = await _client.PostAsJsonAsync("/api/requisitions", new
         {
@@ -168,8 +168,11 @@ public class AccountantDashboardTests(WebApplicationFactory<Program> factory) : 
 
         // BomCreator: start BOM, save lines, submit BOM (→ CostingPending)
         // Note: BomCreator seed email is bob@test.com
+        // BomCreator can see RawMaterial items (not role-restricted)
         var bomToken = await LoginAsync("bob@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bomToken);
+        var bomItems = (await _client.GetFromJsonAsync<List<SeedItemShort>>("/api/items"))!;
+        var rawMaterial = bomItems.First(i => i.Type == "RawMaterial");
 
         var startBom = await _client.PostAsync($"/api/bom/{reqId}/items/{reqItemId}/start", null);
         startBom.EnsureSuccessStatusCode();

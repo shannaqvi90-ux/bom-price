@@ -25,14 +25,14 @@ public class ChangeCustomerTests(WebApplicationFactory<Program> factory) : IClas
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", sales.AccessToken);
 
         var customers = (await _client.GetFromJsonAsync<List<CustomerShort>>("/api/customers"))!;
-        var items = (await _client.GetFromJsonAsync<List<ItemShort>>("/api/items"))!;
+        var spItems = (await _client.GetFromJsonAsync<List<ItemShort>>("/api/items"))!;
         customers.Count.Should().BeGreaterThanOrEqualTo(2, "need two customers for swap");
 
         var original = customers[0];
         var swap = customers[1];
 
-        var finishedGood = items.First(i => i.Type == "FinishedGood");
-        var rawMaterial = items.First(i => i.Type == "RawMaterial");
+        // SP sees FinishedGood only (server-enforced); pick the finished good for the requisition
+        var finishedGood = spItems.First(i => i.Type == "FinishedGood");
 
         var create = await _client.PostAsJsonAsync("/api/requisitions", new
         {
@@ -59,6 +59,10 @@ public class ChangeCustomerTests(WebApplicationFactory<Program> factory) : IClas
         // BomCreator walks BOM → CostingPending
         var bom = await LoginAsync("bob@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bom.AccessToken);
+
+        // BomCreator can see RawMaterial items (not role-restricted)
+        var bomItems = (await _client.GetFromJsonAsync<List<ItemShort>>("/api/items"))!;
+        var rawMaterial = bomItems.First(i => i.Type == "RawMaterial");
 
         var startBom = await _client.PostAsync($"/api/bom/{reqId}/items/{reqItemId}/start", null);
         startBom.EnsureSuccessStatusCode();

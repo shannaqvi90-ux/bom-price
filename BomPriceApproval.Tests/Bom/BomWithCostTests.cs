@@ -27,9 +27,9 @@ public class BomWithCostTests(WebApplicationFactory<Program> factory)
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", spToken);
 
+        // SP sees FinishedGood only (server-enforced)
         var items = await _client.GetFromJsonAsync<List<ItemDto>>("/api/items");
         var finishedGood = items!.First(i => i.Type == "FinishedGood");
-        var rawMaterial = items!.First(i => i.Type == "RawMaterial");
         var customers = await _client.GetFromJsonAsync<List<CustomerDto>>("/api/customers");
 
         var reqResp = await _client.PostAsJsonAsync("/api/requisitions", new
@@ -57,9 +57,12 @@ public class BomWithCostTests(WebApplicationFactory<Program> factory)
         var process = await processResp.Content.ReadFromJsonAsync<ProcessDto>();
 
         // 3. BomCreator starts, saves lines, and submits BOM
+        // BomCreator can see RawMaterial items (not role-restricted)
         var bomToken = await LoginAsync("bob@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", bomToken);
+        var bomItems = await _client.GetFromJsonAsync<List<ItemDto>>("/api/items");
+        var rawMaterial = bomItems!.First(i => i.Type == "RawMaterial");
 
         await _client.PostAsync($"/api/bom/{requisitionId}/items/{requisitionItemId}/start", null);
 
@@ -127,9 +130,9 @@ public class BomWithCostTests(WebApplicationFactory<Program> factory)
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", spToken);
 
+        // SP sees FinishedGood only (server-enforced)
         var items = await _client.GetFromJsonAsync<List<ItemDto>>("/api/items");
         var finishedGood = items!.First(i => i.Type == "FinishedGood");
-        var rawMaterial = items!.First(i => i.Type == "RawMaterial");
         var customers = await _client.GetFromJsonAsync<List<CustomerDto>>("/api/customers");
 
         var reqResp = await _client.PostAsJsonAsync("/api/requisitions", new
@@ -155,9 +158,12 @@ public class BomWithCostTests(WebApplicationFactory<Program> factory)
         var process = await processResp.Content.ReadFromJsonAsync<ProcessDto>();
 
         // BomCreator starts, saves lines, and submits BOM (no costing yet)
+        // BomCreator can see RawMaterial items (not role-restricted)
         var bomToken = await LoginAsync("bob@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", bomToken);
+        var bomItems = await _client.GetFromJsonAsync<List<ItemDto>>("/api/items");
+        var rawMaterial = bomItems!.First(i => i.Type == "RawMaterial");
 
         await _client.PostAsync($"/api/bom/{requisitionId}/items/{requisitionItemId}/start", null);
 

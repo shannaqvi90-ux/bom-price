@@ -16,16 +16,36 @@ namespace BomPriceApproval.API.Features.Items;
 public class ItemsController(AppDbContext db) : ControllerBase
 {
     private int? CurrentBranchId => int.TryParse(User.FindFirstValue("branchId"), out var b) && b > 0 ? b : null;
+    private string? CurrentRole => User.FindFirstValue(ClaimTypes.Role);
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] string? type = null, [FromQuery] bool includeInactive = false)
+    public async Task<IActionResult> GetAll(
+        [FromQuery] int? branchId = null,
+        [FromQuery] string? type = null,
+        [FromQuery] bool includeInactive = false)
     {
         var query = db.Items.AsQueryable();
+
+        // JWT-based branch isolation: branch-assigned users only see their own branch
         if (CurrentBranchId.HasValue) query = query.Where(i => i.BranchId == CurrentBranchId);
-        if (type is not null && Enum.TryParse<ItemType>(type, out var t))
-            query = query.Where(i => i.Type == t);
+
+        // V23a: SP role server-enforces FinishedGood-only (defense-in-depth — UI also filters)
+        if (CurrentRole == "SalesPerson")
+        {
+            query = query.Where(i => i.Type == ItemType.FinishedGood);
+        }
+        else if (!string.IsNullOrWhiteSpace(type) && Enum.TryParse<ItemType>(type, ignoreCase: true, out var parsed))
+        {
+            query = query.Where(i => i.Type == parsed);
+        }
+
+        // Optional branchId filter (useful for admin users who are not auto-scoped)
+        if (branchId.HasValue)
+            query = query.Where(i => i.BranchId == branchId.Value);
+
         if (!includeInactive)
             query = query.Where(i => i.IsActive);
+
         return Ok(await query
             .Select(i => new ItemResponse(i.Id, i.Code, i.Description, i.Type.ToString(), i.BranchId, i.IsActive, i.LastPurchasePrice))
             .ToListAsync());

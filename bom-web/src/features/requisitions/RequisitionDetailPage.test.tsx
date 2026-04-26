@@ -9,6 +9,10 @@ import { useAuthStore } from "@/store/authStore";
 
 vi.mock("@/api/axios", () => ({ api: { get: vi.fn(), post: vi.fn() } }));
 
+vi.mock("@/api/branches", () => ({
+  useBranches: () => ({ data: [], isPending: false }),
+}));
+
 import { api } from "@/api/axios";
 import RequisitionDetailPage from "./RequisitionDetailPage";
 
@@ -257,6 +261,69 @@ describe("RequisitionDetailPage", () => {
     render(wrap(<RequisitionDetailPage />));
     await waitFor(() =>
       expect(screen.getByText(/Customer changed \(1\)/i)).toBeInTheDocument(),
+    );
+  });
+
+  it("shows Change-branch button for Accountant in CostingPending", async () => {
+    useAuthStore.getState().setSession({
+      accessToken: "at", refreshToken: "rt",
+      role: "Accountant", userId: 11, name: "Sara", branchId: null,
+    });
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.includes("branch-history")) return Promise.resolve({ data: [] });
+      if (url.includes("customer-history")) return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: { ...sample, status: "CostingPending" } });
+    });
+    render(wrap(<RequisitionDetailPage />));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /change branch/i })).toBeInTheDocument(),
+    );
+  });
+
+  it("hides Change-branch button for Accountant in CostingInProgress", async () => {
+    useAuthStore.getState().setSession({
+      accessToken: "at", refreshToken: "rt",
+      role: "Accountant", userId: 11, name: "Sara", branchId: null,
+    });
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.includes("branch-history")) return Promise.resolve({ data: [] });
+      if (url.includes("customer-history")) return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: { ...sample, status: "CostingInProgress" } });
+    });
+    render(wrap(<RequisitionDetailPage />));
+    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /change branch/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Branch changed/i)).not.toBeInTheDocument();
+  });
+
+  it("shows 'Branch changed (1)' badge when history > 0; click opens BranchChangeHistoryModal", async () => {
+    useAuthStore.getState().setSession({
+      accessToken: "at", refreshToken: "rt",
+      role: "Accountant", userId: 11, name: "Sara", branchId: null,
+    });
+    const branchHistoryEntry = {
+      id: 1,
+      oldBranchId: 1,
+      oldBranchName: "Fujairah",
+      newBranchId: 2,
+      newBranchName: "Dubai",
+      changedByUserId: 11,
+      changedByUserName: "Sara",
+      changedAt: "2026-04-20T10:00:00Z",
+      reason: "Transfer",
+    };
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.includes("branch-history")) return Promise.resolve({ data: [branchHistoryEntry] });
+      if (url.includes("customer-history")) return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: { ...sample, status: "CostingPending" } });
+    });
+    render(wrap(<RequisitionDetailPage />));
+    await waitFor(() =>
+      expect(screen.getByText(/Branch changed \(1\)/i)).toBeInTheDocument(),
+    );
+    await userEvent.click(screen.getByText(/Branch changed \(1\)/i));
+    await waitFor(() =>
+      expect(screen.getByText(/Branch change history/i)).toBeInTheDocument(),
     );
   });
 });

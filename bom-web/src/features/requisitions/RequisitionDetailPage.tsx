@@ -5,8 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { RequisitionTimeline } from "./components/RequisitionTimeline";
-import { useRequisition, useCustomerChangeHistory } from "./requisitionsApi";
+import { useRequisition, useCustomerChangeHistory, useBranchChangeHistory } from "./requisitionsApi";
 import { CustomerHistoryModal } from "./CustomerHistoryModal";
+import { BranchSwapModal } from "./BranchSwapModal";
+import { BranchChangeHistoryModal } from "./BranchChangeHistoryModal";
 import { useAuthStore } from "@/store/authStore";
 import { formatRelative } from "@/utils/date";
 import type { RequisitionDetail, RequisitionStatus, UserRole } from "@/types/api";
@@ -46,6 +48,10 @@ export default function RequisitionDetailPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const historyQ = useCustomerChangeHistory(numericId, true);
   const historyCount = historyQ.data?.length ?? 0;
+  const [branchSwapOpen, setBranchSwapOpen] = useState(false);
+  const [branchHistoryOpen, setBranchHistoryOpen] = useState(false);
+  const branchHistQ = useBranchChangeHistory(numericId, true);
+  const branchChangeCount = branchHistQ.data?.length ?? 0;
 
   const httpStatus = (error as { response?: { status?: number } } | null)?.response?.status;
 
@@ -91,6 +97,9 @@ export default function RequisitionDetailPage() {
 
   const r: RequisitionDetail = data;
   const action = actionButtonFor(role, r.status);
+  const canChangeBranch =
+    (role === "Accountant" || role === "Admin") &&
+    (r.status === "BomPending" || r.status === "BomInProgress" || r.status === "CostingPending");
 
   return (
     <div className="space-y-6">
@@ -155,7 +164,29 @@ export default function RequisitionDetailPage() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Quotation</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                Quotation
+                {canChangeBranch && (
+                  <button
+                    type="button"
+                    onClick={() => setBranchSwapOpen(true)}
+                    className="text-sm text-blue-700 underline ml-3"
+                  >
+                    Change branch
+                  </button>
+                )}
+                {branchChangeCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setBranchHistoryOpen(true)}
+                    className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800 hover:bg-amber-200"
+                  >
+                    Branch changed ({branchChangeCount})
+                  </button>
+                )}
+              </CardTitle>
+            </CardHeader>
             <CardContent>
               <LabeledValue label="Currency" value={r.currencyCode} />
               {r.exchangeRateSnapshot !== null && (
@@ -220,6 +251,17 @@ export default function RequisitionDetailPage() {
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
         requisitionId={numericId}
+      />
+      <BranchSwapModal
+        requisitionId={r.id}
+        currentBranchId={r.branchId}
+        open={branchSwapOpen}
+        onClose={() => setBranchSwapOpen(false)}
+      />
+      <BranchChangeHistoryModal
+        requisitionId={r.id}
+        open={branchHistoryOpen}
+        onClose={() => setBranchHistoryOpen(false)}
       />
     </div>
   );

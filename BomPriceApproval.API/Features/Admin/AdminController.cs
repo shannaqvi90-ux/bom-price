@@ -56,8 +56,11 @@ public class AdminController(AppDbContext db, AdminAuditLogger audit, Notificati
     }
 
     [HttpDelete("requisitions/{id}")]
-    public async Task<IActionResult> DeleteRequisition(int id, [FromBody] DeleteRequisitionRequest body)
+    public async Task<IActionResult> DeleteRequisition(int id, [FromBody] DeleteRequisitionRequest? body)
     {
+        if (body is null)
+            return BadRequest(new { error = "Request body is required" });
+
         if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Length < 5)
             return BadRequest(new { error = "Reason is required (min 5 chars)" });
 

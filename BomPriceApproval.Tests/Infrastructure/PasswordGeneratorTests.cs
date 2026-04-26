@@ -1,4 +1,5 @@
 using BomPriceApproval.API.Infrastructure.Services;
+using BomPriceApproval.API.Infrastructure.Validation;
 using FluentAssertions;
 
 namespace BomPriceApproval.Tests.Infrastructure;
@@ -30,5 +31,16 @@ public class PasswordGeneratorTests
     {
         var samples = Enumerable.Range(0, 50).Select(_ => PasswordGenerator.Generate()).ToHashSet();
         samples.Count.Should().BeGreaterThan(45, "should be near-collision-free at 12 chars");
+    }
+
+    [Fact]
+    public void Generate_OutputPassesPasswordValidator()
+    {
+        for (int i = 0; i < 50; i++)
+        {
+            var pwd = PasswordGenerator.Generate();
+            PasswordValidator.Validate(pwd).Should().BeNull(
+                "generated password must pass all validator rules");
+        }
     }
 }

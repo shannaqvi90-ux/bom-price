@@ -275,7 +275,9 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime>("ChangedAt")
-                        .HasColumnType("timestamptz");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamptz")
+                        .HasDefaultValueSql("now() at time zone 'utc'");
 
                     b.Property<int>("ChangedByUserId")
                         .HasColumnType("integer");
@@ -287,12 +289,16 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string>("Reason")
-                        .HasColumnType("text");
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<int>("RequisitionId")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ChangedAt")
+                        .IsDescending();
 
                     b.HasIndex("ChangedByUserId");
 

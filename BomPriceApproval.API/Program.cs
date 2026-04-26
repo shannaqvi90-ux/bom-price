@@ -234,6 +234,17 @@ using (var scope = app.Services.CreateScope())
         });
 
         await db.SaveChangesAsync();
+
+        // V2.3-A: Ensure every active Accountant has UserBranches rows for every active Branch
+        // (matches the V23a migration data step; runs after seeding for fresh-DB scenarios where
+        // migrations apply to an empty Users table).
+        await db.Database.ExecuteSqlRawAsync(@"
+            INSERT INTO ""UserBranches"" (""UserId"", ""BranchId"", ""AssignedAt"")
+            SELECT u.""Id"", b.""Id"", NOW() AT TIME ZONE 'UTC'
+            FROM ""Users"" u CROSS JOIN ""Branches"" b
+            WHERE u.""Role"" = 3 AND u.""IsActive"" = TRUE AND b.""IsActive"" = TRUE
+            ON CONFLICT (""UserId"", ""BranchId"") DO NOTHING;
+        ");
     }
 
     // Seed additional BomCreators (eve + frank) added after initial seed — guard separately

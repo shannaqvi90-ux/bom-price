@@ -29,8 +29,8 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                     OldBranchId = table.Column<int>(type: "integer", nullable: false),
                     NewBranchId = table.Column<int>(type: "integer", nullable: false),
                     ChangedByUserId = table.Column<int>(type: "integer", nullable: false),
-                    ChangedAt = table.Column<DateTime>(type: "timestamptz", nullable: false),
-                    Reason = table.Column<string>(type: "text", nullable: true)
+                    ChangedAt = table.Column<DateTime>(type: "timestamptz", nullable: false, defaultValueSql: "now() at time zone 'utc'"),
+                    Reason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -125,6 +125,12 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                 table: "UserBranches",
                 column: "BranchId");
 
+            migrationBuilder.CreateIndex(
+                name: "IX_BranchChangeHistories_ChangedAt",
+                table: "BranchChangeHistories",
+                column: "ChangedAt",
+                descending: new bool[0]);
+
             // Auto-assign every active Accountant to every active Branch.
             // Preserves Sara's pre-V23a cross-branch behavior across the cutover.
             migrationBuilder.Sql(@"
@@ -141,8 +147,6 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.Sql(@"DELETE FROM ""UserBranches"";");
-
             migrationBuilder.DropTable(
                 name: "BranchChangeHistories");
 

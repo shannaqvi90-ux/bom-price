@@ -261,6 +261,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(h => h.NewBranch).WithMany().HasForeignKey(h => h.NewBranchId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(h => h.ChangedBy).WithMany().HasForeignKey(h => h.ChangedByUserId).OnDelete(DeleteBehavior.Restrict);
             e.Property(h => h.ChangedAt).HasColumnType("timestamptz");
+            e.Property(h => h.Reason).HasMaxLength(500);
+            e.Property(h => h.ChangedAt).HasDefaultValueSql("now() at time zone 'utc'");
+            e.HasIndex(h => h.RequisitionId);
+            e.HasIndex(h => h.ChangedAt).IsDescending();
         });
 
         // Optimistic concurrency via PostgreSQL system xmin column.

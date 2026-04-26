@@ -184,5 +184,41 @@ public class AdminController(AppDbContext db, AdminAuditLogger audit, Notificati
         return Ok(new { req.Id, req.SalesPersonId });
     }
 
+    [HttpPost("requisitions/{id}/unlock-bom")]
+    public async Task<IActionResult> UnlockBom(int id, [FromBody] UnlockBomRequest? body)
+    {
+        if (body is null)
+            return BadRequest(new { error = "Request body is required" });
+        if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Length < 5)
+            return BadRequest(new { error = "Reason is required (min 5 chars)" });
+
+        var req = await db.QuotationRequests.FindAsync(id);
+        if (req is null) return NotFound();
+
+        if (!Infrastructure.Authorization.AdminOverrideAuthorization.CanUnlockBom(req.Status))
+            return BadRequest(new { error = $"Cannot unlock BOM from status {req.Status}" });
+
+        var before = new { req.Id, req.Status };
+        req.Status = RequisitionStatus.BomInProgress;
+        var after = new { req.Id, req.Status };
+
+        audit.Log(CurrentUserId, AdminActionType.UnlockBom, "Requisition", id, body.Reason, before, after);
+        await db.SaveChangesAsync();
+
+        var recipientIds = await db.Users
+            .Where(u => u.BranchId == req.BranchId && (u.Role == UserRole.BomCreator || u.Role == UserRole.Accountant))
+            .Select(u => u.Id).ToListAsync();
+
+        foreach (var uid in recipientIds)
+        {
+            await notify.SendAsync(uid,
+                $"BOM for requisition {req.RefNo} has been unlocked by Admin",
+                referenceId: id,
+                referenceType: nameof(NotificationType.BomUnlocked));
+        }
+
+        return Ok(new { req.Id, req.Status });
+    }
+
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
 }

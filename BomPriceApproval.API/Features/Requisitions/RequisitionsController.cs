@@ -38,13 +38,24 @@ public class RequisitionsController(
             .Include(q => q.Branch).Include(q => q.SalesPerson)
             .AsQueryable();
 
-        query = CurrentRole switch
+        // Branch scoping (V23a — uses UserBranches for Accountant)
+        if (CurrentRole == "Accountant")
         {
-            "SalesPerson" => query.Where(q => q.SalesPersonId == CurrentUserId),
-            "BomCreator" => query.Where(q => q.BranchId == CurrentBranchId),
-            _ when CurrentBranchId.HasValue => query.Where(q => q.BranchId == CurrentBranchId),
-            _ => query
-        };
+            var assignedBranchIds = await db.UserBranches
+                .Where(ub => ub.UserId == CurrentUserId)
+                .Select(ub => ub.BranchId)
+                .ToListAsync();
+            query = query.Where(q => assignedBranchIds.Contains(q.BranchId));
+        }
+        else if (CurrentRole == "BomCreator" && CurrentBranchId.HasValue)
+        {
+            query = query.Where(q => q.BranchId == CurrentBranchId.Value);
+        }
+        else if (CurrentRole == "SalesPerson")
+        {
+            query = query.Where(q => q.SalesPersonId == CurrentUserId);
+        }
+        // MD + Admin: no scoping
 
         if (statuses is { Length: > 0 })
         {
@@ -82,7 +93,7 @@ public class RequisitionsController(
             .Select(q => new RequisitionListItem(
                 q.Id, q.RefNo, q.Status.ToString(), q.Items.Count,
                 q.Customer.Name, q.CurrencyCode,
-                q.Branch.Name, q.SalesPerson.Name, q.CreatedAt));
+                q.BranchId, q.Branch.Name, q.SalesPerson.Name, q.CreatedAt));
 
         if (page.HasValue && pageSize.HasValue)
         {

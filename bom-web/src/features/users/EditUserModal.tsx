@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/Label";
 import { useUpdateUser } from "./usersApi";
 import { useBranches } from "@/api/lookups";
 import { useUserBranches, useSetUserBranches } from "@/api/userBranches";
+import { useGroups } from "@/api/groups";
+import { useUserGroup, useSetUserGroup } from "@/api/userGroup";
 import type { User, UserRole } from "@/types/api";
 
 const BRANCH_SCOPED_ROLES = new Set<UserRole>(["SalesPerson", "BomCreator"]);
@@ -42,6 +44,11 @@ export function EditUserModal({ open, user, onClose }: Props) {
   const { data: existingBranchIds = [] } = useUserBranches(user?.id ?? 0, open && user?.role === "Accountant");
   const setUserBranches = useSetUserBranches(user?.id ?? 0);
   const [selectedBranchIds, setSelectedBranchIds] = useState<number[]>([]);
+  // SalesPerson group support
+  const { data: groups = [] } = useGroups();
+  const { data: existingGroup } = useUserGroup(user?.id ?? 0, open && user?.role === "SalesPerson");
+  const setUserGroup = useSetUserGroup(user?.id ?? 0);
+  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
 
   const {
     register,
@@ -72,9 +79,17 @@ export function EditUserModal({ open, user, onClose }: Props) {
     }
   }, [open, user?.role, existingBranchIds]);
 
+  // Sync selected group when existing one loads or modal opens with a SalesPerson
+  useEffect(() => {
+    if (open && user?.role === "SalesPerson") {
+      setSelectedGroupId(existingGroup?.groupId ?? null);
+    }
+  }, [open, user?.role, existingGroup]);
+
   const role = watch("role") as UserRole | "";
   const branchRequired = role !== "" && BRANCH_SCOPED_ROLES.has(role as UserRole);
   const isAccountant = role === "Accountant";
+  const isSalesPerson = role === "SalesPerson";
 
   function toggleBranch(id: number) {
     setSelectedBranchIds((prev) =>
@@ -85,7 +100,9 @@ export function EditUserModal({ open, user, onClose }: Props) {
   function handleClose() {
     update.reset();
     setUserBranches.reset();
+    setUserGroup.reset();
     setSelectedBranchIds([]);
+    setSelectedGroupId(null);
     onClose();
   }
 
@@ -106,9 +123,15 @@ export function EditUserModal({ open, user, onClose }: Props) {
       if (isAccountant) {
         await setUserBranches.mutateAsync(selectedBranchIds);
       }
+      // For SalesPerson: also persist the group assignment
+      if (isSalesPerson) {
+        await setUserGroup.mutateAsync(selectedGroupId);
+      }
       update.reset();
       setUserBranches.reset();
+      setUserGroup.reset();
       setSelectedBranchIds([]);
+      setSelectedGroupId(null);
       onClose();
     } catch {
       // error displayed via update.isError or setUserBranches.isError
@@ -164,6 +187,31 @@ export function EditUserModal({ open, user, onClose }: Props) {
             </select>
             {errors.branchId && (
               <p className="text-xs text-destructive">{errors.branchId.message}</p>
+            )}
+          </div>
+        )}
+
+        {isSalesPerson && (
+          <div className="space-y-1">
+            <Label htmlFor="edit-user-group">Group</Label>
+            <select
+              id="edit-user-group"
+              className="block w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              value={selectedGroupId ?? ""}
+              onChange={(e) => setSelectedGroupId(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">None</option>
+              {groups.filter((g) => g.isActive).map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+            {setUserGroup.isError && (
+              <p className="text-xs text-destructive">
+                {(setUserGroup.error as { response?: { data?: { message?: string } } })
+                  ?.response?.data?.message ?? "Failed to update group assignment"}
+              </p>
             )}
           </div>
         )}

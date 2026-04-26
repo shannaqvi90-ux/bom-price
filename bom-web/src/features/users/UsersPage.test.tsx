@@ -71,9 +71,19 @@ afterEach(() => {
 
 // ─── UsersPage ────────────────────────────────────────────────────────────────
 
+function mockUsersGet(users: typeof sampleUsers) {
+  vi.mocked(api.get).mockImplementation((url: string) => {
+    if (url === "/users") return Promise.resolve({ data: users });
+    if (url === "/branches") return Promise.resolve({ data: [] });
+    if (/\/users\/\d+\/group/.test(url)) return Promise.resolve({ data: { groupId: null, groupName: null } });
+    if (/\/users\/\d+\/branches/.test(url)) return Promise.resolve({ data: [] });
+    return Promise.resolve({ data: [] });
+  });
+}
+
 describe("UsersPage", () => {
   it("renders user rows (name, email, role, active badge)", async () => {
-    vi.mocked(api.get).mockResolvedValueOnce({ data: sampleUsers });
+    mockUsersGet(sampleUsers);
     wrap(<UsersPage />);
     await waitFor(() => expect(screen.getByText("Alice Admin")).toBeInTheDocument());
     expect(screen.getByText("alice@example.com")).toBeInTheDocument();
@@ -87,7 +97,7 @@ describe("UsersPage", () => {
   });
 
   it("hides Deactivate button for inactive users", async () => {
-    vi.mocked(api.get).mockResolvedValueOnce({ data: sampleUsers });
+    mockUsersGet(sampleUsers);
     wrap(<UsersPage />);
     await waitFor(() => expect(screen.getByText("Bob Sales")).toBeInTheDocument());
     // Alice (active) has Deactivate button
@@ -114,7 +124,7 @@ describe("UsersPage", () => {
   });
 
   it("opens EditUserModal pre-populated when Edit clicked", async () => {
-    vi.mocked(api.get).mockResolvedValueOnce({ data: sampleUsers });
+    mockUsersGet(sampleUsers);
     const user = userEvent.setup();
     wrap(<UsersPage />);
     await waitFor(() => expect(screen.getByText("Alice Admin")).toBeInTheDocument());
@@ -144,7 +154,7 @@ describe("UsersPage", () => {
   });
 
   it("Deactivate shows confirmation dialog; cancel dismisses", async () => {
-    vi.mocked(api.get).mockResolvedValueOnce({ data: sampleUsers });
+    mockUsersGet(sampleUsers);
     const user = userEvent.setup();
     wrap(<UsersPage />);
     await waitFor(() => expect(screen.getByText("Alice Admin")).toBeInTheDocument());
@@ -162,7 +172,7 @@ describe("UsersPage", () => {
   });
 
   it("Deactivate confirm calls DELETE /users/:id and invalidates list", async () => {
-    vi.mocked(api.get).mockResolvedValue({ data: sampleUsers });
+    mockUsersGet(sampleUsers);
     vi.mocked(api.delete as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ status: 200 });
     const user = userEvent.setup();
     wrap(<UsersPage />);
@@ -180,7 +190,7 @@ describe("UsersPage", () => {
   });
 
   it("shows error message when Deactivate fails and keeps dialog open", async () => {
-    vi.mocked(api.get).mockResolvedValue({ data: sampleUsers });
+    mockUsersGet(sampleUsers);
     vi.mocked(api.delete as ReturnType<typeof vi.fn>).mockRejectedValueOnce({
       response: { data: { message: "Cannot deactivate last admin" } },
     });
@@ -298,7 +308,7 @@ describe("AddUserModal", () => {
 
 describe("EditUserModal", () => {
   async function openEditModal() {
-    vi.mocked(api.get).mockResolvedValueOnce({ data: sampleUsers });
+    mockUsersGet(sampleUsers);
     const user = userEvent.setup();
     wrap(<UsersPage />);
     await waitFor(() => expect(screen.getByText("Alice Admin")).toBeInTheDocument());
@@ -319,7 +329,7 @@ describe("EditUserModal", () => {
   });
 
   it("submits correct payload and closes modal on success", async () => {
-    vi.mocked(api.get).mockResolvedValue({ data: sampleUsers });
+    mockUsersGet(sampleUsers);
     vi.mocked(api.put as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ status: 204 });
     const user = await openEditModal();
 
@@ -387,6 +397,7 @@ describe("Branch column", () => {
       if (url === "/users") return Promise.resolve({ data: usersWithBranch });
       if (url === "/branches") return Promise.resolve({ data: sampleBranches });
       if (/\/users\/\d+\/branches/.test(url)) return Promise.resolve({ data: [] });
+      if (/\/users\/\d+\/group/.test(url)) return Promise.resolve({ data: { groupId: null, groupName: null } });
       return Promise.resolve({ data: [] });
     });
     wrap(<UsersPage />);
@@ -401,6 +412,7 @@ describe("Branch column", () => {
       if (url === "/users") return Promise.resolve({ data: usersWithBranch });
       if (url === "/branches") return Promise.resolve({ data: sampleBranches });
       if (/\/users\/\d+\/branches/.test(url)) return Promise.resolve({ data: [] });
+      if (/\/users\/\d+\/group/.test(url)) return Promise.resolve({ data: { groupId: null, groupName: null } });
       return Promise.resolve({ data: [] });
     });
     wrap(<UsersPage />);
@@ -413,6 +425,7 @@ describe("Branch column", () => {
       if (url === "/users") return Promise.resolve({ data: usersWithBranch });
       if (url === "/branches") return Promise.resolve({ data: sampleBranches });
       if (url === "/users/4/branches") return Promise.resolve({ data: [1, 2] });
+      if (/\/users\/\d+\/group/.test(url)) return Promise.resolve({ data: { groupId: null, groupName: null } });
       return Promise.resolve({ data: [] });
     });
     wrap(<UsersPage />);
@@ -420,6 +433,45 @@ describe("Branch column", () => {
     await waitFor(() =>
       expect(screen.getByText("Dubai Main, Abu Dhabi")).toBeInTheDocument(),
     );
+  });
+});
+
+// ─── Group column ─────────────────────────────────────────────────────────────
+
+const spUser = {
+  id: 3,
+  name: "Sara Sales",
+  email: "sara@example.com",
+  role: "SalesPerson",
+  branchId: 1,
+  branchName: "Dubai Main",
+  isActive: true,
+};
+
+describe("Group column", () => {
+  it("renders Group column header", async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === "/users") return Promise.resolve({ data: [spUser] });
+      if (url === "/branches") return Promise.resolve({ data: sampleBranches });
+      if (/\/users\/\d+\/group/.test(url)) return Promise.resolve({ data: { groupId: null, groupName: null } });
+      return Promise.resolve({ data: [] });
+    });
+    wrap(<UsersPage />);
+    await waitFor(() => expect(screen.getByText("Sara Sales")).toBeInTheDocument());
+    expect(screen.getByText("Group")).toBeInTheDocument();
+  });
+
+  it("shows group name for SP row when assigned", async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === "/users") return Promise.resolve({ data: [spUser] });
+      if (url === "/branches") return Promise.resolve({ data: sampleBranches });
+      if (url === "/users/3/group") return Promise.resolve({ data: { groupId: 1, groupName: "North Team" } });
+      if (/\/users\/\d+\/group/.test(url)) return Promise.resolve({ data: { groupId: null, groupName: null } });
+      return Promise.resolve({ data: [] });
+    });
+    wrap(<UsersPage />);
+    await waitFor(() => expect(screen.getByText("Sara Sales")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("North Team")).toBeInTheDocument());
   });
 });
 
@@ -477,6 +529,7 @@ describe("EditUserModal — Accountant multi-branch", () => {
       if (url === "/users") return Promise.resolve({ data: [accountantUser] });
       if (url === "/branches") return Promise.resolve({ data: sampleBranches });
       if (url === "/users/4/branches") return Promise.resolve({ data: [1] });
+      if (/\/users\/\d+\/group/.test(url)) return Promise.resolve({ data: { groupId: null, groupName: null } });
       return Promise.resolve({ data: [] });
     });
     vi.mocked(api.put as ReturnType<typeof vi.fn>).mockResolvedValue({ status: 204 });
@@ -502,6 +555,106 @@ describe("EditUserModal — Accountant multi-branch", () => {
       expect(vi.mocked(api.put as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(
         "/users/4/branches",
         expect.objectContaining({ branchIds: expect.arrayContaining([1, 2]) }),
+      ),
+    );
+  });
+});
+
+// ─── EditUserModal — SalesPerson group ───────────────────────────────────────
+
+const sampleGroups = [
+  { id: 1, name: "North Team", isActive: true },
+  { id: 2, name: "South Team", isActive: true },
+];
+
+const spEditUser = {
+  id: 3,
+  name: "Sara Sales",
+  email: "sara@example.com",
+  role: "SalesPerson",
+  branchId: 1,
+  branchName: "Dubai Main",
+  isActive: true,
+};
+
+const nonSpUser = {
+  id: 5,
+  name: "Bob Bom",
+  email: "bob@example.com",
+  role: "BomCreator",
+  branchId: 1,
+  branchName: "Dubai Main",
+  isActive: true,
+};
+
+describe("EditUserModal — SalesPerson group", () => {
+  it("Group dropdown is visible only when role is SalesPerson", async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === "/users") return Promise.resolve({ data: [spEditUser] });
+      if (url === "/branches") return Promise.resolve({ data: sampleBranches });
+      if (url === "/groups") return Promise.resolve({ data: sampleGroups });
+      if (/\/users\/\d+\/group/.test(url)) return Promise.resolve({ data: { groupId: null, groupName: null } });
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    wrap(<UsersPage />);
+    await waitFor(() => expect(screen.getByText("Sara Sales")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /Edit Sara Sales/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "Edit User" })).toBeInTheDocument(),
+    );
+    expect(screen.getByLabelText(/Group/i)).toBeInTheDocument();
+  });
+
+  it("Group dropdown is hidden for non-SalesPerson roles", async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === "/users") return Promise.resolve({ data: [nonSpUser] });
+      if (url === "/branches") return Promise.resolve({ data: sampleBranches });
+      if (url === "/groups") return Promise.resolve({ data: sampleGroups });
+      if (/\/users\/\d+\/group/.test(url)) return Promise.resolve({ data: { groupId: null, groupName: null } });
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    wrap(<UsersPage />);
+    await waitFor(() => expect(screen.getByText("Bob Bom")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /Edit Bob Bom/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "Edit User" })).toBeInTheDocument(),
+    );
+    expect(screen.queryByLabelText(/^Group$/i)).not.toBeInTheDocument();
+  });
+
+  it("Save calls PUT /users/:id and PUT /users/:id/group with selected groupId", async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === "/users") return Promise.resolve({ data: [spEditUser] });
+      if (url === "/branches") return Promise.resolve({ data: sampleBranches });
+      if (url === "/groups") return Promise.resolve({ data: sampleGroups });
+      if (/\/users\/\d+\/group/.test(url)) return Promise.resolve({ data: { groupId: null, groupName: null } });
+      return Promise.resolve({ data: [] });
+    });
+    vi.mocked(api.put as ReturnType<typeof vi.fn>).mockResolvedValue({ status: 204 });
+    const user = userEvent.setup();
+    wrap(<UsersPage />);
+    await waitFor(() => expect(screen.getByText("Sara Sales")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /Edit Sara Sales/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "Edit User" })).toBeInTheDocument(),
+    );
+    // Select group North Team (id=1)
+    await waitFor(() => expect(screen.getByLabelText(/Group/i)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText(/Group/i), "1");
+    await user.click(screen.getByRole("button", { name: /^Save$/i }));
+
+    await waitFor(() =>
+      expect(vi.mocked(api.put as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(
+        "/users/3",
+        expect.objectContaining({ role: "SalesPerson" }),
+      ),
+    );
+    await waitFor(() =>
+      expect(vi.mocked(api.put as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(
+        "/users/3/group",
+        expect.objectContaining({ groupId: 1 }),
       ),
     );
   });

@@ -10,6 +10,7 @@ import { AddUserModal } from "./AddUserModal";
 import { EditUserModal } from "./EditUserModal";
 import { useUserBranches } from "@/api/userBranches";
 import { useBranches } from "@/api/branches";
+import { SalesGroupCell } from "@/components/SalesGroupCell";
 import type { User } from "@/types/api";
 
 // ─── AccountantBranchCell ─────────────────────────────────────────────────────
@@ -71,6 +72,14 @@ export default function UsersPage() {
           if (u.branchId === null) return <span className="text-muted-foreground">—</span>;
           const name = allBranches.find((b) => b.id === u.branchId)?.name ?? u.branchName;
           return <span className="text-sm">{name ?? String(u.branchId)}</span>;
+        },
+      },
+      {
+        id: "group",
+        header: "Group",
+        cell: ({ row }: { row: { original: User } }) => {
+          const u = row.original;
+          return <SalesGroupCell userId={u.id} role={u.role} />;
         },
       },
       {

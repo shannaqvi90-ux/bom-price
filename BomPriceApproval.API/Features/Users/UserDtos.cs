@@ -20,3 +20,6 @@ public record UpdateUserRequest(
 public record UserResponse(int Id, string Name, string Email, string Role, int? BranchId, string? BranchName, bool IsActive);
 
 public record SetUserBranchesRequest(IList<int> BranchIds);
+
+public record SetUserGroupRequest(int? GroupId);
+public record UserGroupResponse(int? GroupId, string? GroupName);

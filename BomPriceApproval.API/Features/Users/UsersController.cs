@@ -10,16 +10,18 @@ namespace BomPriceApproval.API.Features.Users;
 
 [ApiController]
 [Route("api/users")]
-[Authorize(Roles = "Admin")]
+[Authorize]
 public class UsersController(AppDbContext db, ILogger<UsersController> logger) : ControllerBase
 {
     [HttpGet]
+    [Authorize(Roles = "Admin,Accountant")]
     public async Task<IActionResult> GetAll() =>
         Ok(await db.Users.Include(u => u.Branch)
             .Select(u => new UserResponse(u.Id, u.Name, u.Email, u.Role.ToString(), u.BranchId, u.Branch == null ? null : u.Branch.Name, u.IsActive))
             .ToListAsync());
 
     [HttpPost]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(CreateUserRequest req)
     {
         if (PasswordValidator.Validate(req.Password) is { } pwdError)
@@ -58,6 +60,7 @@ public class UsersController(AppDbContext db, ILogger<UsersController> logger) :
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Update(int id, UpdateUserRequest req)
     {
         var user = await db.Users.FindAsync(id);
@@ -103,6 +106,7 @@ public class UsersController(AppDbContext db, ILogger<UsersController> logger) :
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(int id)
     {
         var user = await db.Users.FindAsync(id);
@@ -121,6 +125,7 @@ public class UsersController(AppDbContext db, ILogger<UsersController> logger) :
     // must log in again. Access tokens issued before revocation stay valid until
     // their 15-min expiry; for a full immediate kick, the client must also log out.
     [HttpPost("{id}/revoke-sessions")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> RevokeSessions(int id)
     {
         var user = await db.Users.FindAsync(id);
@@ -140,6 +145,7 @@ public class UsersController(AppDbContext db, ILogger<UsersController> logger) :
     }
 
     [HttpGet("{id}/branches")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> GetBranches(int id)
     {
         var ids = await db.UserBranches
@@ -151,6 +157,7 @@ public class UsersController(AppDbContext db, ILogger<UsersController> logger) :
     }
 
     [HttpPut("{id}/branches")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> SetBranches(int id, SetUserBranchesRequest req)
     {
         var u = await db.Users.FindAsync(id);
@@ -182,6 +189,43 @@ public class UsersController(AppDbContext db, ILogger<UsersController> logger) :
         logger.LogInformation("[Audit] UserBranches updated {TargetUserId} BranchIds={BranchIds}",
             id, string.Join(",", distinct));
 
+        return NoContent();
+    }
+
+    [HttpGet("{id}/group")]
+    [Authorize(Roles = "Admin,Accountant")]
+    public async Task<IActionResult> GetGroup(int id)
+    {
+        var u = await db.Users
+            .Where(x => x.Id == id)
+            .Select(x => new { x.GroupId, GroupName = x.Group != null ? x.Group.Name : null })
+            .FirstOrDefaultAsync();
+        if (u is null) return NotFound();
+        return Ok(new UserGroupResponse(u.GroupId, u.GroupName));
+    }
+
+    [HttpPut("{id}/group")]
+    [Authorize(Roles = "Admin,Accountant")]
+    public async Task<IActionResult> SetGroup(int id, SetUserGroupRequest req)
+    {
+        var u = await db.Users.FindAsync(id);
+        if (u is null) return NotFound();
+        if (u.Role != UserRole.SalesPerson)
+            return Validation.Detail("Groups can only be set on SalesPersons.")
+                .Field("Role", "Must be SalesPerson.")
+                .Return();
+
+        if (req.GroupId.HasValue)
+        {
+            var grp = await db.SalesGroups.FindAsync(req.GroupId.Value);
+            if (grp is null || !grp.IsActive)
+                return Validation.Detail("Group not found or inactive.")
+                    .Field("GroupId", "Invalid group.")
+                    .Return();
+        }
+
+        u.GroupId = req.GroupId;
+        await db.SaveChangesAsync();
         return NoContent();
     }
 }

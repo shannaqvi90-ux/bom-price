@@ -5,6 +5,7 @@ using BomPriceApproval.API.Domain.Enums;
 using BomPriceApproval.API.Infrastructure.Data;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace BomPriceApproval.Tests.Auth;
@@ -91,5 +92,46 @@ public class LoginMustChangePasswordTests(WebApplicationFactory<Program> factory
         // Cleanup
         verifyDb.Users.Remove(refreshed);
         await verifyDb.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task ChangePassword_NewSameAsCurrent_Returns400()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var email = $"forced-{Guid.NewGuid():N}@test.com";
+        var pwd = "Temp123!";
+        var user = new User
+        {
+            Email = email,
+            Name = "Bypass Test",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(pwd),
+            Role = UserRole.SalesPerson,
+            BranchId = 1,
+            IsActive = true,
+            MustChangePassword = true
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var client = factory.CreateClient();
+        var login = await client.PostAsJsonAsync("/api/auth/login", new { Email = email, Password = pwd });
+        var loginBody = await login.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+        var token = loginBody!["accessToken"].ToString();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", token);
+
+        var change = await client.PostAsJsonAsync("/api/auth/change-password",
+            new { CurrentPassword = pwd, NewPassword = pwd });
+        change.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        // Verify in DB: flag still true, password unchanged
+        using var verifyScope = factory.Services.CreateScope();
+        var db2 = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var refreshed = await db2.Users.AsNoTracking().FirstAsync(u => u.Id == user.Id);
+        refreshed.MustChangePassword.Should().BeTrue("flag must NOT clear when bypass attempted");
+
+        // Cleanup
+        db2.Users.Remove(refreshed);
+        await db2.SaveChangesAsync();
     }
 }

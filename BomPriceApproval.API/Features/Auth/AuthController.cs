@@ -176,6 +176,11 @@ public class AuthController(
                 .Return();
         }
 
+        if (req.NewPassword == req.CurrentPassword)
+            return Validation.Detail("New password must differ from current password.")
+                .Field("NewPassword", "New password must differ from current password.")
+                .Return();
+
         var pwdError = PasswordValidator.Validate(req.NewPassword);
         if (pwdError is not null)
             return Validation.Detail(pwdError).Field("NewPassword", pwdError).Return();

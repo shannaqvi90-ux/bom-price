@@ -239,13 +239,16 @@ public class AdminReassignSpTests(WebApplicationFactory<Program> factory) : ICla
 
             auditRow.Should().NotBeNull("an audit row must be written for the reassign");
             auditRow!.ActionType.Should().Be(AdminActionType.ReassignSp);
-            // Enums serialize as integers — verify old SP id appears in BeforeJson
-            auditRow.BeforeJson.Should().Contain(sp1.Id.ToString(),
-                "BeforeJson must contain the old SP id");
-            // AfterJson must contain the new SP id
+            // Use typed JSON parsing to avoid false positives from substring matches
+            // (e.g. id=12 would be found inside id=123 with a naive Contains check)
+            var before = System.Text.Json.JsonDocument.Parse(auditRow.BeforeJson).RootElement;
+            before.GetProperty("OldSalesPersonId").GetInt32().Should().Be(sp1.Id,
+                "BeforeJson must record the old SP id");
+
             auditRow.AfterJson.Should().NotBeNull();
-            auditRow.AfterJson!.Should().Contain(sp2.Id.ToString(),
-                "AfterJson must contain the new SP id");
+            var after = System.Text.Json.JsonDocument.Parse(auditRow.AfterJson!).RootElement;
+            after.GetProperty("NewSalesPersonId").GetInt32().Should().Be(sp2.Id,
+                "AfterJson must record the new SP id");
             auditId = auditRow.Id;
         }
         finally

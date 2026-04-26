@@ -15,6 +15,8 @@ export const requisitionKeys = {
   detail: (id: number) => [...requisitionKeys.all, "detail", id] as const,
   customerHistory: (id: number) =>
     [...requisitionKeys.all, "customer-history", id] as const,
+  branchHistory: (id: number) =>
+    [...requisitionKeys.all, "branch-history", id] as const,
 };
 
 export function useRequisitions() {
@@ -127,5 +129,46 @@ export function useCustomerChangeHistory(id: number, enabled = true) {
         .get<CustomerChangeHistoryEntry[]>(`/requisitions/${id}/customer-history`)
         .then((r) => r.data),
     enabled: enabled && Number.isFinite(id) && id > 0,
+  });
+}
+
+export interface ChangeBranchPayload {
+  branchId: number;
+  reason?: string;
+}
+
+export interface BranchChangeHistoryEntry {
+  id: number;
+  oldBranchId: number;
+  oldBranchName: string;
+  newBranchId: number;
+  newBranchName: string;
+  changedByUserId: number;
+  changedByUserName: string;
+  changedAt: string;
+  reason: string | null;
+}
+
+export function useChangeBranch(requisitionId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: ChangeBranchPayload) => {
+      await api.patch(`/requisitions/${requisitionId}/branch`, payload);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: requisitionKeys.detail(requisitionId) });
+      qc.invalidateQueries({ queryKey: requisitionKeys.list() });
+      qc.invalidateQueries({ queryKey: requisitionKeys.branchHistory(requisitionId) });
+    },
+  });
+}
+
+export function useBranchChangeHistory(requisitionId: number, enabled = true) {
+  return useQuery({
+    queryKey: requisitionKeys.branchHistory(requisitionId),
+    queryFn: async () =>
+      (await api.get<BranchChangeHistoryEntry[]>(`/requisitions/${requisitionId}/branch-history`)).data,
+    enabled: enabled && Number.isFinite(requisitionId) && requisitionId > 0,
+    staleTime: 30_000,
   });
 }

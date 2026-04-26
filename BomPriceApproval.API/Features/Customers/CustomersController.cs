@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using BomPriceApproval.API.Domain.Entities;
+using BomPriceApproval.API.Infrastructure.Authorization;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Authorization;
@@ -21,7 +22,11 @@ public class CustomersController(AppDbContext db) : ControllerBase
     {
         var query = db.Customers.Include(c => c.SalesPerson).AsQueryable();
         if (CurrentRole == "SalesPerson")
-            query = query.Where(c => c.SalesPersonId == CurrentUserId);
+        {
+            var currentUser = await db.Users.FirstAsync(u => u.Id == CurrentUserId);
+            var visibleIds = SalesAuthorization.VisibleSalesPersonIds(currentUser, db);
+            query = query.Where(c => c.SalesPersonId.HasValue && visibleIds.Contains(c.SalesPersonId.Value));
+        }
 
         var list = await query
             .OrderBy(c => c.Name)

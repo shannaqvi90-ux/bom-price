@@ -209,6 +209,30 @@ SalesPersons can be grouped into flat peer "sales groups". All members of a grou
 
 > On-device smoke pending — user runs spec §12 11-item checklist when phone tunnel ready.
 
+### V2.3-C P1 Admin Override (post-2026-04-26)
+
+Admin role gets 7 corrective operations contextually surfaced where each entity lives, all writing to a unified `AdminAuditLog` table.
+
+- **C1 Hard-delete requisition** — `DELETE /api/admin/requisitions/{id}`. Cascades children (verified: BomHeader → BomLine + BomCost + BomCostLine + CostingDraft chain). Notif to SP + branch staff + MDs.
+- **C2 Status rollback** — `POST /api/admin/requisitions/{id}/rollback-status`. Whitelist transitions only (`Approved→MdReview`, `MdReview→CostingPending`, `CostingInProgress→CostingPending`, `CostingPending→BomInProgress`, `BomInProgress→BomPending`). Forward jumps + Rejected blocked.
+- **C3 Reassign salesperson** — `POST /api/admin/requisitions/{id}/reassign-sp`. Full replace; old SP captured in audit. Target must be active SalesPerson role.
+- **C4 Unlock BOM** — `POST /api/admin/requisitions/{id}/unlock-bom`. Status → `BomInProgress`. Allowed from `CostingPending` / `CostingInProgress` / `MdReview`. BOM data preserved.
+- **C5 Unlock costing** — `POST /api/admin/requisitions/{id}/unlock-costing`. Status → `CostingInProgress`. Allowed from `MdReview` only. Costing data preserved.
+- **C7 Reset password** — `POST /api/admin/users/{id}/reset-password`. Returns one-shot 12-char temp (`PasswordGenerator` excludes l/I/o/O/0/1); sets `User.MustChangePassword=true`; clears `FailedLoginAttempts`+`LockedUntil`; revokes all refresh tokens. **TempPassword never written to logs/audit** (verified by test).
+- **C9 Audit log** — `GET /api/admin/audit-log` paginated/filtered (actionType, adminUserId, entityType, entityId, from, to). Page at `/admin/audit-log`. Reads only `AdminAuditLog` (legacy `BranchChangeHistory` + `CustomerChangeHistory` viewers stay on RequisitionDetail).
+
+All endpoints require `reason: string` (≥ 5 chars). All gated `[Authorize(Roles="Admin")]`. Helper: `AdminOverrideAuthorization` centralizes the C2/C4/C5 status guards (35 unit tests).
+
+`User.MustChangePassword` extends `LoginResponse`; web `<ForceChangePasswordGuard>` redirects flagged users to `/change-password` until cleared. ChangePassword endpoint blocks `NewPassword == CurrentPassword` (closes silent-bypass).
+
+Web UI: `<AdminActionsCard>` collapsible card on `RequisitionDetailPage` (Admin-only, conditional buttons per status), `ResetPasswordModal` row action on `UsersPage`, `/admin/audit-log` page with filters/pagination/Diff expand.
+
+`AdminAuditLog.ActionType` is stored as **string** for forensic readability (deviates from project convention of int-stored enums; documented inline in `AppDbContext.cs`).
+
+`AdminAuditLogger.Log()` adds row to DbContext but does NOT save — caller owns the transaction (single SaveChanges with the entity mutation).
+
+Web only — no mobile UI in P1. C6 (override approved prices) and C8 (hard-delete customer) deferred to Phase 2.
+
 ### Multi-Item Requisition Model
 
 A `QuotationRequest` contains multiple `RequisitionItem` entries (each with an `Item` + `ExpectedQty`). BOM and costing are tracked per-item via `BomHeader.RequisitionItemId`. Approval uses `ApprovalItem` (per-item price/margin on `QuotationApproval`).

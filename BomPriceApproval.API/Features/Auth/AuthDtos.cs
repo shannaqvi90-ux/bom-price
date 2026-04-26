@@ -9,6 +9,10 @@ public record LoginRequest(
     [Required, MaxLength(255)] string Email,
     [Required, MaxLength(200)] string Password);
 
-public record LoginResponse(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId);
+public record LoginResponse(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId, bool MustChangePassword);
+
+public record ChangePasswordRequest(
+    [Required, MaxLength(200)] string CurrentPassword,
+    [Required, MaxLength(200)] string NewPassword);
 
 public record RefreshRequest([Required, MaxLength(500)] string RefreshToken);

@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Services;
@@ -78,7 +79,7 @@ public class AuthController(
         logger.LogInformation("[Audit] Login success {UserId} {Email} Role={Role} BranchId={BranchId}",
             user.Id, user.Email, user.Role, user.BranchId);
 
-        return Ok(new LoginResponse(accessToken, refreshTokenValue, user.Role.ToString(), user.Id, user.Name, user.BranchId));
+        return Ok(new LoginResponse(accessToken, refreshTokenValue, user.Role.ToString(), user.Id, user.Name, user.BranchId, user.MustChangePassword));
     }
 
     [HttpPost("refresh")]
@@ -123,7 +124,8 @@ public class AuthController(
             token.User.Role.ToString(),
             token.User.Id,
             token.User.Name,
-            token.User.BranchId));
+            token.User.BranchId,
+            token.User.MustChangePassword));
     }
 
     [Authorize]
@@ -152,5 +154,38 @@ public class AuthController(
             userIdClaim ?? "unknown", jti ?? "none");
 
         return NoContent();
+    }
+
+    [Authorize]
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword(ChangePasswordRequest req)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!int.TryParse(userIdStr, out var userId))
+            return Unauthorized(new { message = "Invalid token" });
+
+        var user = await db.Users.FindAsync(userId);
+        if (user is null || !user.IsActive)
+            return Unauthorized(new { message = "User not found" });
+
+        if (!BCrypt.Net.BCrypt.Verify(req.CurrentPassword, user.PasswordHash))
+        {
+            logger.LogWarning("[Audit] ChangePassword failed: wrong current password UserId={UserId}", userId);
+            return Validation.Detail("Current password is incorrect.")
+                .Field("CurrentPassword", "Incorrect current password.")
+                .Return();
+        }
+
+        var pwdError = PasswordValidator.Validate(req.NewPassword);
+        if (pwdError is not null)
+            return Validation.Detail(pwdError).Field("NewPassword", pwdError).Return();
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.NewPassword);
+        user.MustChangePassword = false;
+        await db.SaveChangesAsync();
+
+        logger.LogInformation("[Audit] ChangePassword success UserId={UserId}", userId);
+
+        return Ok(new { mustChangePassword = false });
     }
 }

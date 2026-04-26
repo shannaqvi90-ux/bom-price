@@ -289,6 +289,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Reason).HasMaxLength(2000).IsRequired();
             e.Property(x => x.BeforeJson).HasColumnType("jsonb").IsRequired();
             e.Property(x => x.AfterJson).HasColumnType("jsonb");
+            // Stored as string for forensic readability — survives enum value reordering across migrations.
             e.Property(x => x.ActionType).HasConversion<string>().HasMaxLength(50);
 
             e.HasOne(x => x.AdminUser)

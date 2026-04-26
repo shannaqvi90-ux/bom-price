@@ -3,7 +3,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useCostingReview, useStartCostingItem } from "@/api/costing";
-import { useCustomerChangeHistory, useRequisitionDetail } from "@/api/requisitions";
+import { useBranchChangeHistory, useCustomerChangeHistory, useRequisitionDetail } from "@/api/requisitions";
 import { useAuth } from "@/auth/AuthContext";
 import { LoadingView } from "@/components/LoadingView";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -14,6 +14,8 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { HistoricalRequisitionScreen } from "@/components/HistoricalRequisitionScreen";
 import { CustomerSwapSheet } from "@/components/CustomerSwapSheet";
 import { CustomerChangeHistorySheet } from "@/components/CustomerChangeHistorySheet";
+import { BranchSwapSheet } from "@/components/BranchSwapSheet";
+import { BranchChangeHistorySheet } from "@/components/BranchChangeHistorySheet";
 
 const COST_STATUS_COLORS: Record<string, { bg: string; fg: string; label: string }> = {
   NotStarted: { bg: "#f1f5f9", fg: "#64748b", label: "Not started" },
@@ -73,6 +75,10 @@ export default function AccountantReqDetail() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const historyQ = useCustomerChangeHistory(id, true);
   const historyCount = historyQ.data?.length ?? 0;
+  const [branchSwapOpen, setBranchSwapOpen] = useState(false);
+  const [branchHistoryOpen, setBranchHistoryOpen] = useState(false);
+  const branchHistQ = useBranchChangeHistory(id, true);
+  const branchChangeCount = branchHistQ.data?.length ?? 0;
   useEffect(() => {
     if (allSubmitted && reqStatus === "MdReview") {
       const t = setTimeout(() => router.replace("/(accountant)"), 2000);
@@ -134,7 +140,7 @@ export default function AccountantReqDetail() {
         </View>
 
         {r.status === "CostingPending" || r.status === "CostingInProgress" ? (
-          <View style={{ marginTop: 4, marginBottom: 8 }}>
+          <View style={{ marginTop: 4, marginBottom: 4 }}>
             <Pressable
               onPress={() => setSwapOpen(true)}
               style={{
@@ -168,6 +174,45 @@ export default function AccountantReqDetail() {
             ) : null}
           </View>
         ) : null}
+
+        {(() => {
+          const canChangeBranch = ["BomPending", "BomInProgress", "CostingPending"].includes(r.status);
+          return canChangeBranch ? (
+            <View style={{ marginTop: 4, marginBottom: 8 }}>
+              <Pressable
+                onPress={() => setBranchSwapOpen(true)}
+                style={{
+                  alignSelf: "flex-start",
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: "#1e40af",
+                  backgroundColor: "#eff6ff",
+                }}
+              >
+                <Text style={{ color: "#1e40af", fontWeight: "600", fontSize: 13 }}>Change branch</Text>
+              </Pressable>
+              {branchChangeCount > 0 ? (
+                <Pressable
+                  onPress={() => setBranchHistoryOpen(true)}
+                  style={{
+                    alignSelf: "flex-start",
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 999,
+                    backgroundColor: "#fef3c7",
+                    marginTop: 6,
+                  }}
+                >
+                  <Text style={{ color: "#92400e", fontSize: 12, fontWeight: "600" }}>
+                    Branch changed ({branchChangeCount})
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null;
+        })()}
 
         {allSubmitted && r.status === "MdReview" ? (
           <View
@@ -225,6 +270,18 @@ export default function AccountantReqDetail() {
         requisitionId={id}
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
+      />
+      <BranchSwapSheet
+        requisitionId={id}
+        currentBranchId={r.branchId}
+        currentBranchName={r.branchName}
+        open={branchSwapOpen}
+        onClose={() => setBranchSwapOpen(false)}
+      />
+      <BranchChangeHistorySheet
+        requisitionId={id}
+        open={branchHistoryOpen}
+        onClose={() => setBranchHistoryOpen(false)}
       />
     </View>
   );

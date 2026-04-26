@@ -9,9 +9,10 @@ import {
 } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMdReview, useApproveRequisition, useRejectRequisition } from "@/api/approvals";
-import { useCustomerChangeHistory } from "@/api/requisitions";
+import { useBranchChangeHistory, useCustomerChangeHistory } from "@/api/requisitions";
 import { ApprovalItemRow } from "@/components/ApprovalItemRow";
 import { BomDetailSheet } from "@/components/BomDetailSheet";
+import { BranchChangeHistorySheet } from "@/components/BranchChangeHistorySheet";
 import { Button } from "@/components/Button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CustomerChangeHistorySheet } from "@/components/CustomerChangeHistorySheet";
@@ -45,6 +46,9 @@ export default function MdApprovalDetail() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const historyQ = useCustomerChangeHistory(id, true);
   const historyCount = historyQ.data?.length ?? 0;
+  const [branchHistoryOpen, setBranchHistoryOpen] = useState(false);
+  const branchHistQ = useBranchChangeHistory(id, true);
+  const branchChangeCount = branchHistQ.data?.length ?? 0;
 
   // Initialize price state from backend once data arrives
   useEffect(() => {
@@ -227,6 +231,23 @@ export default function MdApprovalDetail() {
                 </Text>
               </Pressable>
             ) : null}
+            {branchChangeCount > 0 ? (
+              <Pressable
+                onPress={() => setBranchHistoryOpen(true)}
+                style={{
+                  alignSelf: "flex-start",
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 999,
+                  backgroundColor: "#fef3c7",
+                  marginTop: 6,
+                }}
+              >
+                <Text style={{ color: "#92400e", fontSize: 12, fontWeight: "600" }}>
+                  Branch changed ({branchChangeCount})
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
 
           {/* Readiness warning */}
@@ -364,6 +385,11 @@ export default function MdApprovalDetail() {
         requisitionId={id}
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
+      />
+      <BranchChangeHistorySheet
+        requisitionId={id}
+        open={branchHistoryOpen}
+        onClose={() => setBranchHistoryOpen(false)}
       />
     </View>
   );

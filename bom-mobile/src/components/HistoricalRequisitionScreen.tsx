@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { useCustomerChangeHistory, useRequisitionDetail } from "@/api/requisitions";
+import { useBranchChangeHistory, useCustomerChangeHistory, useRequisitionDetail } from "@/api/requisitions";
 import { downloadRequisitionPdf } from "@/api/pdf";
 import { Button } from "@/components/Button";
 import { StatusPill } from "@/components/StatusPill";
@@ -14,6 +14,7 @@ import { SectionCard } from "@/components/SectionCard";
 import { ItemCardShell } from "@/components/ItemCardShell";
 import { ItemPriceBlock } from "@/components/ItemPriceBlock";
 import { NotificationBell } from "@/components/NotificationBell";
+import { BranchChangeHistorySheet } from "@/components/BranchChangeHistorySheet";
 import { CustomerChangeHistorySheet } from "@/components/CustomerChangeHistorySheet";
 import { useAuth } from "@/auth/AuthContext";
 import { formatShortDate } from "@/utils/dates";
@@ -34,6 +35,9 @@ export function HistoricalRequisitionScreen({
   const [historyOpen, setHistoryOpen] = useState(false);
   const historyQ = useCustomerChangeHistory(id, true);
   const historyCount = historyQ.data?.length ?? 0;
+  const [branchHistoryOpen, setBranchHistoryOpen] = useState(false);
+  const branchHistQ = useBranchChangeHistory(id, true);
+  const branchChangeCount = branchHistQ.data?.length ?? 0;
 
   const onLogout = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -160,6 +164,23 @@ export function HistoricalRequisitionScreen({
               </Text>
             </Pressable>
           ) : null}
+          {branchChangeCount > 0 ? (
+            <Pressable
+              onPress={() => setBranchHistoryOpen(true)}
+              style={{
+                alignSelf: "flex-start",
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 999,
+                backgroundColor: "#fef3c7",
+                marginTop: 6,
+              }}
+            >
+              <Text style={{ color: "#92400e", fontSize: 12, fontWeight: "600" }}>
+                Branch changed ({branchChangeCount})
+              </Text>
+            </Pressable>
+          ) : null}
         </SectionCard>
 
         <Text
@@ -271,6 +292,11 @@ export function HistoricalRequisitionScreen({
         requisitionId={id}
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
+      />
+      <BranchChangeHistorySheet
+        requisitionId={id}
+        open={branchHistoryOpen}
+        onClose={() => setBranchHistoryOpen(false)}
       />
     </View>
   );

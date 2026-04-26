@@ -3,6 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { MotiView } from "moti";
 import * as Haptics from "expo-haptics";
 import { StatusPill } from "./StatusPill";
+import { OwnedByBadge } from "./OwnedByBadge";
 import type { RequisitionListItem } from "@/types/api";
 import { formatShortDate } from "@/utils/dates";
 import { stripTags } from "@/utils/text";
@@ -10,9 +11,10 @@ import { stripTags } from "@/utils/text";
 interface Props {
   item: RequisitionListItem;
   onPress: (id: number) => void;
+  currentUserId?: number;
 }
 
-export function RequisitionCard({ item, onPress }: Props) {
+export function RequisitionCard({ item, onPress, currentUserId }: Props) {
   const [pressed, setPressed] = useState(false);
 
   return (
@@ -57,17 +59,24 @@ export function RequisitionCard({ item, onPress }: Props) {
         {(() => {
           const name = stripTags(item.customerName);
           return (
-            <Text
-              style={{
-                fontSize: 15,
-                color: name ? "#475569" : "#94a3b8",
-                fontStyle: name ? "normal" : "italic",
-                marginBottom: 8,
-              }}
-              numberOfLines={1}
-            >
-              {name || "— No name"}
-            </Text>
+            <>
+              <Text
+                style={{
+                  fontSize: 15,
+                  color: name ? "#475569" : "#94a3b8",
+                  fontStyle: name ? "normal" : "italic",
+                  marginBottom: currentUserId !== undefined && item.salesPersonId !== currentUserId ? 2 : 8,
+                }}
+                numberOfLines={1}
+              >
+                {name || "— No name"}
+              </Text>
+              {currentUserId !== undefined && item.salesPersonId !== currentUserId && (
+                <View style={{ marginBottom: 8 }}>
+                  <OwnedByBadge ownerName={item.salesPersonName} prefix="by" />
+                </View>
+              )}
+            </>
           );
         })()}
         <View

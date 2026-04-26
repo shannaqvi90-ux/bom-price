@@ -23,6 +23,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { LoadingView } from "@/components/LoadingView";
 import { StatusChipRow, CHIP_TO_STATUSES, type ChipLabel } from "@/components/StatusChipRow";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useAuth } from "@/auth/AuthContext";
 import type { RequisitionListItem } from "@/types/api";
 
 const PAGE_SIZE = 20;
@@ -53,6 +54,7 @@ export default function SalesRequisitionsList() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
+  const { user } = useAuth();
   const listRef = useRef<FlatList<RequisitionListItem>>(null);
 
   const [activeChip, setActiveChip] = useState<ChipLabel>("All");
@@ -148,6 +150,7 @@ export default function SalesRequisitionsList() {
               <RequisitionCard
                 item={item}
                 onPress={() => router.push(`/(sales)/${item.id}`)}
+                currentUserId={user?.userId}
               />
             </MotiView>
           )}

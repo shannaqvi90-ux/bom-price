@@ -19,7 +19,8 @@ public record RequisitionItemDto(int Id, int ItemId, string ItemDescription, dec
 public record RequisitionListItem(
     int Id, string RefNo, string Status, int ItemCount,
     string CustomerName, string CurrencyCode,
-    int BranchId, string BranchName, string SalesPersonName, DateTime CreatedAt);
+    int BranchId, string BranchName,
+    int SalesPersonId, string SalesPersonName, DateTime CreatedAt);
 
 public record RequisitionDetail(
     int Id, string RefNo, string Status,

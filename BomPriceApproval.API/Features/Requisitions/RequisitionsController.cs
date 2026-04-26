@@ -96,7 +96,8 @@ public class RequisitionsController(
             .Select(q => new RequisitionListItem(
                 q.Id, q.RefNo, q.Status.ToString(), q.Items.Count,
                 q.Customer.Name, q.CurrencyCode,
-                q.BranchId, q.Branch.Name, q.SalesPerson.Name, q.CreatedAt));
+                q.BranchId, q.Branch.Name,
+                q.SalesPersonId, q.SalesPerson.Name, q.CreatedAt));
 
         if (page.HasValue && pageSize.HasValue)
         {

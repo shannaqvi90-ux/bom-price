@@ -7,6 +7,7 @@ namespace BomPriceApproval.API.Features.Requisitions;
 public record RequisitionItemInput(int ItemId, decimal ExpectedQty);
 
 public record CreateRequisitionRequest(
+    int? BranchId,
     int CustomerId,
     [Required, MinLength(1)] List<RequisitionItemInput> Items,
     [RegularExpression("^[A-Z]{3}$", ErrorMessage = "Currency code must be 3 uppercase letters.")] string CurrencyCode = "AED");

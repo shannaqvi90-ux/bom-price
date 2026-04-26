@@ -152,11 +152,31 @@ public class RequisitionsController(
     [Authorize(Roles = "SalesPerson,Accountant")]
     public async Task<IActionResult> Create(CreateRequisitionRequest req)
     {
-        if (CurrentBranchId is null)
+        // V23a: SP picks branch per-req. Accept payload BranchId.
+        // Transition fallback (1 release): if SP omits BranchId, fall back to User.BranchId (logged).
+        int branchId;
+        if (req.BranchId.HasValue)
+        {
+            branchId = req.BranchId.Value;
+        }
+        else if (CurrentBranchId.HasValue)
+        {
+            logger.LogWarning("V23a transition: requisition created without payload BranchId by user {UserId}; falling back to User.BranchId={BranchId}",
+                CurrentUserId, CurrentBranchId.Value);
+            branchId = CurrentBranchId.Value;
+        }
+        else
+        {
             return Validation
-                .Detail("A branch-assigned sales person is required to create requisitions.")
-                .Field("BranchId", "A branch-assigned sales person is required.")
+                .Detail("BranchId is required.")
+                .Field("BranchId", "Branch must be specified.")
                 .Return();
+        }
+
+        // Validate branch exists and is active
+        var branch = await db.Branches.FindAsync(branchId);
+        if (branch is null || !branch.IsActive)
+            return Validation.Detail("Branch not found or inactive.").Field("BranchId", "Invalid branch.").Return();
 
         if (req.Items.Count == 0)
             return Validation
@@ -194,6 +214,15 @@ public class RequisitionsController(
             return builder.Return();
         }
 
+        // Validate every item belongs to the chosen branch
+        var dbItems = await db.Items.Where(i => distinctItemIds.Contains(i.Id)).ToListAsync();
+        var mismatched = dbItems.Where(i => i.BranchId != branchId).ToList();
+        if (mismatched.Count > 0)
+            return Validation
+                .Detail($"{mismatched.Count} item(s) do not belong to the selected branch.")
+                .Field("Items", $"Items not in branch {branchId}: {string.Join(", ", mismatched.Select(m => m.Code))}")
+                .Return();
+
         var customerExists = await db.Customers.AnyAsync(c =>
             c.Id == req.CustomerId &&
             (!CurrentBranchId.HasValue || CurrentRole == "Accountant" || c.SalesPersonId == CurrentUserId));
@@ -219,7 +248,7 @@ public class RequisitionsController(
 
         var requisition = new QuotationRequest
         {
-            BranchId = CurrentBranchId.Value,
+            BranchId = branchId,
             SalesPersonId = CurrentUserId,
             CustomerId = req.CustomerId,
             CurrencyCode = req.CurrencyCode,

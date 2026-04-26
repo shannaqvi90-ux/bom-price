@@ -27,6 +27,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CustomerChangeHistory> CustomerChangeHistories => Set<CustomerChangeHistory>();
     public DbSet<UserBranch> UserBranches => Set<UserBranch>();
     public DbSet<BranchChangeHistory> BranchChangeHistories => Set<BranchChangeHistory>();
+    public DbSet<SalesGroup> SalesGroups => Set<SalesGroup>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -266,6 +267,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasIndex(h => h.RequisitionId);
             e.HasIndex(h => h.ChangedAt).IsDescending();
         });
+
+        mb.Entity<SalesGroup>(e =>
+        {
+            e.HasKey(g => g.Id);
+            e.Property(g => g.Name).HasMaxLength(100).IsRequired();
+        });
+
+        mb.Entity<User>()
+            .HasOne(u => u.Group)
+            .WithMany(g => g.Members)
+            .HasForeignKey(u => u.GroupId)
+            .OnDelete(DeleteBehavior.Restrict);  // group with members can't be deleted
+
+        mb.Entity<User>().HasIndex(u => u.GroupId);
 
         // Optimistic concurrency via PostgreSQL system xmin column.
         // No migration needed — xmin is always present on every row.

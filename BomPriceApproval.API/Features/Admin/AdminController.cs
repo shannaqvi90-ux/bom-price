@@ -146,5 +146,43 @@ public class AdminController(AppDbContext db, AdminAuditLogger audit, Notificati
         return Ok(new { req.Id, req.Status });
     }
 
+    [HttpPost("requisitions/{id}/reassign-sp")]
+    public async Task<IActionResult> ReassignSp(int id, [FromBody] ReassignSpRequest? body)
+    {
+        if (body is null)
+            return BadRequest(new { error = "Request body is required" });
+        if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Length < 5)
+            return BadRequest(new { error = "Reason is required (min 5 chars)" });
+
+        var req = await db.QuotationRequests.FindAsync(id);
+        if (req is null) return NotFound();
+
+        var newSp = await db.Users.FindAsync(body.NewSalesPersonId);
+        if (newSp is null || newSp.Role != UserRole.SalesPerson || !newSp.IsActive)
+            return BadRequest(new { error = "Target user must be an active SalesPerson" });
+
+        var oldSpId = req.SalesPersonId;
+        var before = new { req.Id, OldSalesPersonId = oldSpId };
+        req.SalesPersonId = newSp.Id;
+        var after = new { req.Id, NewSalesPersonId = newSp.Id };
+
+        audit.Log(CurrentUserId, AdminActionType.ReassignSp, "Requisition", id, body.Reason, before, after);
+        await db.SaveChangesAsync();
+
+        var recipientIds = await db.Users
+            .Where(u => u.Id == oldSpId || u.Id == newSp.Id || u.Role == UserRole.ManagingDirector)
+            .Select(u => u.Id).ToListAsync();
+
+        foreach (var uid in recipientIds)
+        {
+            await notify.SendAsync(uid,
+                $"Requisition {req.RefNo} reassigned by Admin",
+                referenceId: id,
+                referenceType: nameof(NotificationType.SalesPersonReassigned));
+        }
+
+        return Ok(new { req.Id, req.SalesPersonId });
+    }
+
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
 }

@@ -309,16 +309,16 @@ public class AdminUnlockCostingTests(WebApplicationFactory<Program> factory) : I
             auditRow.Should().NotBeNull("an audit row must be written for the costing unlock");
             auditRow!.ActionType.Should().Be(AdminActionType.UnlockCosting);
 
-            // BeforeJson should contain Status=5 (MdReview)
+            // BeforeJson should contain Status="MdReview"
             using var beforeDoc = JsonDocument.Parse(auditRow.BeforeJson);
-            var beforeStatus = beforeDoc.RootElement.GetProperty("Status").GetInt32();
-            beforeStatus.Should().Be(5, "BeforeJson must capture original MdReview status (int value 5)");
+            var beforeStatus = beforeDoc.RootElement.GetProperty("Status").GetString();
+            beforeStatus.Should().Be("MdReview", "BeforeJson must capture original MdReview status as string");
 
-            // AfterJson should contain Status=4 (CostingInProgress)
+            // AfterJson should contain Status="CostingInProgress"
             auditRow.AfterJson.Should().NotBeNull();
             using var afterDoc = JsonDocument.Parse(auditRow.AfterJson!);
-            var afterStatus = afterDoc.RootElement.GetProperty("Status").GetInt32();
-            afterStatus.Should().Be(4, "AfterJson must capture target CostingInProgress status (int value 4)");
+            var afterStatus = afterDoc.RootElement.GetProperty("Status").GetString();
+            afterStatus.Should().Be("CostingInProgress", "AfterJson must capture target CostingInProgress status as string");
 
             auditId = auditRow.Id;
         }

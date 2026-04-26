@@ -293,16 +293,16 @@ public class AdminUnlockBomTests(WebApplicationFactory<Program> factory) : IClas
             auditRow.Should().NotBeNull("an audit row must be written for the BOM unlock");
             auditRow!.ActionType.Should().Be(AdminActionType.UnlockBom);
 
-            // BeforeJson should contain Status=5 (MdReview)
+            // BeforeJson should contain Status="MdReview"
             using var beforeDoc = JsonDocument.Parse(auditRow.BeforeJson);
-            var beforeStatus = beforeDoc.RootElement.GetProperty("Status").GetInt32();
-            beforeStatus.Should().Be(5, "BeforeJson must capture original MdReview status (int value 5)");
+            var beforeStatus = beforeDoc.RootElement.GetProperty("Status").GetString();
+            beforeStatus.Should().Be("MdReview", "BeforeJson must capture original MdReview status as string");
 
-            // AfterJson should contain Status=2 (BomInProgress)
+            // AfterJson should contain Status="BomInProgress"
             auditRow.AfterJson.Should().NotBeNull();
             using var afterDoc = JsonDocument.Parse(auditRow.AfterJson!);
-            var afterStatus = afterDoc.RootElement.GetProperty("Status").GetInt32();
-            afterStatus.Should().Be(2, "AfterJson must capture target BomInProgress status (int value 2)");
+            var afterStatus = afterDoc.RootElement.GetProperty("Status").GetString();
+            afterStatus.Should().Be("BomInProgress", "AfterJson must capture target BomInProgress status as string");
 
             auditId = auditRow.Id;
         }

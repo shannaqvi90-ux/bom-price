@@ -179,9 +179,9 @@ public class AdminRollbackStatusTests(WebApplicationFactory<Program> factory) : 
 
             auditRow.Should().NotBeNull("an audit row must be written for the rollback");
             auditRow!.ActionType.Should().Be(AdminActionType.RollbackStatus);
-            auditRow!.BeforeJson.Should().MatchRegex("\"Status\"\\s*:\\s*6", "before snapshot must capture original Approved status (enum value 6)");
+            auditRow!.BeforeJson.Should().MatchRegex("\"Status\"\\s*:\\s*\"Approved\"", "before snapshot must capture original Approved status as string");
             auditRow.AfterJson.Should().NotBeNull();
-            auditRow.AfterJson!.Should().MatchRegex("\"Status\"\\s*:\\s*5", "after snapshot must capture target MdReview status (enum value 5)");
+            auditRow.AfterJson!.Should().MatchRegex("\"Status\"\\s*:\\s*\"MdReview\"", "after snapshot must capture target MdReview status as string");
             auditId = auditRow.Id;
         }
         finally

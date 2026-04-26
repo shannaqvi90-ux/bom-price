@@ -11,7 +11,8 @@ public class AdminAuditLogger(AppDbContext db)
     {
         WriteIndented = false,
         ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
     };
 
     /// <summary>

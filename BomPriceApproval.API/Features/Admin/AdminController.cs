@@ -256,5 +256,48 @@ public class AdminController(AppDbContext db, AdminAuditLogger audit, Notificati
         return Ok(new { req.Id, req.Status });
     }
 
+    [HttpPost("users/{id}/reset-password")]
+    public async Task<IActionResult> ResetPassword(int id, [FromBody] ResetPasswordRequest? body)
+    {
+        if (body is null)
+            return BadRequest(new { error = "Request body is required" });
+        if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Length < 5)
+            return BadRequest(new { error = "Reason is required (min 5 chars)" });
+
+        var user = await db.Users.Include(u => u.RefreshTokens).FirstOrDefaultAsync(u => u.Id == id);
+        if (user is null) return NotFound();
+
+        var before = new
+        {
+            user.Id,
+            user.MustChangePassword,
+            user.FailedLoginAttempts,
+            user.LockedUntil,
+            ActiveTokenCount = user.RefreshTokens.Count(t => !t.IsRevoked)
+        };
+
+        var temp = Infrastructure.Services.PasswordGenerator.Generate();
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(temp);
+        user.MustChangePassword = true;
+        user.FailedLoginAttempts = 0;
+        user.LockedUntil = null;
+        foreach (var tok in user.RefreshTokens.Where(t => !t.IsRevoked))
+            tok.IsRevoked = true;
+
+        var after = new
+        {
+            user.Id,
+            user.MustChangePassword,
+            user.FailedLoginAttempts,
+            user.LockedUntil,
+            ActiveTokenCount = 0
+        };
+
+        audit.Log(CurrentUserId, AdminActionType.ResetPassword, "User", id, body.Reason, before, after);
+        await db.SaveChangesAsync();
+
+        return Ok(new ResetPasswordResponse(temp));
+    }
+
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
 }

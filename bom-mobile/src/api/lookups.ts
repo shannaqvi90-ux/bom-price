@@ -13,11 +13,21 @@ export function useCustomers() {
   });
 }
 
-export function useItems() {
+export interface UseItemsOptions {
+  branchId?: number;
+  type?: "FinishedGood" | "RawMaterial";
+}
+
+export function useItems(opts: UseItemsOptions = {}) {
+  const params = new URLSearchParams();
+  if (opts.branchId) params.append("branchId", String(opts.branchId));
+  if (opts.type) params.append("type", opts.type);
+  const qs = params.toString();
+
   return useQuery({
-    queryKey: ["items"],
+    queryKey: ["items", "list", { branchId: opts.branchId, type: opts.type }],
     queryFn: async () => {
-      const res = await api.get<Item[]>("/api/items");
+      const res = await api.get<Item[]>(`/api/items${qs ? `?${qs}` : ""}`);
       return res.data;
     },
     staleTime: 60_000,

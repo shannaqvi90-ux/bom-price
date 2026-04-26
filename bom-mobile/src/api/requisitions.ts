@@ -82,3 +82,48 @@ export function useCustomerChangeHistory(requisitionId: number, enabled = true) 
     staleTime: 30_000,
   });
 }
+
+export interface ChangeBranchPayload {
+  branchId: number;
+  reason?: string;
+}
+
+export interface BranchChangeHistoryEntry {
+  id: number;
+  oldBranchId: number;
+  oldBranchName: string;
+  newBranchId: number;
+  newBranchName: string;
+  changedByUserId: number;
+  changedByUserName: string;
+  changedAt: string;
+  reason: string | null;
+}
+
+export function useChangeBranch(requisitionId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: ChangeBranchPayload) => {
+      await api.patch(`/api/requisitions/${requisitionId}/branch`, payload);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.detail(requisitionId) });
+      qc.invalidateQueries({ queryKey: keys.list() });
+      qc.invalidateQueries({ queryKey: ["requisition", requisitionId, "branchHistory"] });
+    },
+  });
+}
+
+export function useBranchChangeHistory(requisitionId: number, enabled = true) {
+  return useQuery({
+    queryKey: ["requisition", requisitionId, "branchHistory"],
+    queryFn: async () => {
+      const res = await api.get<BranchChangeHistoryEntry[]>(
+        `/api/requisitions/${requisitionId}/branch-history`,
+      );
+      return res.data;
+    },
+    enabled: enabled && requisitionId > 0,
+    staleTime: 30_000,
+  });
+}

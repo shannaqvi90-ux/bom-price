@@ -1,4 +1,5 @@
 using BomPriceApproval.API.Domain.Entities;
+using BomPriceApproval.API.Domain.Enums;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Authorization;
@@ -136,5 +137,51 @@ public class UsersController(AppDbContext db, ILogger<UsersController> logger) :
             user.Id, user.Email, tokens.Count);
 
         return Ok(new { revokedTokens = tokens.Count });
+    }
+
+    [HttpGet("{id}/branches")]
+    public async Task<IActionResult> GetBranches(int id)
+    {
+        var ids = await db.UserBranches
+            .Where(ub => ub.UserId == id)
+            .Select(ub => ub.BranchId)
+            .OrderBy(x => x)
+            .ToListAsync();
+        return Ok(ids);
+    }
+
+    [HttpPut("{id}/branches")]
+    public async Task<IActionResult> SetBranches(int id, SetUserBranchesRequest req)
+    {
+        var u = await db.Users.FindAsync(id);
+        if (u is null) return NotFound();
+        if (u.Role != UserRole.Accountant)
+            return Validation.Detail("Branches can only be set on Accountants.")
+                .Field("Role", "Must be Accountant.")
+                .Return();
+
+        // Validate all branch IDs exist and are active
+        var distinct = req.BranchIds.Distinct().ToList();
+        var validIds = await db.Branches
+            .Where(b => distinct.Contains(b.Id) && b.IsActive)
+            .Select(b => b.Id)
+            .ToListAsync();
+        var invalid = distinct.Except(validIds).ToList();
+        if (invalid.Any())
+            return Validation.Detail($"Invalid branch ids: {string.Join(",", invalid)}")
+                .Field("BranchIds", "Some branches not found or inactive.")
+                .Return();
+
+        // Replace semantics — remove existing, add new
+        var existing = db.UserBranches.Where(ub => ub.UserId == id);
+        db.UserBranches.RemoveRange(existing);
+        foreach (var bid in distinct)
+            db.UserBranches.Add(new UserBranch { UserId = id, BranchId = bid });
+        await db.SaveChangesAsync();
+
+        logger.LogInformation("[Audit] UserBranches updated {TargetUserId} BranchIds={BranchIds}",
+            id, string.Join(",", distinct));
+
+        return NoContent();
     }
 }

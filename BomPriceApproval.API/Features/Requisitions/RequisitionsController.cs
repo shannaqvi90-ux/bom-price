@@ -53,7 +53,10 @@ public class RequisitionsController(
         }
         else if (CurrentRole == "SalesPerson")
         {
-            query = query.Where(q => q.SalesPersonId == CurrentUserId);
+            var me = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == CurrentUserId);
+            if (me is null) return Forbid();
+            var visibleSpIds = SalesAuthorization.VisibleSalesPersonIds(me, db);
+            query = query.Where(q => visibleSpIds.Contains(q.SalesPersonId));
         }
         // MD + Admin: no scoping
 

@@ -677,6 +677,27 @@ public class RequisitionsController(
         return Ok(entries);
     }
 
+    [HttpGet("{id}/branch-history")]
+    public async Task<IActionResult> GetBranchHistory(int id)
+    {
+        var q = await db.QuotationRequests.FirstOrDefaultAsync(r => r.Id == id);
+        if (q is null) return NotFound();
+        if (!CanAccess(q)) return Forbid();
+
+        var entries = await db.BranchChangeHistories
+            .Where(h => h.RequisitionId == id)
+            .OrderByDescending(h => h.ChangedAt)
+            .Select(h => new BranchChangeHistoryResponse(
+                h.Id,
+                h.OldBranchId, h.OldBranch.Name,
+                h.NewBranchId, h.NewBranch.Name,
+                h.ChangedByUserId, h.ChangedBy.Name,
+                h.ChangedAt, h.Reason))
+            .ToListAsync();
+
+        return Ok(entries);
+    }
+
     private bool CanAccess(QuotationRequest q) => CurrentRole switch
     {
         "SalesPerson" => q.SalesPersonId == CurrentUserId,

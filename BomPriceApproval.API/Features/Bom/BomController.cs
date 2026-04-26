@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Domain.Enums;
+using BomPriceApproval.API.Infrastructure.Authorization;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Services;
 using BomPriceApproval.API.Infrastructure.Validation;
@@ -212,9 +213,12 @@ public class BomController(
 
         try
         {
-            var accountants = await db.Users
-                .Where(u => u.Role == UserRole.Accountant && (u.BranchId == req.BranchId || u.BranchId == null) && u.IsActive)
+            var accountantCandidates = await db.Users
+                .Where(u => u.Role == UserRole.Accountant && u.IsActive)
                 .ToListAsync();
+            var accountants = accountantCandidates
+                .Where(u => BranchAuthorization.UserAuthorizedForBranch(u, req.BranchId, db))
+                .ToList();
             foreach (var accountant in accountants)
                 await notificationService.SendAsync(accountant.Id,
                     $"BOM ready for costing: {req.RefNo}", req.Id, "QuotationRequest");

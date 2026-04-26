@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Domain.Enums;
+using BomPriceApproval.API.Infrastructure.Authorization;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Services;
 using BomPriceApproval.API.Infrastructure.Validation;
@@ -237,9 +238,12 @@ public class RequisitionsController(
 
         try
         {
-            var bomCreators = await db.Users
-                .Where(u => u.Role == UserRole.BomCreator && (u.BranchId == requisition.BranchId || u.BranchId == null) && u.IsActive)
+            var bomCreatorCandidates = await db.Users
+                .Where(u => u.Role == UserRole.BomCreator && u.IsActive)
                 .ToListAsync();
+            var bomCreators = bomCreatorCandidates
+                .Where(u => BranchAuthorization.UserAuthorizedForBranch(u, requisition.BranchId, db))
+                .ToList();
 
             foreach (var creator in bomCreators)
                 await notificationService.SendAsync(creator.Id,
@@ -435,11 +439,14 @@ public class RequisitionsController(
 
         try
         {
-            var bomCreators = await db.Users
-                .Where(u => u.Role == UserRole.BomCreator && (u.BranchId == q.BranchId || u.BranchId == null) && u.IsActive)
+            var resubmitBomCandidates = await db.Users
+                .Where(u => u.Role == UserRole.BomCreator && u.IsActive)
                 .ToListAsync();
+            var resubmitBomCreators = resubmitBomCandidates
+                .Where(u => BranchAuthorization.UserAuthorizedForBranch(u, q.BranchId, db))
+                .ToList();
 
-            foreach (var creator in bomCreators)
+            foreach (var creator in resubmitBomCreators)
                 await notificationService.SendAsync(creator.Id,
                     $"Resubmitted BOM request: {q.RefNo}", q.Id, "QuotationRequest");
         }

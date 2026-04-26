@@ -24,6 +24,18 @@ public class UserGroupAdminTests(WebApplicationFactory<Program> factory) : IClas
         return (await resp.Content.ReadFromJsonAsync<GroupShort>())!.Id;
     }
 
+    /// <summary>Creates a throwaway SalesPerson via Admin so tests don't share seed-user state.</summary>
+    private async Task<UserShort> CreateThrowawaySpAsync()
+    {
+        var email = $"sp-{Guid.NewGuid():N}@test.com";
+        var resp = await _client.PostAsJsonAsync("/api/users", new
+        {
+            Name = "Throwaway SP", Email = email, Password = "Test@1234", Role = 1, BranchId = 1
+        });
+        resp.EnsureSuccessStatusCode();
+        return (await resp.Content.ReadFromJsonAsync<UserShort>())!;
+    }
+
     [Fact]
     public async Task SetGroup_AsAdmin_OnSP_Persists()
     {
@@ -31,34 +43,30 @@ public class UserGroupAdminTests(WebApplicationFactory<Program> factory) : IClas
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", admin.AccessToken);
 
         var grpId = await CreateGroupAsync("SetA");
-        var users = (await _client.GetFromJsonAsync<List<UserShort>>("/api/users"))!;
-        var ali = users.First(u => u.Email == "ali@test.com");
+        var sp = await CreateThrowawaySpAsync();
 
-        var put = await _client.PutAsJsonAsync($"/api/users/{ali.Id}/group", new { GroupId = grpId });
+        var put = await _client.PutAsJsonAsync($"/api/users/{sp.Id}/group", new { GroupId = grpId });
         put.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-        var get = await _client.GetFromJsonAsync<UserGroupResponse>($"/api/users/{ali.Id}/group");
+        var get = await _client.GetFromJsonAsync<UserGroupResponse>($"/api/users/{sp.Id}/group");
         get!.GroupId.Should().Be(grpId);
-
-        // Cleanup
-        await _client.PutAsJsonAsync($"/api/users/{ali.Id}/group", new { GroupId = (int?)null });
     }
 
     [Fact]
     public async Task SetGroup_AsAccountant_OnSP_Persists()
     {
+        // Create the throwaway SP as Admin (POST /api/users requires Admin role)
+        var admin = await LoginAsync("admin@test.com", "Admin@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", admin.AccessToken);
+        var grpId = await CreateGroupAsync("SetB");
+        var sp = await CreateThrowawaySpAsync();
+
+        // Now switch to Accountant to perform the group assignment
         var sara = await LoginAsync("sara@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", sara.AccessToken);
 
-        var grpId = await CreateGroupAsync("SetB");
-        var users = (await _client.GetFromJsonAsync<List<UserShort>>("/api/users"))!;
-        var ali = users.First(u => u.Email == "ali@test.com");
-
-        var put = await _client.PutAsJsonAsync($"/api/users/{ali.Id}/group", new { GroupId = grpId });
+        var put = await _client.PutAsJsonAsync($"/api/users/{sp.Id}/group", new { GroupId = grpId });
         put.StatusCode.Should().Be(HttpStatusCode.NoContent);
-
-        // Cleanup
-        await _client.PutAsJsonAsync($"/api/users/{ali.Id}/group", new { GroupId = (int?)null });
     }
 
     [Fact]
@@ -92,14 +100,13 @@ public class UserGroupAdminTests(WebApplicationFactory<Program> factory) : IClas
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", admin.AccessToken);
 
         var grpId = await CreateGroupAsync("Clear");
-        var users = (await _client.GetFromJsonAsync<List<UserShort>>("/api/users"))!;
-        var ali = users.First(u => u.Email == "ali@test.com");
+        var sp = await CreateThrowawaySpAsync();
 
-        await _client.PutAsJsonAsync($"/api/users/{ali.Id}/group", new { GroupId = grpId });
-        var clear = await _client.PutAsJsonAsync($"/api/users/{ali.Id}/group", new { GroupId = (int?)null });
+        await _client.PutAsJsonAsync($"/api/users/{sp.Id}/group", new { GroupId = grpId });
+        var clear = await _client.PutAsJsonAsync($"/api/users/{sp.Id}/group", new { GroupId = (int?)null });
         clear.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-        var get = await _client.GetFromJsonAsync<UserGroupResponse>($"/api/users/{ali.Id}/group");
+        var get = await _client.GetFromJsonAsync<UserGroupResponse>($"/api/users/{sp.Id}/group");
         get!.GroupId.Should().BeNull();
     }
 
@@ -114,10 +121,9 @@ public class UserGroupAdminTests(WebApplicationFactory<Program> factory) : IClas
         var del = await _client.DeleteAsync($"/api/groups/{grpId}");
         del.EnsureSuccessStatusCode();
 
-        var users = (await _client.GetFromJsonAsync<List<UserShort>>("/api/users"))!;
-        var ali = users.First(u => u.Email == "ali@test.com");
+        var sp = await CreateThrowawaySpAsync();
 
-        var put = await _client.PutAsJsonAsync($"/api/users/{ali.Id}/group", new { GroupId = grpId });
+        var put = await _client.PutAsJsonAsync($"/api/users/{sp.Id}/group", new { GroupId = grpId });
         put.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 

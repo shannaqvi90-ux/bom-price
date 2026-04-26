@@ -22,30 +22,42 @@ public class SalesGroupNotificationRoutingTests(WebApplicationFactory<Program> f
         var admin = await LoginAsync("admin@test.com", "Admin@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", admin.AccessToken);
 
-        // Create group with 2 SPs (use ali for one + a fresh second SP)
+        // Create group with 2 throwaway SPs — no shared seed-user state
         var grpResp = await _client.PostAsJsonAsync("/api/groups", new { Name = $"NotifGrp-{Guid.NewGuid():N}".Substring(0, 18) });
         var grpId = (await grpResp.Content.ReadFromJsonAsync<GroupShort>())!.Id;
 
-        var users = (await _client.GetFromJsonAsync<List<UserShort>>("/api/users"))!;
-        var ali = users.First(u => u.Email == "ali@test.com");
-        await _client.PutAsJsonAsync($"/api/users/{ali.Id}/group", new { GroupId = grpId });
+        var ownerEmail = $"own-{Guid.NewGuid():N}".Substring(0, 22) + "@test.com";
+        var ownerResp = await _client.PostAsJsonAsync("/api/users", new
+        {
+            Name = "Owner SP", Email = ownerEmail, Password = "Test@1234", Role = 1, BranchId = 1
+        });
+        ownerResp.EnsureSuccessStatusCode();
+        var owner = (await ownerResp.Content.ReadFromJsonAsync<UserShort>())!;
+        await _client.PutAsJsonAsync($"/api/users/{owner.Id}/group", new { GroupId = grpId });
 
         var peerEmail = $"peer-{Guid.NewGuid():N}".Substring(0, 22) + "@test.com";
         var peerResp = await _client.PostAsJsonAsync("/api/users", new
         {
             Name = "Peer SP", Email = peerEmail, Password = "Test@1234", Role = 1, BranchId = 1
         });
+        peerResp.EnsureSuccessStatusCode();
         var peer = (await peerResp.Content.ReadFromJsonAsync<UserShort>())!;
         await _client.PutAsJsonAsync($"/api/users/{peer.Id}/group", new { GroupId = grpId });
 
-        // Ali creates a req
-        var aliLogin = await LoginAsync("ali@test.com", "Test@1234");
-        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", aliLogin.AccessToken);
-        var customers = (await _client.GetFromJsonAsync<List<CustomerShort>>("/api/customers"))!;
+        // Owner SP creates a customer and a req
+        var ownerLogin = await LoginAsync(ownerEmail, "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ownerLogin.AccessToken);
+        var custResp = await _client.PostAsJsonAsync("/api/customers", new
+        {
+            Code = $"C-{Guid.NewGuid():N}".Substring(0, 12),
+            Name = "Notif Test Customer", Address = "", Email = "", PhoneNumber = ""
+        });
+        custResp.EnsureSuccessStatusCode();
+        var custId = (await custResp.Content.ReadFromJsonAsync<CustomerShort>())!.Id;
         var items = (await _client.GetFromJsonAsync<List<ItemShort>>("/api/items?branchId=1&type=FinishedGood"))!;
         var create = await _client.PostAsJsonAsync("/api/requisitions", new
         {
-            BranchId = 1, CustomerId = customers.First().Id, CurrencyCode = "AED",
+            BranchId = 1, CustomerId = custId, CurrencyCode = "AED",
             Items = new[] { new { ItemId = items.First().Id, ExpectedQty = 1m } }
         });
         var reqId = (await create.Content.ReadFromJsonAsync<CreateResponse>())!.Id;
@@ -62,11 +74,6 @@ public class SalesGroupNotificationRoutingTests(WebApplicationFactory<Program> f
         }
 
         (await CountForReq(peerEmail, "Test@1234")).Should().Be(0, "peer in same group should NOT receive req-progression notifs");
-
-        // Cleanup
-        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", admin.AccessToken);
-        await _client.PutAsJsonAsync($"/api/users/{ali.Id}/group", new { GroupId = (int?)null });
-        await _client.PutAsJsonAsync($"/api/users/{peer.Id}/group", new { GroupId = (int?)null });
     }
 
     private record LoginResponse(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId);

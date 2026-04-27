@@ -7,4 +7,6 @@ public enum NotificationType
     SalesPersonReassigned,
     BomUnlocked,
     CostingUnlocked,
+    PricesOverridden,
+    CustomerDeleted,
 }

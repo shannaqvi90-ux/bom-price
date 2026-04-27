@@ -7,5 +7,7 @@ public enum AdminActionType
     ReassignSp,
     UnlockBom,
     UnlockCosting,
-    ResetPassword
+    ResetPassword,
+    OverridePrices,
+    HardDeleteCustomer
 }

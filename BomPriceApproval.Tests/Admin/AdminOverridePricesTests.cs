@@ -313,26 +313,10 @@ public class AdminOverridePricesTests(WebApplicationFactory<Program> factory)
         var (reqId, riId, _, _) = await SeedApprovedReqAsync(currencyCode: "USD", exchangeRate: 3.67m);
         try
         {
-            // Setup an active USD rate so the endpoint can re-snap
-            using (var s = factory.Services.CreateScope())
-            {
-                var setupDb = s.ServiceProvider.GetRequiredService<AppDbContext>();
-                if (!await setupDb.ExchangeRates.AnyAsync(e => e.CurrencyCode == "USD" && e.IsActive))
-                {
-                    var admin = await setupDb.Users.FirstAsync(u => u.Email == "admin@test.com");
-                    setupDb.ExchangeRates.Add(new ExchangeRate
-                    {
-                        CurrencyCode = "USD",
-                        CurrencyName = "US Dollar",
-                        RateToAed = 3.67m,
-                        IsActive = true,
-                        EffectiveDate = DateTime.UtcNow,
-                        SetByUserId = admin.Id,
-                    });
-                    await setupDb.SaveChangesAsync();
-                }
-            }
-
+            // The seeded USD rate (3.6725) is sufficient for the endpoint's
+            // rate-lookup; we don't need to add another active rate here.
+            // The test just verifies the validation rejects null foreign price
+            // on non-AED currency.
             _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
                 "Bearer", await TokenAsync("admin@test.com", "Admin@1234"));
             var resp = await _client.PostAsJsonAsync(
@@ -340,7 +324,52 @@ public class AdminOverridePricesTests(WebApplicationFactory<Program> factory)
                 MakeBody(riId, foreign: null)); // null foreign on non-AED is rejected
             resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         }
-        finally { await CleanupAsync(reqId); }
+        finally
+        {
+            await CleanupAsync(reqId);
+            // Defensive: if any prior test polluted USD rates, restore a clean state
+            await RestoreSeededUsdRateAsync();
+        }
+    }
+
+    /// <summary>
+    /// Restore the seeded USD 3.6725 rate to active and remove any stray
+    /// USD rates added by earlier tests. Required because some test data
+    /// pollution accumulated during V23c P2 development.
+    /// </summary>
+    private async Task RestoreSeededUsdRateAsync()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        // Remove any USD rates other than the seeded 3.6725
+        var stray = await db.ExchangeRates
+            .Where(e => e.CurrencyCode == "USD" && e.RateToAed != 3.6725m)
+            .ToListAsync();
+        if (stray.Count > 0) db.ExchangeRates.RemoveRange(stray);
+
+        // Re-activate any 3.6725 rate that may have been deactivated
+        var seeded = await db.ExchangeRates
+            .Where(e => e.CurrencyCode == "USD" && e.RateToAed == 3.6725m)
+            .ToListAsync();
+        foreach (var r in seeded) r.IsActive = true;
+
+        // If somehow no 3.6725 row exists at all, add one
+        if (seeded.Count == 0)
+        {
+            var admin = await db.Users.FirstAsync(u => u.Email == "admin@test.com");
+            db.ExchangeRates.Add(new ExchangeRate
+            {
+                CurrencyCode = "USD",
+                CurrencyName = "US Dollar",
+                RateToAed = 3.6725m,
+                IsActive = true,
+                EffectiveDate = DateTime.UtcNow,
+                SetByUserId = admin.Id,
+            });
+        }
+
+        await db.SaveChangesAsync();
     }
 
     [Fact]
@@ -437,15 +466,13 @@ public class AdminOverridePricesTests(WebApplicationFactory<Program> factory)
         var (reqId, riId, _, _) = await SeedApprovedReqAsync(currencyCode: "USD", exchangeRate: 3.50m);
         try
         {
-            // Insert a "newer" active rate that the override will pick up
+            // Insert a "newer" active rate (later EffectiveDate) that the override
+            // will pick up. Do NOT disable the seeded 3.6725 rate — the endpoint
+            // picks the latest by EffectiveDate, so additive-only avoids polluting
+            // other tests that rely on the seeded USD rate.
             using (var s = factory.Services.CreateScope())
             {
                 var setupDb = s.ServiceProvider.GetRequiredService<AppDbContext>();
-                // Mark any existing USD rates as inactive first
-                var existingRates = await setupDb.ExchangeRates
-                    .Where(e => e.CurrencyCode == "USD")
-                    .ToListAsync();
-                foreach (var r in existingRates) r.IsActive = false;
                 var admin = await setupDb.Users.FirstAsync(u => u.Email == "admin@test.com");
                 setupDb.ExchangeRates.Add(new ExchangeRate
                 {
@@ -453,7 +480,7 @@ public class AdminOverridePricesTests(WebApplicationFactory<Program> factory)
                     CurrencyName = "US Dollar",
                     RateToAed = 3.70m,
                     IsActive = true,
-                    EffectiveDate = DateTime.UtcNow,
+                    EffectiveDate = DateTime.UtcNow.AddDays(1), // beat the seed for ORDER BY
                     SetByUserId = admin.Id,
                 });
                 await setupDb.SaveChangesAsync();
@@ -476,13 +503,7 @@ public class AdminOverridePricesTests(WebApplicationFactory<Program> factory)
         finally
         {
             await CleanupAsync(reqId);
-            // Cleanup our seeded test rates
-            using var s = factory.Services.CreateScope();
-            var rateDb = s.ServiceProvider.GetRequiredService<AppDbContext>();
-            var stale = await rateDb.ExchangeRates
-                .Where(e => e.CurrencyCode == "USD" && (e.RateToAed == 3.50m || e.RateToAed == 3.70m))
-                .ToListAsync();
-            if (stale.Count > 0) { rateDb.ExchangeRates.RemoveRange(stale); await rateDb.SaveChangesAsync(); }
+            await RestoreSeededUsdRateAsync();
         }
     }
 }

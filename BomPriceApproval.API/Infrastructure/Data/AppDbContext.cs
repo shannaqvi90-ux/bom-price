@@ -58,6 +58,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany()
             .HasForeignKey(c => c.CreatedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
+        mb.Entity<Customer>()
+            .HasOne(c => c.DeletedBy)
+            .WithMany()
+            .HasForeignKey(c => c.DeletedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+        mb.Entity<Customer>().HasIndex(c => c.IsDeleted);
 
         // RequisitionItem → QuotationRequest (many:1)
         mb.Entity<QuotationRequest>()
@@ -163,6 +169,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<ApprovalItem>().Property(a => a.OtherCostPct).HasPrecision(18, 4);
         mb.Entity<ExchangeRate>().Property(e => e.RateToAed).HasPrecision(18, 6);
         mb.Entity<QuotationRequest>().Property(q => q.ExchangeRateSnapshot).HasPrecision(18, 6);
+        mb.Entity<QuotationApproval>().Property(a => a.RateSnapshot).HasPrecision(18, 6);
         mb.Entity<BomHeader>().Property(b => b.TotalCostPerKg).HasPrecision(18, 4);
         mb.Entity<Item>().Property(i => i.LastPurchasePrice).HasPrecision(18, 4);
 

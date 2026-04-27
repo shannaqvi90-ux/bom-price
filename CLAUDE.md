@@ -274,6 +274,34 @@ Web UI: `<AdminActionsCard>` collapsible card on `RequisitionDetailPage` (Admin-
 
 Web only — no mobile UI in P1. C6 (override approved prices) and C8 (hard-delete customer) deferred to Phase 2.
 
+### V2.3-C P2 Admin Override — Phase 2 (post-2026-04-27)
+
+Phase 2 adds the two deferred operations + finishes structural cleanup of the admin namespace.
+
+- **C6 Override approved prices** — `POST /api/admin/requisitions/{id}/override-prices`. Allowed only from `Status=Approved`. Validates item set is unchanged (D5 frozen — no add/remove), prices ≥ 0, percent fields sum to 100 ± 0.01, non-AED requires foreign price. **Re-snaps exchange rate (D7)** to today's active rate for the original currency. Marks current `QuotationApproval` as `IsSuperseded=true`+`SupersededAt`, creates a new approval with admin's prices and the new `RateSnapshot`. Notes prefixed `[Override]`. Best-effort PDF + email to **SP only (D6 broad — never customer)**; PDF/email failure does not roll back the approval supersession. Notifies SP + original-MD + branch Accountants.
+- **C8 Hard-delete customer** — `DELETE /api/admin/customers/{id}`. **Anonymize-in-place (D11)**: `Customer.IsDeleted=true`, `Code` rewritten to `[deleted-{id}]` (Code has unique index → empty would collide), Name→`[Deleted YYYY-MM-DD]`, Email/Phone/Address blanked, `SalesPersonId` cleared. **409 Conflict (D13)** if the customer has any req in active workflow status (BomPending..MdReview); Approved/Rejected reqs do NOT block. Audit BeforeJson includes the full Customer row + array of all referencing req-IDs (D15). Notifies the customer's old SP + their V23b group peers + active Accountants in branches with reqs for this customer.
+- **GET current-approval (admin only)** — `GET /api/admin/requisitions/{id}/current-approval`. Returns the current non-superseded approval with per-item prices, used by the C6 modal to pre-fill the editor.
+
+**New schema (V23c P2 migrations):**
+- `Customer.IsDeleted` (bool, indexed) + `DeletedAt` (DateTime?) + `DeletedByUserId` (FK Users, Restrict)
+- `QuotationApproval.RateSnapshot` (decimal?(18,6)) — per-approval exchange rate (D7 re-snap)
+- New `AdminActionType` enum values: `OverridePrices`, `HardDeleteCustomer`
+- New `NotificationType` enum values: `PricesOverridden`, `CustomerDeleted`
+
+**Listing filter (E2):** `GET /api/customers` and `GET /api/customers/{id}` filter on `!c.IsDeleted` (no opt-in flag for non-admin). Historical req detail still resolves the customer via FK navigation (anonymize-in-place preserves the row + PK).
+
+**R4 broad email policy (D6):** `ApprovalsController.Approve` already emailed SP (existing behaviour). Body now augmented with customer Name + Email + Phone for SP to forward. `(no contact on file)` fallback if customer fields blank. SP-no-email guard logs warning instead of failing. C6 endpoint follows the same pattern.
+
+**R1 N+1 fan-out fix:** `NotificationService.SendToUsersAsync(IEnumerable<int>, ...)` does a single `SaveChangesAsync` for the recipient set, then per-user SignalR push. Existing `SendAsync` unchanged. Migrated callers: `AdminRequisitionsController` (5 sites), `RequisitionsController` (4 sites), `BomController`, `CostingController`, `ApprovalsController`. Single-recipient `SendAsync` calls left as-is.
+
+**R2 controller split:** `AdminController.cs` deleted. The 7 P1 endpoints + 2 P2 endpoints + 1 GET now live in three thin controllers (all `[Route("api/admin")] [Authorize(Roles="Admin")]`):
+- `AdminRequisitionsController` — Delete/Rollback/ReassignSp/UnlockBom/UnlockCosting (P1) + GetCurrentApproval/OverridePrices (P2). 5 + 2 endpoints.
+- `AdminCustomersController` — HardDeleteCustomer (P2). 1 endpoint.
+- `AdminUsersController` — ResetPassword (P1). 1 endpoint.
+- `AdminAuditLogController` — GetAuditLog (P1). 1 endpoint.
+
+**Web UI (P2):** `<OverridePricesModal>` (most complex modal — 5-field-per-item editor, percent-sum validation, currency-aware foreign price field, pre-fills from `GET /api/admin/requisitions/{id}/current-approval`); `<DeleteCustomerModal>` (reason + confirmation checkbox + 409-blocking-reqs panel); `<AdminActionsCard>` extended with "Override Prices" button (visible only when `req.status === "Approved"`); `CustomersPage` row action (Admin-only) to open `<DeleteCustomerModal>`; `<AuditLogPage>` filter UI extended with `Admin User` dropdown (filtered+sorted from `useUsers()`) + `Entity ID` number input + new `OverridePrices`/`HardDeleteCustomer` action labels + `Customer` entity type. Web only — no mobile UI in P2 (D17).
+
 ### Multi-Item Requisition Model
 
 A `QuotationRequest` contains multiple `RequisitionItem` entries (each with an `Item` + `ExpectedQty`). BOM and costing are tracked per-item via `BomHeader.RequisitionItemId`. Approval uses `ApprovalItem` (per-item price/margin on `QuotationApproval`).
@@ -436,4 +464,4 @@ Always follow this order — no exceptions:
 
 ## Maintenance
 
-This file drifts over time as the codebase evolves. Re-audit it every ~2 months by running a "reality audit" session (compare each claim against the actual codebase). The last audit was **2026-04-27** (post-V2.3-A/B/C-P1 + mobile EAS V1).
+This file drifts over time as the codebase evolves. Re-audit it every ~2 months by running a "reality audit" session (compare each claim against the actual codebase). The last update was **2026-04-27** (post-V2.3-C P2: C6 + C8 + R1 fan-out + R2 admin split).

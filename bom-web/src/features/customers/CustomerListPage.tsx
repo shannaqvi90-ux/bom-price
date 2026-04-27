@@ -8,6 +8,7 @@ import { OwnedByBadge } from "@/components/OwnedByBadge";
 import { useCustomers } from "./customersApi";
 import { AddCustomerModal } from "./AddCustomerModal";
 import { ImportCustomersModal } from "./ImportCustomersModal";
+import { DeleteCustomerModal } from "@/features/admin/modals/DeleteCustomerModal";
 import type { Customer } from "@/types/api";
 
 export default function CustomerListPage() {
@@ -15,35 +16,59 @@ export default function CustomerListPage() {
   const currentUserId = useAuthStore((s) => s.user?.userId);
   const { data, isLoading, isError, refetch } = useCustomers();
 
-  const columns = useMemo<ColumnDef<Customer>[]>(() => [
-    { accessorKey: "code", header: "Code", cell: (info) => <span className="font-mono text-xs">{info.getValue() as string}</span> },
-    {
-      accessorKey: "name",
-      header: "Name",
-      cell: (info) => {
-        const row = info.row.original;
-        return (
-          <span>
-            {row.name}
-            {currentUserId !== undefined && row.salesPersonId !== null && row.salesPersonId !== currentUserId && row.salesPersonName && (
-              <OwnedByBadge ownerName={row.salesPersonName} prefix="owned by" />
-            )}
-          </span>
-        );
-      },
-    },
-    { accessorKey: "email", header: "Email" },
-    { accessorKey: "phoneNumber", header: "Phone" },
-    {
-      id: "salesPerson",
-      header: "Sales Person",
-      accessorFn: (row) => row.salesPersonName ?? "—",
-    },
-  ], [currentUserId]);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
 
   const isAdmin = role === "Admin";
+
+  const columns = useMemo<ColumnDef<Customer>[]>(() => {
+    const base: ColumnDef<Customer>[] = [
+      { accessorKey: "code", header: "Code", cell: (info) => <span className="font-mono text-xs">{info.getValue() as string}</span> },
+      {
+        accessorKey: "name",
+        header: "Name",
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <span>
+              {row.name}
+              {currentUserId !== undefined && row.salesPersonId !== null && row.salesPersonId !== currentUserId && row.salesPersonName && (
+                <OwnedByBadge ownerName={row.salesPersonName} prefix="owned by" />
+              )}
+            </span>
+          );
+        },
+      },
+      { accessorKey: "email", header: "Email" },
+      { accessorKey: "phoneNumber", header: "Phone" },
+      {
+        id: "salesPerson",
+        header: "Sales Person",
+        accessorFn: (row) => row.salesPersonName ?? "—",
+      },
+    ];
+
+    if (isAdmin) {
+      base.push({
+        id: "actions",
+        header: "",
+        cell: (info) => (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-red-600 hover:text-red-700"
+            onClick={() => setCustomerToDelete(info.row.original)}
+            aria-label={`Delete customer ${info.row.original.code}`}
+          >
+            Delete
+          </Button>
+        ),
+      });
+    }
+
+    return base;
+  }, [currentUserId, isAdmin]);
 
   return (
     <div className="space-y-4">
@@ -79,6 +104,12 @@ export default function CustomerListPage() {
 
       <AddCustomerModal open={addOpen} onClose={() => setAddOpen(false)} />
       <ImportCustomersModal open={importOpen} onClose={() => setImportOpen(false)} />
+      {customerToDelete && (
+        <DeleteCustomerModal
+          customer={customerToDelete}
+          onClose={() => setCustomerToDelete(null)}
+        />
+      )}
     </div>
   );
 }

@@ -31,3 +31,7 @@ export function canDelete(): boolean {
 export function canReassignSp(): boolean {
   return true;
 }
+
+export function canOverridePrices(current: RequisitionStatus): boolean {
+  return current === "Approved";
+}

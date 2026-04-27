@@ -174,10 +174,31 @@ public class ApprovalsController(
             await notificationSvc.SendAsync(req.SalesPersonId,
                 $"Quotation approved! Download ready: {req.RefNo}", req.Id, "QuotationRequest");
 
-            await emailSvc.SendAsync(req.SalesPerson.Email, req.SalesPerson.Name,
-                $"Quotation Approved – {req.RefNo}",
-                $"<p>Dear {req.SalesPerson.Name},</p><p>Your quotation <strong>{req.RefNo}</strong> has been approved. Please find the quotation PDF attached.</p><p>Regards,<br/>Fujairah Plastic Factory</p>",
-                pdf, $"{req.RefNo}-Quotation.pdf");
+            // V23c P2 D6 broad: app never emails customer; email goes to SP
+            // with customer contact info in the body so SP can forward manually.
+            if (!string.IsNullOrWhiteSpace(req.SalesPerson.Email))
+            {
+                var customerContact = string.Join(" / ",
+                    new[] { req.Customer.Email, req.Customer.PhoneNumber }
+                        .Where(s => !string.IsNullOrWhiteSpace(s)));
+                if (string.IsNullOrEmpty(customerContact)) customerContact = "(no contact on file)";
+
+                await emailSvc.SendAsync(req.SalesPerson.Email, req.SalesPerson.Name,
+                    $"Quotation Approved – {req.RefNo}",
+                    $"<p>Dear {req.SalesPerson.Name},</p>" +
+                    $"<p>Your quotation <strong>{req.RefNo}</strong> has been approved. " +
+                    $"Please forward the attached PDF to the customer.</p>" +
+                    $"<p><strong>Customer:</strong> {req.Customer.Name}<br/>" +
+                    $"<strong>Customer contact:</strong> {customerContact}</p>" +
+                    $"<p>Regards,<br/>Fujairah Plastic Factory</p>",
+                    pdf, $"{req.RefNo}-Quotation.pdf");
+            }
+            else
+            {
+                logger.LogWarning(
+                    "[Approve] SP {SalesPersonId} has no email on record; skipping email dispatch for {RefNo}",
+                    req.SalesPersonId, req.RefNo);
+            }
         }
         catch (Exception ex)
         {
@@ -224,11 +245,15 @@ public class ApprovalsController(
             await notificationSvc.SendAsync(req.SalesPersonId,
                 $"Quotation rejected: {req.RefNo}. Reason: {request.Notes}", req.Id, "QuotationRequest");
 
-            var accountants = await db.Users
-                .Where(u => u.Role == UserRole.Accountant && u.IsActive).ToListAsync();
-            foreach (var acct in accountants)
-                await notificationSvc.SendAsync(acct.Id,
-                    $"Quotation rejected by MD: {req.RefNo}. Reason: {request.Notes}", req.Id, "QuotationRequest");
+            var accountantIds = await db.Users
+                .Where(u => u.Role == UserRole.Accountant && u.IsActive)
+                .Select(u => u.Id)
+                .ToListAsync();
+            await notificationSvc.SendToUsersAsync(
+                accountantIds,
+                $"Quotation rejected by MD: {req.RefNo}. Reason: {request.Notes}",
+                req.Id,
+                "QuotationRequest");
         }
         catch (Exception ex)
         {

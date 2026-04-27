@@ -348,10 +348,15 @@ public class CostingController(
         {
             try
             {
-                var mds = await db.Users.Where(u => u.Role == UserRole.ManagingDirector && u.IsActive).ToListAsync();
-                foreach (var md in mds)
-                    await notificationService.SendAsync(md.Id,
-                        $"Costing complete, ready for approval: {req.RefNo}", req.Id, "QuotationRequest");
+                var mdIds = await db.Users
+                    .Where(u => u.Role == UserRole.ManagingDirector && u.IsActive)
+                    .Select(u => u.Id)
+                    .ToListAsync();
+                await notificationService.SendToUsersAsync(
+                    mdIds,
+                    $"Costing complete, ready for approval: {req.RefNo}",
+                    req.Id,
+                    "QuotationRequest");
             }
             catch (Exception ex)
             {

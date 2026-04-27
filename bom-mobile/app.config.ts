@@ -31,7 +31,7 @@ export default (): ExpoConfig => ({
   extra: {
     apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://localhost:7300",
     eas: {
-      projectId: process.env.EAS_PROJECT_ID ?? "",
+      projectId: "4d550ebf-6917-4811-8d0c-db0aa90e559f",
     },
   },
   experiments: { typedRoutes: false },

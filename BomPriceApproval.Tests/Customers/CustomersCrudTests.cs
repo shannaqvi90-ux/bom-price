@@ -137,6 +137,59 @@ public class CustomersCrudTests(WebApplicationFactory<Program> factory) : IClass
         upd.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
 
+    [Theory]
+    [InlineData("<script>alert(1)</script>")]
+    [InlineData("<img src=x onerror=alert(1)>")]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("Hi <a href='x'>click</a>")]
+    public async Task Create_RejectsHtmlPayloadInName(string maliciousName)
+    {
+        var login = await LoginAsync("admin@test.com", "Admin@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
+
+        var code = $"XSS-{Guid.NewGuid():N}".Substring(0, 12);
+        var resp = await _client.PostAsJsonAsync("/api/customers", new
+        {
+            Code = code, Name = maliciousName, Address = "", Email = "", PhoneNumber = ""
+        });
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Create_RejectsHtmlPayloadInAddress()
+    {
+        var login = await LoginAsync("admin@test.com", "Admin@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
+
+        var code = $"XSS-{Guid.NewGuid():N}".Substring(0, 12);
+        var resp = await _client.PostAsJsonAsync("/api/customers", new
+        {
+            Code = code, Name = "Clean Co", Address = "<script>x</script>", Email = "", PhoneNumber = ""
+        });
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Update_RejectsHtmlPayloadInName()
+    {
+        var login = await LoginAsync("admin@test.com", "Admin@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
+
+        var code = $"XSS-UPD-{Guid.NewGuid():N}".Substring(0, 16);
+        var create = await _client.PostAsJsonAsync("/api/customers", new
+        {
+            Code = code, Name = "Clean Co", Address = "", Email = "", PhoneNumber = ""
+        });
+        create.StatusCode.Should().Be(HttpStatusCode.Created);
+        var customer = await create.Content.ReadFromJsonAsync<CustomerResponse>();
+
+        var upd = await _client.PutAsJsonAsync($"/api/customers/{customer!.Id}", new
+        {
+            Name = "<script>alert('xss')</script>", Address = "", Email = "", PhoneNumber = ""
+        });
+        upd.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
     private record LoginResponse(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId);
     private record CustomerResponse(int Id, string Code, string Name, string Address, string Email, string PhoneNumber, int? SalesPersonId, string? SalesPersonName, int CreatedByUserId);
 }

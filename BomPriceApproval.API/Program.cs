@@ -132,9 +132,26 @@ builder.Services.AddRateLimiter(opts =>
     opts.RejectionStatusCode = 429;
 });
 
+// CORS allowlist:
+//   - Dev defaults: localhost web (5300) + mobile metro (8081)
+//   - Production extras: env var `CorsAllowedOrigins` (comma-separated)
+//     e.g. "https://bom-fpf.pages.dev,https://bom.fpf-fujairah.com"
+var corsOrigins = new List<string>
+{
+    "http://localhost:5300",
+    "http://localhost:8081",
+};
+var extraOrigins = builder.Configuration["CorsAllowedOrigins"];
+if (!string.IsNullOrWhiteSpace(extraOrigins))
+{
+    foreach (var origin in extraOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+    {
+        if (!corsOrigins.Contains(origin)) corsOrigins.Add(origin);
+    }
+}
 builder.Services.AddCors(opt =>
     opt.AddDefaultPolicy(p => p
-        .WithOrigins("http://localhost:5300", "http://localhost:8081")
+        .WithOrigins(corsOrigins.ToArray())
         .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
         .WithHeaders("Content-Type", "Authorization")
         .AllowCredentials()));
@@ -379,6 +396,14 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
+
+// Liveness probe — Fly.io healthchecks + Docker HEALTHCHECK both hit this.
+// Anonymous (no auth) so the load balancer can reach it. Returns 200 + a
+// tiny JSON payload; does NOT touch the DB so a transient PG outage doesn't
+// take the app out of rotation.
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
+   .AllowAnonymous();
+
 app.Run();
 
 public partial class Program { }

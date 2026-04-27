@@ -18,7 +18,7 @@ export function BranchSwapModal({ requisitionId, currentBranchId, open, onClose 
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const candidateBranches = (branches ?? []).filter((b) => b.isActive && b.id !== currentBranchId);
+  const candidateBranches = (branches ?? []).filter((b) => (b.isActive ?? true) && b.id !== currentBranchId);
   const canSave = pickedId !== null && pickedId !== currentBranchId && !changeMut.isPending;
 
   async function handleSave() {

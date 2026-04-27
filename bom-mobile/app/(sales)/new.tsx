@@ -107,7 +107,7 @@ export default function NewRequisition() {
                   onChange={field.onChange}
                   loading={branchesQ.isPending}
                   options={(branchesQ.data ?? [])
-                    .filter((b) => b.isActive)
+                    .filter((b) => b.isActive ?? true)
                     .map((b) => ({ id: b.id, label: b.name }))}
                   error={errors.branchId?.message}
                 />

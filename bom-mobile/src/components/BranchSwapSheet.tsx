@@ -33,7 +33,7 @@ export function BranchSwapSheet({
 
   // Exclude the current branch from the picker list
   const candidates = (branchesQ.data ?? [])
-    .filter((b) => b.isActive && b.id !== currentBranchId)
+    .filter((b) => (b.isActive ?? true) && b.id !== currentBranchId)
     .map((b) => ({ id: b.id, label: b.name }));
 
   const handleSave = async () => {

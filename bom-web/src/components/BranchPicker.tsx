@@ -9,7 +9,7 @@ interface Props {
 
 export function BranchPicker({ id, value, onChange, disabled }: Props) {
   const { data: branches, isPending } = useBranches();
-  const active = (branches ?? []).filter((b) => b.isActive);
+  const active = (branches ?? []).filter((b) => b.isActive ?? true);
 
   return (
     <select

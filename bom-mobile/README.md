@@ -56,4 +56,10 @@ This split exists because `jest-expo`'s polyfills crash `axios-mock-adapter` at 
 
 **Plan 3a (this work):** MD pending-approvals list, MD approval detail with per-item prices + approve/reject flow, notifications screen with bell badge, SignalR foreground live updates.
 
-**Plan 3b (next):** EAS Build profiles for Android, Play Store Internal Testing distribution, deployment docs. iOS is a later phase.
+**Plan 3b (merged):** EAS Android deployment — build profiles, Play Store Internal Testing runbook. See [`docs/DEPLOY.md`](docs/DEPLOY.md).
+
+## Distribution
+
+**Android V1 (current):** EAS cloud builds → preview APK installed directly on devices, or Play Store Internal Testing track. See [`docs/DEPLOY.md`](docs/DEPLOY.md).
+
+**iOS:** deferred to Phase 2. Requires Apple Developer account and is a separate plan.

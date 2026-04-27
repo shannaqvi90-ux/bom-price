@@ -20,7 +20,8 @@ public class CustomersController(AppDbContext db) : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
-        var query = db.Customers.Include(c => c.SalesPerson).AsQueryable();
+        // V23c P2: hide soft-deleted customers from default listings
+        var query = db.Customers.Where(c => !c.IsDeleted).Include(c => c.SalesPerson).AsQueryable();
         if (CurrentRole == "SalesPerson")
         {
             var currentUser = await db.Users.FirstAsync(u => u.Id == CurrentUserId);
@@ -41,7 +42,11 @@ public class CustomersController(AppDbContext db) : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> Get(int id)
     {
-        var c = await db.Customers.Include(c => c.SalesPerson).FirstOrDefaultAsync(x => x.Id == id);
+        // V23c P2: GET-by-id also hides soft-deleted customers (returns 404).
+        // Historical req detail pages use the navigation property which still
+        // resolves to the anonymized row — they don't go through this endpoint.
+        var c = await db.Customers.Include(c => c.SalesPerson)
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         if (c is null) return NotFound();
         if (CurrentRole == "SalesPerson")
         {

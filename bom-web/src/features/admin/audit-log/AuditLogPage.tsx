@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
-import { useAuditLog, type AdminActionType } from "@/api/admin";
+import { useAuditLog, type AdminActionType, type AuditEntityType } from "@/api/admin";
+import { useUsers } from "@/features/users/usersApi";
 import { DiffPanel } from "./DiffPanel";
 
 const ACTION_TYPE_LABELS: Record<AdminActionType, string> = {
@@ -12,6 +13,8 @@ const ACTION_TYPE_LABELS: Record<AdminActionType, string> = {
   UnlockBom: "Unlock BOM",
   UnlockCosting: "Unlock Costing",
   ResetPassword: "Reset Password",
+  OverridePrices: "Override Prices",
+  HardDeleteCustomer: "Delete Customer",
 };
 
 const ACTION_TYPES: AdminActionType[] = [
@@ -21,9 +24,11 @@ const ACTION_TYPES: AdminActionType[] = [
   "UnlockBom",
   "UnlockCosting",
   "ResetPassword",
+  "OverridePrices",
+  "HardDeleteCustomer",
 ];
 
-const ENTITY_TYPES = ["Requisition", "User"] as const;
+const ENTITY_TYPES: AuditEntityType[] = ["Requisition", "User", "Customer"];
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString();
@@ -32,18 +37,37 @@ function formatDate(iso: string) {
 export function AuditLogPage() {
   const [page, setPage] = useState(1);
   const [actionType, setActionType] = useState<AdminActionType | "">("");
-  const [entityType, setEntityType] = useState<"Requisition" | "User" | "">("");
+  const [entityType, setEntityType] = useState<AuditEntityType | "">("");
+  const [adminUserId, setAdminUserId] = useState<number | "">("");
+  const [entityIdInput, setEntityIdInput] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   const pageSize = 20;
 
+  const { data: users } = useUsers();
+  const adminUsers = useMemo(
+    () =>
+      (users ?? [])
+        .filter((u) => u.role === "Admin" && u.isActive)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [users],
+  );
+
+  const parsedEntityId = entityIdInput.trim() === "" ? undefined : Number(entityIdInput);
+  const entityIdFilter =
+    parsedEntityId !== undefined && Number.isFinite(parsedEntityId) && parsedEntityId > 0
+      ? parsedEntityId
+      : undefined;
+
   const filters = {
     page,
     pageSize,
     ...(actionType ? { actionType } : {}),
     ...(entityType ? { entityType } : {}),
+    ...(adminUserId !== "" ? { adminUserId } : {}),
+    ...(entityIdFilter !== undefined ? { entityId: entityIdFilter } : {}),
     ...(from ? { from } : {}),
     ...(to ? { to } : {}),
   };
@@ -87,7 +111,7 @@ export function AuditLogPage() {
             className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
             value={entityType}
             onChange={(e) => {
-              setEntityType(e.target.value as "Requisition" | "User" | "");
+              setEntityType(e.target.value as AuditEntityType | "");
               handleFilterChange();
             }}
             aria-label="Filter by entity type"
@@ -97,6 +121,36 @@ export function AuditLogPage() {
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
+
+          <select
+            className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+            value={adminUserId === "" ? "" : String(adminUserId)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setAdminUserId(v === "" ? "" : Number(v));
+              handleFilterChange();
+            }}
+            aria-label="Filter by admin user"
+          >
+            <option value="">All admins</option>
+            {adminUsers.map((u) => (
+              <option key={u.id} value={u.id}>{u.name}</option>
+            ))}
+          </select>
+
+          <div className="flex items-center gap-1.5">
+            <label className="text-sm text-muted-foreground">Entity ID</label>
+            <input
+              type="number"
+              min={1}
+              inputMode="numeric"
+              className="w-24 rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+              value={entityIdInput}
+              onChange={(e) => { setEntityIdInput(e.target.value); handleFilterChange(); }}
+              aria-label="Filter by entity ID"
+              placeholder="e.g. 42"
+            />
+          </div>
 
           <div className="flex items-center gap-1.5">
             <label className="text-sm text-muted-foreground">From</label>

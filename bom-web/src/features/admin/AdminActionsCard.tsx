@@ -8,12 +8,14 @@ import {
   canUnlockCosting,
   canDelete,
   canReassignSp,
+  canOverridePrices,
 } from "./adminOverrideAuthorization";
 import { DeleteRequisitionModal } from "./modals/DeleteRequisitionModal";
 import { RollbackStatusModal } from "./modals/RollbackStatusModal";
 import { ReassignSpModal } from "./modals/ReassignSpModal";
 import { UnlockBomModal } from "./modals/UnlockBomModal";
 import { UnlockCostingModal } from "./modals/UnlockCostingModal";
+import { OverridePricesModal } from "./modals/OverridePricesModal";
 import type { RequisitionStatus } from "@/types/api";
 
 interface Requisition {
@@ -32,6 +34,7 @@ type ModalKey =
   | "reassignSp"
   | "unlockBom"
   | "unlockCosting"
+  | "overridePrices"
   | null;
 
 export function AdminActionsCard({ requisition }: Props) {
@@ -113,6 +116,16 @@ export function AdminActionsCard({ requisition }: Props) {
                 Unlock Costing
               </Button>
             )}
+
+            {canOverridePrices(status) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setActiveModal("overridePrices")}
+              >
+                Override Prices
+              </Button>
+            )}
           </CardContent>
         )}
       </Card>
@@ -143,6 +156,12 @@ export function AdminActionsCard({ requisition }: Props) {
       )}
       {activeModal === "unlockCosting" && (
         <UnlockCostingModal
+          requisition={requisition}
+          onClose={() => setActiveModal(null)}
+        />
+      )}
+      {activeModal === "overridePrices" && (
+        <OverridePricesModal
           requisition={requisition}
           onClose={() => setActiveModal(null)}
         />

@@ -1,0 +1,45 @@
+# Exclude things that shouldn't be in the Docker build context.
+# Speeds up build + reduces image size.
+
+# Build artifacts
+**/bin/
+**/obj/
+**/out/
+**/dist/
+**/build/
+
+# IDE / OS
+.vs/
+.vscode/
+.idea/
+**/.DS_Store
+Thumbs.db
+
+# Source control
+.git/
+.gitignore
+.gitattributes
+
+# Frontend artifacts (we only build the API in this Dockerfile)
+bom-web/
+bom-mobile/
+
+# Test artifacts (test project not needed at runtime)
+BomPriceApproval.Tests/
+
+# Docs / planning
+docs/
+*.md
+!BomPriceApproval.API/**/*.md
+
+# Local secrets — never include
+**/appsettings.Local.json
+**/.env
+**/.env.*
+**/secrets.json
+
+# Misc
+*.log
+Dockerfile
+.dockerignore
+fly.toml

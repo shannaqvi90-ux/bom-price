@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import * as signalR from "@microsoft/signalr";
-import { api } from "@/api/axios";
+import { api, HUB_BASE_URL } from "@/api/axios";
 import { notify } from "@/lib/notify";
 import { getAppNavigate } from "@/lib/navigator";
 import type { Notification } from "@/types/api";
@@ -38,7 +38,7 @@ export const notificationsStore = create<NotificationsState>()((set, get) => ({
     if (get().connected || get()._connection) return;
 
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(`/hubs/notifications?access_token=${token}`)
+      .withUrl(`${HUB_BASE_URL}/hubs/notifications?access_token=${token}`)
       .withAutomaticReconnect()
       .build();
 

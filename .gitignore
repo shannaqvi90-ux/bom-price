@@ -14,4 +14,5 @@ user id pwd.txt
 .env
 .env.*
 !.env.example
+!.env.production
 appsettings.*.Local.json

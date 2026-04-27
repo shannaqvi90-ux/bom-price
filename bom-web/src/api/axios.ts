@@ -6,10 +6,17 @@ import axios, {
 import { useAuthStore } from "@/store/authStore";
 import type { LoginResponse } from "@/types/api";
 
-// Relative base — Vite dev server proxies /api and /hubs to the ASP.NET Core
-// backend on port 7300 (see vite.config.ts). In production this should be
-// overridden via VITE_API_BASE_URL in a later plan.
-export const API_BASE_URL = "/api";
+// API base URL.
+//   - Dev: empty `VITE_API_BASE_URL` → "/api" (Vite dev-server proxies to localhost:7300, see vite.config.ts).
+//   - Prod: set `VITE_API_BASE_URL` to e.g. "https://bom-fpf-api.fly.dev" — full origin
+//     becomes "<origin>/api". See bom-web/.env.production.
+//
+// HUB_BASE_URL is the SignalR origin — in dev it's "" (relative, proxied),
+// in prod it's the same Fly.io origin. notificationsStore.ts builds the
+// hub URL as `${HUB_BASE_URL}/hubs/notifications`.
+const apiOrigin = import.meta.env.VITE_API_BASE_URL ?? "";
+export const API_BASE_URL = `${apiOrigin}/api`;
+export const HUB_BASE_URL = apiOrigin;
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

@@ -9,5 +9,6 @@ export default function Index() {
   if (user.role === "SalesPerson") return <Redirect href="/(sales)" />;
   if (user.role === "ManagingDirector") return <Redirect href="/(md)" />;
   if (user.role === "Accountant") return <Redirect href="/(accountant)" />;
+  if (user.role === "Admin") return <Redirect href="/(admin)" />;
   return <Redirect href="/login" />;
 }

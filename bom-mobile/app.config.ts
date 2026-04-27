@@ -1,6 +1,7 @@
 import type { ExpoConfig } from "expo/config";
 
 const androidVersionCode = Number(process.env.ANDROID_VERSION_CODE ?? "1");
+const allowCleartextTraffic = process.env.EAS_BUILD_PROFILE !== "production";
 
 export default (): ExpoConfig => ({
   name: "FPF Quotations",
@@ -26,7 +27,18 @@ export default (): ExpoConfig => ({
       backgroundColor: "#ffffff",
     },
   },
-  plugins: ["expo-router", "expo-secure-store"],
+  plugins: [
+    "expo-router",
+    "expo-secure-store",
+    [
+      "expo-build-properties",
+      {
+        android: {
+          usesCleartextTraffic: allowCleartextTraffic,
+        },
+      },
+    ],
+  ],
   scheme: "fpfquotations",
   updates: {
     url: "https://u.expo.dev/4d550ebf-6917-4811-8d0c-db0aa90e559f",

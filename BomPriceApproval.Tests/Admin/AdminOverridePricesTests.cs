@@ -13,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace BomPriceApproval.Tests.Admin;
 
+[Collection(ExchangeRateMutationCollection.Name)]
 public class AdminOverridePricesTests(WebApplicationFactory<Program> factory)
     : IClassFixture<WebApplicationFactory<Program>>
 {

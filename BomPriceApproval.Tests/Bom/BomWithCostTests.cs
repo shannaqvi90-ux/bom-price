@@ -1,11 +1,13 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using BomPriceApproval.Tests.Shared;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace BomPriceApproval.Tests.Bom;
 
+[Collection(ExchangeRateMutationCollection.Name)]
 public class BomWithCostTests(WebApplicationFactory<Program> factory)
     : IClassFixture<WebApplicationFactory<Program>>
 {

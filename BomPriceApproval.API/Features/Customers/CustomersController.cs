@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Infrastructure.Authorization;
 using BomPriceApproval.API.Infrastructure.Data;
@@ -14,6 +15,17 @@ namespace BomPriceApproval.API.Features.Customers;
 [Authorize]
 public class CustomersController(AppDbContext db) : ControllerBase
 {
+    // Defense-in-depth: reject obvious HTML/script-like payloads in customer text
+    // fields before they hit the DB. Frontend (mobile + web) also sanitize on
+    // render, but blocking at the API boundary stops new XSS-payload data from
+    // ever reaching storage.
+    private static readonly Regex HtmlPayloadRegex = new(
+        @"<\s*\w+|javascript:|on\w+\s*=",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static bool ContainsHtmlPayload(string? value)
+        => !string.IsNullOrEmpty(value) && HtmlPayloadRegex.IsMatch(value);
+
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string CurrentRole => User.FindFirstValue(ClaimTypes.Role)!;
 
@@ -69,6 +81,13 @@ public class CustomersController(AppDbContext db) : ControllerBase
                 .Field("Code", "Customer code is required.")
                 .Return();
 
+        if (ContainsHtmlPayload(req.Name) || ContainsHtmlPayload(req.Address))
+            return Validation
+                .Detail("HTML or script-like content is not allowed in Name or Address.")
+                .Field(ContainsHtmlPayload(req.Name) ? "Name" : "Address",
+                       "Remove tags / event handlers / javascript: links.")
+                .Return();
+
         if (await db.Customers.AnyAsync(c => c.Code == req.Code))
             return Conflict(new { message = $"Customer with code '{req.Code}' already exists." });
 
@@ -102,6 +121,13 @@ public class CustomersController(AppDbContext db) : ControllerBase
             var visibleIds = SalesAuthorization.VisibleSalesPersonIds(me, db);
             if (!c.SalesPersonId.HasValue || !visibleIds.Contains(c.SalesPersonId.Value)) return Forbid();
         }
+
+        if (ContainsHtmlPayload(req.Name) || ContainsHtmlPayload(req.Address))
+            return Validation
+                .Detail("HTML or script-like content is not allowed in Name or Address.")
+                .Field(ContainsHtmlPayload(req.Name) ? "Name" : "Address",
+                       "Remove tags / event handlers / javascript: links.")
+                .Return();
 
         c.Name = req.Name;
         c.Address = req.Address;

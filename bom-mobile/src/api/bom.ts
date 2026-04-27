@@ -15,5 +15,6 @@ export function useBomReview(requisitionId: number, enabled = true) {
     },
     enabled: enabled && Number.isFinite(requisitionId) && requisitionId > 0,
     staleTime: 30_000,
+    retry: false,
   });
 }

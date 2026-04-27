@@ -22,6 +22,49 @@ public class AdminRequisitionsController(
 {
     private const decimal PercentSumTolerance = 0.01m;
 
+    [HttpGet("requisitions/{id}/current-approval")]
+    public async Task<IActionResult> GetCurrentApproval(int id)
+    {
+        var req = await db.QuotationRequests
+            .Include(q => q.Items).ThenInclude(ri => ri.Item)
+            .Include(q => q.Approvals).ThenInclude(a => a.Items)
+            .FirstOrDefaultAsync(q => q.Id == id);
+        if (req is null) return NotFound();
+
+        var currentApproval = req.Approvals.FirstOrDefault(a => !a.IsSuperseded && a.IsApproved);
+        if (currentApproval is null)
+            return NotFound(new { error = "No active approval for this requisition" });
+
+        var itemLookup = req.Items.ToDictionary(ri => ri.Id);
+
+        var items = currentApproval.Items
+            .Select(ai =>
+            {
+                itemLookup.TryGetValue(ai.RequisitionItemId, out var ri);
+                return new CurrentApprovalItemDto(
+                    RequisitionItemId: ai.RequisitionItemId,
+                    ItemDescription: ri?.Item.Description ?? string.Empty,
+                    ExpectedQty: ri?.ExpectedQty ?? 0m,
+                    SalesPricePerKgAed: ai.SalesPricePerKgAed,
+                    SalesPricePerKgForeign: ai.SalesPricePerKgForeign,
+                    ProfitMarginPct: ai.ProfitMarginPct,
+                    MaterialCostPct: ai.MaterialCostPct,
+                    OtherCostPct: ai.OtherCostPct);
+            })
+            .ToList();
+
+        return Ok(new CurrentApprovalResponse(
+            Id: currentApproval.Id,
+            QuotationRequestId: req.Id,
+            RefNo: req.RefNo,
+            CurrencyCode: req.CurrencyCode,
+            RateSnapshot: currentApproval.RateSnapshot,
+            ApprovedAt: currentApproval.ApprovedAt,
+            ApprovedByUserId: currentApproval.ApprovedByUserId,
+            Notes: currentApproval.Notes,
+            Items: items));
+    }
+
     [HttpPost("requisitions/{id}/override-prices")]
     public async Task<IActionResult> OverridePrices(int id, [FromBody] OverridePricesRequest? body)
     {

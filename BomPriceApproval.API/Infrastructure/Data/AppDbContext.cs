@@ -58,6 +58,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany()
             .HasForeignKey(c => c.CreatedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
+        mb.Entity<Customer>()
+            .HasOne(c => c.DeletedBy)
+            .WithMany()
+            .HasForeignKey(c => c.DeletedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+        mb.Entity<Customer>().HasIndex(c => c.IsDeleted);
 
         // RequisitionItem → QuotationRequest (many:1)
         mb.Entity<QuotationRequest>()

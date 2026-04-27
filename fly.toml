@@ -1,60 +1,45 @@
-# fly.toml — Fly.io configuration for BomPriceApproval.API
+# fly.toml app configuration file generated for bom-fpf-api on 2026-04-28T00:11:26+04:00
 #
-# Intended for Fly.io free tier:
-#   - 1 shared-cpu-1x VM (256 MB RAM) in fra (Frankfurt — closest free region to UAE)
-#   - Auto-scaling to zero when idle (saves credits)
-#   - HTTPS via Fly's auto-cert
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
-# After app creation:
-#   fly launch --copy-config --no-deploy   (interactive — pick app name + region)
-#   fly secrets set ConnectionStrings__DefaultConnection="..." \
-#                   Jwt__Key="..." \
-#                   Email__Username="..." \
-#                   Email__Password="..."
-#   fly deploy
-#
-# Health check: Program.cs must expose GET /health → 200 OK (added in this commit).
 
-app = "bom-fpf-api"   # placeholder — `fly launch` will rename if taken
-primary_region = "fra"
+app = 'bom-fpf-api'
+primary_region = 'sin'
 
 [build]
-  dockerfile = "BomPriceApproval.API/Dockerfile"
+  dockerfile = 'BomPriceApproval.API/Dockerfile'
 
-# Default Fly.io HTTPS handler routes :443 → internal_port over the Fly proxy.
+[env]
+  ASPNETCORE_ENVIRONMENT = 'Production'
+  ASPNETCORE_URLS = 'http://+:8080'
+  CorsAllowedOrigins = 'https://bom-fpf.pages.dev'
+  Npgsql__MaxPoolSize = '5'
+  Npgsql__MinPoolSize = '0'
+
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"     # scale to zero when idle (saves free-tier hours)
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
-  processes = ["app"]
+  processes = ['app']
 
-[http_service.concurrency]
-  type = "requests"
-  hard_limit = 200
-  soft_limit = 100
+  [http_service.concurrency]
+    type = 'requests'
+    hard_limit = 200
+    soft_limit = 100
 
-# HTTP-level healthcheck. Returns 200 from Program.cs MapGet("/health").
-[[http_service.checks]]
-  grace_period = "30s"
-  interval = "30s"
-  method = "GET"
-  path = "/health"
-  protocol = "http"
-  timeout = "5s"
+  [[http_service.checks]]
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '30s'
+    method = 'GET'
+    path = '/health'
+    protocol = 'http'
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "256mb"     # free tier — bump to "512mb" if .NET runtime tight
+  size = 'shared-cpu-1x'
+  memory = '256mb'
+  cpu_kind = 'shared'
   cpus = 1
-
-[env]
-  ASPNETCORE_URLS = "http://+:8080"
-  ASPNETCORE_ENVIRONMENT = "Production"
-  # CORS allowlist for production web SPA — set on deploy after Cloudflare
-  # Pages domain is known. See Program.cs CorsAllowedOrigins binding.
-  CorsAllowedOrigins = "https://bom-fpf.pages.dev"
-  # Connection-pool sizing for Neon serverless PG (Neon recommends low pool)
-  Npgsql__MinPoolSize = "0"
-  Npgsql__MaxPoolSize = "5"
+  memory_mb = 256

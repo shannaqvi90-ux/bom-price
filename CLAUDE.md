@@ -105,7 +105,8 @@ Examples:
   ```
   If it is not running, start it (`dotnet run --project BomPriceApproval.API`) and wait for it to be ready before running tests. Never run integration tests against a stopped backend — they will fail and waste cycles.
 - After every file edit, prefer running `dotnet build --nologo -v q` to catch compile errors immediately rather than batching fixes.
-- Integration tests use `WebApplicationFactory<Program>` + Testcontainers PostgreSQL. Tests spin up a real database container — **do not mock the database**.
+- Integration tests use `WebApplicationFactory<Program>` and inherit the API's runtime config — **they hit the real localhost PostgreSQL** at the connection string in user-secrets. (`Testcontainers.PostgreSql` is a stale dependency in `BomPriceApproval.Tests.csproj` but is not actually used anywhere — do not assume containerized DB.) Tests do not mock the database.
+- Tests reuse one `WebApplicationFactory` instance per class via `IClassFixture<WebApplicationFactory<Program>>`. Seeded users live across tests — use Guid-isolated throwaway records (V23b lesson).
 
 ---
 
@@ -113,7 +114,10 @@ Examples:
 
 **BOM & Price Approval** is a quotation workflow system for Fujairah Plastic Factory. Sales staff submit quotation requests; BOM creators build Bills of Materials; accountants enter costing data; the Managing Director approves and dispatches PDF quotations via email.
 
-The repository contains an **ASP.NET Core 8 backend** and a **React 19 + Vite web frontend** (`bom-web/`). A React Native mobile app is planned but not yet implemented.
+The repository contains:
+- **ASP.NET Core 8 backend** (`BomPriceApproval.API/`)
+- **React 19 + Vite web frontend** (`bom-web/`)
+- **React Native (Expo) mobile app** (`bom-mobile/`) — V1 shipped 2026-04-27 via EAS preview-channel APK; deploy runbook at `bom-mobile/docs/DEPLOY.md`.
 
 ---
 
@@ -153,24 +157,61 @@ Swagger UI is available at `http://localhost:7300/swagger` when the API is runni
 ```
 BomPriceApproval.API/
   Domain/
-    Entities/        # Pure C# entity classes (RequisitionItem, ApprovalItem, etc.)
-    Enums/           # UserRole, RequisitionStatus, ItemType, LandedCostType
+    Entities/        # Pure C# entity classes (RequisitionItem, ApprovalItem, AdminAuditLog, …)
+    Enums/           # UserRole, RequisitionStatus, ItemType, LandedCostType, AdminActionType, NotificationType
   Infrastructure/
     Data/
       AppDbContext.cs
       Migrations/
-    Services/        # TokenService, EmailService, NotificationService, PdfService, ItemImportService
-  Features/          # One folder per feature, each containing *Controller.cs + *Dtos.cs
+    Services/        # TokenService, EmailService, NotificationService, PdfService,
+                     # ItemImportService, CustomerImportService, PurchaseLedgerService,
+                     # AdminAuditLogger, RevokedJtiCleanupService (HostedService)
+  Features/          # Admin, Approvals, Auth, Bom, Branches, Costing, Customers,
+                     # ExchangeRates, Groups, Items, Notifications, Processes,
+                     # Requisitions, Stats, Users — each a self-contained controller + DTOs slice
+
 BomPriceApproval.Tests/
-  Auth/              # AuthTests.cs
-  Bom/               # BomSaveLinesTests.cs, BomWithCostTests.cs, BomTests.cs
-  Costing/           # CostingTests.cs
-  Requisitions/      # RequisitionWorkflowTests.cs
+  Admin/             # AdminAuditLogTests, AdminDeleteRequisitionTests, AdminReassignSpTests,
+                     # AdminResetPasswordTests, AdminRollbackStatusTests,
+                     # AdminUnlockBomTests, AdminUnlockCostingTests
+  Approvals/         # ApprovalGetReviewTests, ApprovalHistoricalReadTests, ApprovalValidationTests, NotificationResilienceTests
+  Auth/              # AuthTests, LoginLockoutTests, LoginMustChangePasswordTests, RefreshTokenRaceTests
+  Authorization/     # AdminOverrideAuthorizationHelperTests, BranchAuthorizationHelperTests,
+                     # SalesAuthorizationHelperTests, SalesGroupAccessTests
+  Bom/               # BomTests, BomSaveLinesTests, BomWithCostTests, BomHistoricalReadTests, NotificationResilienceTests
+  Branches/          # BranchesAdminCrudTests, UserBranchesEntityTests
+  Costing/           # CostingTests, CostingTestFixture (shared helper), CostingLastItemTransitionTests, NotificationResilienceTests
+  Customers/         # CustomersCrudTests, CustomerImportTests, CustomersListGroupScopingTests
+  Groups/            # GroupsAdminCrudTests
+  Infrastructure/    # PasswordGeneratorTests
+  Items/             # ItemEditTests, ItemCreateDuplicateTests, ItemsListBranchAndTypeTests, PurchaseLedgerImportTests
+  Notifications/     # NotificationCascadeOnBranchChangeTests, SalesGroupNotificationRoutingTests
+  Requisitions/      # RequisitionWorkflowTests, ValidationTests, ResubmitTests, ListDateFilterTests,
+                     # BranchHistoryReadTests, ChangeBranchTests, ChangeCustomerTests,
+                     # RequisitionsCreateBranchPickerTests, RequisitionsListBranchScopingTests, RequisitionsListGroupScopingTests
+  Stats/             # AccountantDashboardTests
+  Users/             # UserCreateTests, UserBranchesAdminTests, UserGroupAdminTests, UserTokenRevocationTests
+  Shared/            # TestDtos, ThrowingNotificationFactory
+
 bom-web/             # React 19 + Vite + TanStack Query + Tailwind CSS
   src/
-    features/        # requisitions, bom, costing, approvals
+    features/        # admin, approvals, auth, bom, costing, customers, dashboard,
+                     # exchange-rates, items, notifications, requisitions, users
     types/api.ts     # Shared TypeScript types
-    api/             # Axios instance + lookup hooks
+    api/             # Axios instance + typed query hooks
+    components/      # Shared UI primitives (Dialog, Button, OwnedByBadge, BranchPicker, …)
+    store/           # Zustand auth store (mustChangePassword flag, etc.)
+
+bom-mobile/          # React Native (Expo Router) + TanStack Query + Reanimated/Moti + Haptics
+  app/               # File-based routes: (sales)/, (accountant)/, (md)/, login, profile, notifications
+  src/
+    api/             # Axios + auth/branches/groups/lookups query hooks
+    components/      # OwnedByBadge, BranchSwapSheet, SearchablePicker, StatusChipRow, …
+    auth/            # AuthGuard / role-based redirects
+    signalr/         # SignalR hub client (?access_token query auth)
+    theme/           # corporate-blue palette tokens
+  docs/DEPLOY.md     # EAS Android deploy runbook
+  eas.json           # development / preview / production profiles
 ```
 
 ### Feature-Slice Controllers
@@ -179,7 +220,7 @@ Each feature folder under `Features/` is self-contained: a controller and its DT
 
 ### Branch Isolation
 
-Every data-access query must scope results to the user's `BranchId` extracted from JWT claims. Admins, Accountants, and the MD have `null` BranchId and see all branches. SalesPersons are isolated to their own branch **and** to their own requisitions only.
+Every data-access query must scope results to the user's `BranchId` extracted from JWT claims. Admins, MDs, and Accountants (via `UserBranches` M:N — see V2.3-A) have cross-branch visibility; non-Accountant `null` BranchId roles see all. **SalesPerson visibility is no longer simple "own-branch only"** post-V2.3-A/B — see those sections below for the current per-req branch picker + sales-group peer pool model. Centralized helpers: `BranchAuthorization.UserAuthorizedForBranch` and `SalesAuthorization.VisibleSalesPersonIds`.
 
 ### V2.3-A Branch model (post-2026-04-26)
 
@@ -252,9 +293,12 @@ Status transitions are role-gated:
 ### Authentication
 
 - JWT access tokens (15 min) + refresh tokens (7 days, stored in DB, revokable)
-- Claims: `UserId`, `Email`, `Role`, `BranchId`, `Name`
-- Passwords hashed with BCrypt
-- SignalR hub authenticates via `?access_token=` query param
+- Claims: `UserId`, `Email`, `Role`, `BranchId`, `Name`, `jti` (per-token unique id)
+- `LoginResponse` includes a `mustChangePassword` flag (set after Admin C7 reset; cleared by `/api/auth/change-password`)
+- Passwords hashed with BCrypt; `PasswordValidator` enforces 4-class composition; `PasswordGenerator` is the temp-password helper used by C7
+- jti revocation: `RevokedJti` table is checked on every JWT validation (`Program.cs OnTokenValidated`); admin override C7, role change, and logout add to it. `RevokedJtiCleanupService` (HostedService) prunes expired entries.
+- SignalR hub at `/hubs/notifications` authenticates via `?access_token=` query param (intercepted in `OnMessageReceived`)
+- Rate limiting: `login` policy (20/15min) and `imports` policy (10/hr) — disabled outside Production so dev + tests run freely
 
 ### Real-time Notifications
 
@@ -268,22 +312,56 @@ Status transitions are role-gated:
 | `EmailService` | SMTP via MailKit; supports PDF attachments |
 | `PdfService` | Generates quotation PDFs using QuestPDF |
 | `NotificationService` | SignalR real-time + DB persistence |
-| `ItemImportService` | Excel (ClosedXML) and CSV (CsvHelper) import |
+| `ItemImportService` | Excel (ClosedXML) and CSV (CsvHelper) import for items |
+| `CustomerImportService` | Excel/CSV import for customers |
+| `PurchaseLedgerService` | Excel/CSV import for purchase-ledger snapshots (last-purchase-price source) |
+| `AdminAuditLogger` | Snapshots Admin override actions to `AdminAuditLog` (caller owns the SaveChanges transaction; serializes enums as **strings**, not ints, for forensic readability — forever-decision) |
+| `RevokedJtiCleanupService` | HostedService that prunes expired `RevokedJti` rows so the table stays small |
 
 ### Database
 
 PostgreSQL via EF Core 8 (Npgsql). All financial columns use `HasPrecision(18, 4)` or `(18, 6)`. The `RefNo` column on `QuotationRequest` is a PostgreSQL computed column that formats as `REQ-0001`.
 
-Default connection string targets `Host=localhost;Port=5433;Database=bom_price_approval`.
+`appsettings.json` and `appsettings.Development.json` ship with **empty** `ConnectionStrings:DefaultConnection` — the actual connection string lives in `dotnet user-secrets` (UserSecretsId `bom-price-approval-secrets`). Convention: `Host=localhost;Port=5433;Database=bom_price_approval;Username=postgres;Password=…`. PG password was last rotated 2026-04-27 (history pre-rotation password is now a dead value).
+
+### Logging
+
+Serilog structured logging via `UseSerilog`. Development: human-readable console. Production: `CompactJsonFormatter` (one JSON event per line, ready for Loki/Elastic/Datadog). Microsoft.AspNetCore + EFCore loggers minimum is `Warning` to keep request-cycle noise out. **Never log request/response bodies** — would leak temp passwords from C7 reset (verified-by-test invariant).
+
+### Mobile architecture (`bom-mobile/`)
+
+- **Routing:** Expo Router (file-based). Role-gated layouts under `app/(sales)/`, `app/(accountant)/`, `app/(md)/`. Auth/role redirect handled by `<AuthGuard>` in `src/auth/`.
+- **State + data:** TanStack Query for server state; Zustand for auth store. SignalR client at `src/signalr/` mirrors web's notification hub via `?access_token=` query auth.
+- **UI primitives:** native `<View>`/`<Text>` + Reanimated/Moti for motion + Haptics on interactive feedback. Corporate-blue palette `#1e40af`. `<OwnedByBadge>` shows on group-peer reqs/customers (V23b).
+- **Dev backend access:** emulator uses `adb reverse tcp:7300 tcp:7300` to reach host's API. Cleartext traffic enabled for non-production EAS profiles via `expo-build-properties` plugin (gated by `EAS_BUILD_PROFILE !== "production"` in `app.config.ts`).
+- **EAS:** `@shan_naqvi/fpf-quotations` (project ID `4d550ebf-6917-4811-8d0c-db0aa90e559f`). Profiles: `development` (dev client), `preview` (APK for internal QA), `production` (AAB for Play Store). EAS Update channel wired to `preview`. Runbook at `bom-mobile/docs/DEPLOY.md`.
+- **Defensive coding:** filter `b.isActive ?? true` (not just `b.isActive`) when consuming branch lists — guards against API drift if `isActive` is ever omitted.
 
 ---
 
 ## Configuration Checklist (fresh environment)
 
-1. Set a 32+ character `Jwt:Key` in `appsettings.json` (or user secrets)
-2. Configure `Smtp:*` fields for email delivery
-3. Ensure PostgreSQL is running on port 5433 (or update the connection string)
-4. Run `dotnet ef database update` to apply migrations
+Secrets live in **`dotnet user-secrets`** (NOT in `appsettings.json`, which ships empty for those keys). UserSecretsId: `bom-price-approval-secrets`.
+
+```bash
+# 1. Connection string (PostgreSQL on port 5433)
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" \
+  "Host=localhost;Port=5433;Database=bom_price_approval;Username=postgres;Password=…" \
+  --project BomPriceApproval.API
+
+# 2. JWT signing key (32+ chars)
+dotnet user-secrets set "Jwt:Key" "<random-32-char-key>" --project BomPriceApproval.API
+
+# 3. SMTP (optional — only needed for outbound email/PDF dispatch)
+dotnet user-secrets set "Email:Username" "<gmail-or-smtp-user>" --project BomPriceApproval.API
+dotnet user-secrets set "Email:Password" "<smtp-app-password>" --project BomPriceApproval.API
+
+# 4. List current secrets to verify
+dotnet user-secrets list --project BomPriceApproval.API
+
+# 5. Apply EF Core migrations
+dotnet ef database update --project BomPriceApproval.API
+```
 
 ---
 
@@ -294,7 +372,9 @@ Default connection string targets `Host=localhost;Port=5433;Database=bom_price_a
 | API (HTTP) | 7300 |
 | API (HTTPS) | 7301 |
 | React web (`bom-web`) | 5300 |
-| React Native / Expo (planned) | 5500 |
+| React Native / Expo Metro (`bom-mobile`) | 8081 |
+
+CORS allowlist in `Program.cs` permits origins `http://localhost:5300` (web) and `http://localhost:8081` (mobile dev).
 
 ---
 
@@ -317,6 +397,8 @@ Always follow this order — no exceptions:
 3. `/model sonnet` → `/superpowers:execute-plan`
 4. Never start coding without an approved plan
 5. Never skip the brainstorm phase — even for small features
+
+**Subagent-driven-development (V2.3-C P1 lesson):** for foundation work (new tables + auditing + multi-endpoint feature slices), `/superpowers:subagent-driven-development` with strict spec-reviewer + code-reviewer dual-review caught real bugs every 1-2 tasks (cascade gaps, silent bypasses, audit serialization issues). High quality but slow (~5h / 25-task plan). Worth choosing it over streamlined alternatives when the foundation is load-bearing. For follow-up work that copies an established pattern, single-reviewer dispatch saves ~30% with no quality regression.
 
 ## Context Window Rules
 
@@ -354,4 +436,4 @@ Always follow this order — no exceptions:
 
 ## Maintenance
 
-This file drifts over time as the codebase evolves. Re-audit it every ~2 months by running a "reality audit" session (compare each claim against the actual codebase). The last audit was **2026-04-26**.
+This file drifts over time as the codebase evolves. Re-audit it every ~2 months by running a "reality audit" session (compare each claim against the actual codebase). The last audit was **2026-04-27** (post-V2.3-A/B/C-P1 + mobile EAS V1).

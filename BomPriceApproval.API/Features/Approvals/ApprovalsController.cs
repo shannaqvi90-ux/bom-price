@@ -245,11 +245,15 @@ public class ApprovalsController(
             await notificationSvc.SendAsync(req.SalesPersonId,
                 $"Quotation rejected: {req.RefNo}. Reason: {request.Notes}", req.Id, "QuotationRequest");
 
-            var accountants = await db.Users
-                .Where(u => u.Role == UserRole.Accountant && u.IsActive).ToListAsync();
-            foreach (var acct in accountants)
-                await notificationSvc.SendAsync(acct.Id,
-                    $"Quotation rejected by MD: {req.RefNo}. Reason: {request.Notes}", req.Id, "QuotationRequest");
+            var accountantIds = await db.Users
+                .Where(u => u.Role == UserRole.Accountant && u.IsActive)
+                .Select(u => u.Id)
+                .ToListAsync();
+            await notificationSvc.SendToUsersAsync(
+                accountantIds,
+                $"Quotation rejected by MD: {req.RefNo}. Reason: {request.Notes}",
+                req.Id,
+                "QuotationRequest");
         }
         catch (Exception ex)
         {

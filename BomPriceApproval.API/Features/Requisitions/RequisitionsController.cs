@@ -311,9 +311,11 @@ public class RequisitionsController(
                 .Where(u => BranchAuthorization.UserAuthorizedForBranch(u, requisition.BranchId, db))
                 .ToList();
 
-            foreach (var creator in bomCreators)
-                await notificationService.SendAsync(creator.Id,
-                    $"New BOM request: {requisition.RefNo}", requisition.Id, "QuotationRequest");
+            await notificationService.SendToUsersAsync(
+                bomCreators.Select(u => u.Id),
+                $"New BOM request: {requisition.RefNo}",
+                requisition.Id,
+                "QuotationRequest");
         }
         catch (Exception ex)
         {
@@ -512,9 +514,11 @@ public class RequisitionsController(
                 .Where(u => BranchAuthorization.UserAuthorizedForBranch(u, q.BranchId, db))
                 .ToList();
 
-            foreach (var creator in resubmitBomCreators)
-                await notificationService.SendAsync(creator.Id,
-                    $"Resubmitted BOM request: {q.RefNo}", q.Id, "QuotationRequest");
+            await notificationService.SendToUsersAsync(
+                resubmitBomCreators.Select(u => u.Id),
+                $"Resubmitted BOM request: {q.RefNo}",
+                q.Id,
+                "QuotationRequest");
         }
         catch (Exception ex)
         {
@@ -587,9 +591,11 @@ public class RequisitionsController(
 
             await notificationService.SendAsync(q.SalesPersonId, message, q.Id, "QuotationRequest");
 
-            var mds = await db.Users.Where(u => u.Role == UserRole.ManagingDirector && u.IsActive).ToListAsync();
-            foreach (var md in mds)
-                await notificationService.SendAsync(md.Id, message, q.Id, "QuotationRequest");
+            var mdIds = await db.Users
+                .Where(u => u.Role == UserRole.ManagingDirector && u.IsActive)
+                .Select(u => u.Id)
+                .ToListAsync();
+            await notificationService.SendToUsersAsync(mdIds, message, q.Id, "QuotationRequest");
         }
         catch (Exception ex)
         {
@@ -670,20 +676,20 @@ public class RequisitionsController(
 
             await notificationService.SendAsync(q.SalesPersonId, msg, q.Id, "QuotationRequest");
 
-            var mds = await db.Users.Where(u => u.Role == UserRole.ManagingDirector && u.IsActive).ToListAsync();
-            foreach (var md in mds) await notificationService.SendAsync(md.Id, msg, q.Id, "QuotationRequest");
+            var mdIds = await db.Users
+                .Where(u => u.Role == UserRole.ManagingDirector && u.IsActive)
+                .Select(u => u.Id)
+                .ToListAsync();
+            await notificationService.SendToUsersAsync(mdIds, msg, q.Id, "QuotationRequest");
 
             var allUsers = await db.Users
                 .Where(u => u.IsActive && (u.Role == UserRole.BomCreator || u.Role == UserRole.Accountant))
                 .ToListAsync();
-            foreach (var u in allUsers)
-            {
-                if (BranchAuthorization.UserAuthorizedForBranch(u, oldBranchId, db) ||
-                    BranchAuthorization.UserAuthorizedForBranch(u, req.BranchId, db))
-                {
-                    await notificationService.SendAsync(u.Id, msg, q.Id, "QuotationRequest");
-                }
-            }
+            var authorizedIds = allUsers
+                .Where(u => BranchAuthorization.UserAuthorizedForBranch(u, oldBranchId, db)
+                            || BranchAuthorization.UserAuthorizedForBranch(u, req.BranchId, db))
+                .Select(u => u.Id);
+            await notificationService.SendToUsersAsync(authorizedIds, msg, q.Id, "QuotationRequest");
         }
         catch (Exception ex)
         {

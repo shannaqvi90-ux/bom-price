@@ -219,9 +219,11 @@ public class BomController(
             var accountants = accountantCandidates
                 .Where(u => BranchAuthorization.UserAuthorizedForBranch(u, req.BranchId, db))
                 .ToList();
-            foreach (var accountant in accountants)
-                await notificationService.SendAsync(accountant.Id,
-                    $"BOM ready for costing: {req.RefNo}", req.Id, "QuotationRequest");
+            await notificationService.SendToUsersAsync(
+                accountants.Select(u => u.Id),
+                $"BOM ready for costing: {req.RefNo}",
+                req.Id,
+                "QuotationRequest");
         }
         catch (Exception ex)
         {

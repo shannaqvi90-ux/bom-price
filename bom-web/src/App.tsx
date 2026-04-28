@@ -27,6 +27,7 @@ import { InstallModal } from "@/components/pwa/InstallModal";
 import { InstallBanner } from "@/components/pwa/InstallBanner";
 import { UpdateToast } from "@/components/pwa/UpdateToast";
 import { OfflineBanner } from "@/components/pwa/OfflineBanner";
+import { NotificationPermissionPrompt } from "@/components/pwa/NotificationPermissionPrompt";
 
 function NavigatorBridge() {
   const n = useNavigate();
@@ -200,6 +201,7 @@ export default function App() {
       <RouterProvider router={router} />
       <InstallModal />
       <UpdateToast />
+      <NotificationPermissionPrompt />
       <Toaster position="top-right" richColors closeButton />
     </>
   );

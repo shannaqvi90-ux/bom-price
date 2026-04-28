@@ -3,6 +3,7 @@ import { api } from "@/api/axios";
 import { useAuthStore } from "@/store/authStore";
 import { notificationsStore } from "@/store/notificationsStore";
 import { clearPwaApiCaches } from "@/utils/pwaCaches";
+import { unsubscribePushOnLogout } from "@/features/notifications/usePushSubscription";
 import type { LoginRequest, LoginResponse } from "@/types/api";
 
 async function loginRequest(req: LoginRequest): Promise<LoginResponse> {
@@ -27,6 +28,8 @@ export function useLogout() {
   const refreshToken = useAuthStore((s) => s.refreshToken);
   return useMutation({
     mutationFn: async () => {
+      // Unsubscribe push BEFORE token-clearing requests; the DELETE needs auth.
+      await unsubscribePushOnLogout();
       const tasks: Promise<unknown>[] = [clearPwaApiCaches()];
       if (refreshToken) {
         tasks.push(

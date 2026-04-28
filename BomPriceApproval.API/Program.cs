@@ -153,7 +153,7 @@ builder.Services.AddCors(opt =>
     opt.AddDefaultPolicy(p => p
         .WithOrigins(corsOrigins.ToArray())
         .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
-        .WithHeaders("Content-Type", "Authorization")
+        .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-SignalR-User-Agent")
         .AllowCredentials()));
 
 var app = builder.Build();
@@ -351,7 +351,10 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
-    app.UseHttpsRedirection();
+    // No app.UseHttpsRedirection() — Fly.io's proxy already enforces HTTPS via
+    // force_https=true in fly.toml. The .NET app receives HTTP from the proxy,
+    // so the redirect middleware would issue 307 on every request — fine for
+    // REST but FATAL for WebSocket upgrades (SignalR 101 never gets sent).
     app.UseHsts();
 }
 

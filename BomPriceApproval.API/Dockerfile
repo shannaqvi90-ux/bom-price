@@ -9,12 +9,9 @@ ARG DOTNET_VERSION=8.0
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
 WORKDIR /src
 
-# Copy solution + csproj files first for dependency-cache-friendly build.
-# (csproj-only restore cached separately from source recompile.)
-COPY BomPriceApproval.sln ./
+# Restore deps with csproj-only first (cache-friendly). Test project is
+# excluded via .dockerignore — we build the API in isolation here.
 COPY BomPriceApproval.API/BomPriceApproval.API.csproj BomPriceApproval.API/
-COPY BomPriceApproval.Tests/BomPriceApproval.Tests.csproj BomPriceApproval.Tests/
-
 RUN dotnet restore BomPriceApproval.API/BomPriceApproval.API.csproj
 
 # Now copy the rest and publish.
@@ -29,11 +26,10 @@ RUN dotnet publish BomPriceApproval.API/BomPriceApproval.API.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime
 WORKDIR /app
 
-# Run as non-root for safety (UID 1000 — already exists in the base image).
-RUN useradd -m -u 1000 app && chown -R app:app /app
-USER app
-
+# Run as non-root for safety. The aspnet:8.0 base image ships with an `app`
+# user (UID 1654) — we use that rather than recreating.
 COPY --from=build --chown=app:app /app/publish ./
+USER app
 
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:8080 \

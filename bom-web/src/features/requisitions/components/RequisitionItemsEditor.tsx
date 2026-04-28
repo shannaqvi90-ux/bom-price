@@ -78,6 +78,9 @@ export function RequisitionItemsEditor<T extends ItemsFormShape>({
               step="0.0001"
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               placeholder="Qty"
+              autoComplete="off"
+              data-1p-ignore="true"
+              data-lpignore="true"
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               {...register(`items.${index}.expectedQty` as any, { valueAsNumber: true })}
             />

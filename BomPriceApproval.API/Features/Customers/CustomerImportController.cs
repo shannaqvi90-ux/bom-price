@@ -26,7 +26,8 @@ public class CustomerImportController(CustomerImportService importService) : Con
     [HttpPost]
     [RequestSizeLimit(MaxUploadBytes)]
     [EnableRateLimiting("imports")]
-    public async Task<IActionResult> Import([FromForm] IFormFile file)
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> Import(IFormFile file)
     {
         if (file.Length == 0)
             return Validation.Detail("File is empty").Field("File", "File is empty.").Return();

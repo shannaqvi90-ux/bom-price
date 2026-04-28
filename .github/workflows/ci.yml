@@ -10,6 +10,23 @@ jobs:
   backend:
     name: Backend (dotnet)
     runs-on: ubuntu-latest
+    # Integration tests use WebApplicationFactory<Program> which boots the real
+    # API and runs db.Database.Migrate() against a live Postgres. We provision
+    # a service container instead of relying on Testcontainers (the dep is
+    # present in BomPriceApproval.Tests.csproj but is not actually wired up).
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: bom_price_approval
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -28,7 +45,14 @@ jobs:
         run: dotnet list package --vulnerable --include-transitive
         continue-on-error: true
 
-      - name: Test (Testcontainers PostgreSQL — requires Docker)
+      - name: Test
+        env:
+          # ASP.NET Core conventions: __ replaces : in env-var keys for
+          # nested config, so ConnectionStrings__DefaultConnection maps to
+          # ConnectionStrings:DefaultConnection. These shadow the empty
+          # values shipped in appsettings.json.
+          ConnectionStrings__DefaultConnection: "Host=localhost;Port=5432;Database=bom_price_approval;Username=postgres;Password=testpass"
+          Jwt__Key: "test-jwt-signing-key-32-chars-minimum-required-for-hmac-sha256"
         run: dotnet test --configuration Release --no-build --nologo --verbosity normal
 
   frontend:

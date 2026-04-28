@@ -1,6 +1,8 @@
 .vs/
 */bin/
 */obj/
+*/TestResults/
+node_modules/
 .superpowers/
 .claude/
 *.user

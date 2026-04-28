@@ -16,3 +16,8 @@ user id pwd.txt
 !.env.example
 !.env.production
 appsettings.*.Local.json
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example

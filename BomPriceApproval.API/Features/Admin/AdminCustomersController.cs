@@ -2,6 +2,7 @@ using System.Security.Claims;
 using BomPriceApproval.API.Domain.Enums;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Services;
+using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -26,14 +27,16 @@ public class AdminCustomersController(AppDbContext db, AdminAuditLogger audit, N
     public async Task<IActionResult> HardDeleteCustomer(int id, [FromBody] HardDeleteCustomerRequest? body)
     {
         if (body is null)
-            return BadRequest(new { error = "Request body is required" });
+            return Validation.Detail("Request body is required").Return();
         if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Length < 5)
-            return BadRequest(new { error = "Reason is required (min 5 chars)" });
+            return Validation.Detail("Reason is required (min 5 chars)")
+                .Field("Reason", "Reason is required (min 5 chars).").Return();
 
         var customer = await db.Customers.FindAsync(id);
         if (customer is null) return NotFound();
         if (customer.IsDeleted)
-            return Conflict(new { error = "Customer is already deleted" });
+            return Validation.Detail("Customer is already deleted")
+                .Status(StatusCodes.Status409Conflict).Return();
 
         // D13: block on active-workflow reqs only; Approved / Rejected don't block
         var blockingReqs = await db.QuotationRequests

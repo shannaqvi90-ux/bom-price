@@ -3,6 +3,7 @@ using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Domain.Enums;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Services;
+using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -69,11 +70,13 @@ public class AdminRequisitionsController(
     public async Task<IActionResult> OverridePrices(int id, [FromBody] OverridePricesRequest? body)
     {
         if (body is null)
-            return BadRequest(new { error = "Request body is required" });
+            return Validation.Detail("Request body is required").Return();
         if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Length < 5)
-            return BadRequest(new { error = "Reason is required (min 5 chars)" });
+            return Validation.Detail("Reason is required (min 5 chars)")
+                .Field("Reason", "Reason is required (min 5 chars).").Return();
         if (body.Items is null || body.Items.Count == 0)
-            return BadRequest(new { error = "Items are required" });
+            return Validation.Detail("Items are required")
+                .Field("Items", "At least one item is required.").Return();
 
         var req = await db.QuotationRequests
             .Include(q => q.Customer)
@@ -86,47 +89,45 @@ public class AdminRequisitionsController(
         if (req is null) return NotFound();
 
         if (req.Status != RequisitionStatus.Approved)
-            return BadRequest(new { error = $"Cannot override prices on a {req.Status} requisition" });
+            return Validation.Detail($"Cannot override prices on a {req.Status} requisition")
+                .Field("Status", $"Status must be Approved (current: {req.Status}).").Return();
 
         var currentApproval = req.Approvals.FirstOrDefault(a => !a.IsSuperseded && a.IsApproved);
         if (currentApproval is null)
-            return BadRequest(new { error = "No active approval to override" });
+            return Validation.Detail("No active approval to override").Return();
 
         // D5: item set frozen — input must contain exactly the existing RequisitionItem set
         var requisitionItemIds = req.Items.Select(i => i.Id).ToHashSet();
         var inputIds = body.Items.Select(i => i.RequisitionItemId).ToList();
         if (inputIds.Distinct().Count() != inputIds.Count)
-            return BadRequest(new { error = "Duplicate items in override request" });
+            return Validation.Detail("Duplicate items in override request")
+                .Field("Items", "Duplicate items not allowed.").Return();
 
         var inputSet = inputIds.ToHashSet();
         if (!inputSet.SetEquals(requisitionItemIds))
-            return BadRequest(new
-            {
-                error = "Items must exactly match the existing requisition items (no add/remove allowed in override)"
-            });
+            return Validation.Detail("Items must exactly match the existing requisition items (no add/remove allowed in override)")
+                .Field("Items", "Item set must match exactly — no add or remove during override.").Return();
 
         // D4 validation: prices >= 0; percent sum ~ 100; non-AED requires foreign price
-        foreach (var item in body.Items)
+        for (int i = 0; i < body.Items.Count; i++)
         {
+            var item = body.Items[i];
             if (item.SalesPricePerKgAed < 0
                 || (item.SalesPricePerKgForeign.HasValue && item.SalesPricePerKgForeign.Value < 0)
                 || item.ProfitMarginPct < 0
                 || item.MaterialCostPct < 0
                 || item.OtherCostPct < 0)
-                return BadRequest(new { error = $"Negative values not allowed (item {item.RequisitionItemId})" });
+                return Validation.Detail($"Negative values not allowed (item {item.RequisitionItemId})")
+                    .Field($"Items[{i}]", "Negative values not allowed.").Return();
 
             var sum = item.ProfitMarginPct + item.MaterialCostPct + item.OtherCostPct;
             if (Math.Abs(sum - 100m) > PercentSumTolerance)
-                return BadRequest(new
-                {
-                    error = $"Percent fields must sum to 100 (item {item.RequisitionItemId} sums to {sum})"
-                });
+                return Validation.Detail($"Percent fields must sum to 100 (item {item.RequisitionItemId} sums to {sum})")
+                    .Field($"Items[{i}].PercentSum", "Percent fields must sum to 100.").Return();
 
             if (req.CurrencyCode != "AED" && !item.SalesPricePerKgForeign.HasValue)
-                return BadRequest(new
-                {
-                    error = $"SalesPricePerKgForeign required for non-AED currency (item {item.RequisitionItemId})"
-                });
+                return Validation.Detail($"SalesPricePerKgForeign required for non-AED currency (item {item.RequisitionItemId})")
+                    .Field($"Items[{i}].SalesPricePerKgForeign", "Required for non-AED currency.").Return();
         }
 
         // D7: re-snap exchange rate. Original currency lookup; null when AED.
@@ -138,7 +139,8 @@ public class AdminRequisitionsController(
                 .OrderByDescending(e => e.EffectiveDate)
                 .FirstOrDefaultAsync();
             if (rate is null)
-                return BadRequest(new { error = $"No active exchange rate for {req.CurrencyCode}" });
+                return Validation.Detail($"No active exchange rate for {req.CurrencyCode}")
+                    .Field("CurrencyCode", "No active exchange rate.").Return();
             newRateSnapshot = rate.RateToAed;
         }
 
@@ -301,10 +303,11 @@ public class AdminRequisitionsController(
     public async Task<IActionResult> DeleteRequisition(int id, [FromBody] DeleteRequisitionRequest? body)
     {
         if (body is null)
-            return BadRequest(new { error = "Request body is required" });
+            return Validation.Detail("Request body is required").Return();
 
         if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Length < 5)
-            return BadRequest(new { error = "Reason is required (min 5 chars)" });
+            return Validation.Detail("Reason is required (min 5 chars)")
+                .Field("Reason", "Reason is required (min 5 chars).").Return();
 
         var req = await db.QuotationRequests
             .Include(r => r.Items)
@@ -352,15 +355,17 @@ public class AdminRequisitionsController(
     public async Task<IActionResult> RollbackStatus(int id, [FromBody] RollbackStatusRequest? body)
     {
         if (body is null)
-            return BadRequest(new { error = "Request body is required" });
+            return Validation.Detail("Request body is required").Return();
         if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Length < 5)
-            return BadRequest(new { error = "Reason is required (min 5 chars)" });
+            return Validation.Detail("Reason is required (min 5 chars)")
+                .Field("Reason", "Reason is required (min 5 chars).").Return();
 
         var req = await db.QuotationRequests.FindAsync(id);
         if (req is null) return NotFound();
 
         if (!Infrastructure.Authorization.AdminOverrideAuthorization.CanRollback(req.Status, body.TargetStatus))
-            return BadRequest(new { error = $"Cannot rollback {req.Status} → {body.TargetStatus}" });
+            return Validation.Detail($"Cannot rollback {req.Status} → {body.TargetStatus}")
+                .Field("TargetStatus", $"Rollback from {req.Status} to {body.TargetStatus} is not allowed.").Return();
 
         var before = new { req.Id, req.Status };
         req.Status = body.TargetStatus;
@@ -388,16 +393,18 @@ public class AdminRequisitionsController(
     public async Task<IActionResult> ReassignSp(int id, [FromBody] ReassignSpRequest? body)
     {
         if (body is null)
-            return BadRequest(new { error = "Request body is required" });
+            return Validation.Detail("Request body is required").Return();
         if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Length < 5)
-            return BadRequest(new { error = "Reason is required (min 5 chars)" });
+            return Validation.Detail("Reason is required (min 5 chars)")
+                .Field("Reason", "Reason is required (min 5 chars).").Return();
 
         var req = await db.QuotationRequests.FindAsync(id);
         if (req is null) return NotFound();
 
         var newSp = await db.Users.FindAsync(body.NewSalesPersonId);
         if (newSp is null || newSp.Role != UserRole.SalesPerson || !newSp.IsActive)
-            return BadRequest(new { error = "Target user must be an active SalesPerson" });
+            return Validation.Detail("Target user must be an active SalesPerson")
+                .Field("NewSalesPersonId", "Target user must be an active SalesPerson.").Return();
 
         var oldSpId = req.SalesPersonId;
         var before = new { req.Id, OldSalesPersonId = oldSpId };
@@ -424,15 +431,17 @@ public class AdminRequisitionsController(
     public async Task<IActionResult> UnlockBom(int id, [FromBody] UnlockBomRequest? body)
     {
         if (body is null)
-            return BadRequest(new { error = "Request body is required" });
+            return Validation.Detail("Request body is required").Return();
         if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Length < 5)
-            return BadRequest(new { error = "Reason is required (min 5 chars)" });
+            return Validation.Detail("Reason is required (min 5 chars)")
+                .Field("Reason", "Reason is required (min 5 chars).").Return();
 
         var req = await db.QuotationRequests.FindAsync(id);
         if (req is null) return NotFound();
 
         if (!Infrastructure.Authorization.AdminOverrideAuthorization.CanUnlockBom(req.Status))
-            return BadRequest(new { error = $"Cannot unlock BOM from status {req.Status}" });
+            return Validation.Detail($"Cannot unlock BOM from status {req.Status}")
+                .Field("Status", $"BOM cannot be unlocked from {req.Status}.").Return();
 
         var before = new { req.Id, req.Status };
         req.Status = RequisitionStatus.BomInProgress;
@@ -458,15 +467,17 @@ public class AdminRequisitionsController(
     public async Task<IActionResult> UnlockCosting(int id, [FromBody] UnlockCostingRequest? body)
     {
         if (body is null)
-            return BadRequest(new { error = "Request body is required" });
+            return Validation.Detail("Request body is required").Return();
         if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Length < 5)
-            return BadRequest(new { error = "Reason is required (min 5 chars)" });
+            return Validation.Detail("Reason is required (min 5 chars)")
+                .Field("Reason", "Reason is required (min 5 chars).").Return();
 
         var req = await db.QuotationRequests.FindAsync(id);
         if (req is null) return NotFound();
 
         if (!Infrastructure.Authorization.AdminOverrideAuthorization.CanUnlockCosting(req.Status))
-            return BadRequest(new { error = $"Cannot unlock costing from status {req.Status}" });
+            return Validation.Detail($"Cannot unlock costing from status {req.Status}")
+                .Field("Status", $"Costing cannot be unlocked from {req.Status}.").Return();
 
         var before = new { req.Id, req.Status };
         req.Status = RequisitionStatus.CostingInProgress;

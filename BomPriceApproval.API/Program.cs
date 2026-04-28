@@ -331,6 +331,15 @@ using (var scope = app.Services.CreateScope())
         await db.SaveChangesAsync();
     }
 
+    // Seed a default Process so BOM creation flows have data on a fresh DB.
+    // Production users add their own via /api/processes; this is just enough
+    // for tests + smoke runs to construct a BOM without manual setup.
+    if (!db.Processes.Any())
+    {
+        db.Processes.Add(new Process { Name = "Extrusion", DisplayOrder = 1, IsActive = true });
+        await db.SaveChangesAsync();
+    }
+
     await seedTx.CommitAsync();
 }
 

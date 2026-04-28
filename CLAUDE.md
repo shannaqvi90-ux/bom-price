@@ -384,16 +384,14 @@ Serilog structured logging via `UseSerilog`. Development: human-readable console
   - `<OfflineBanner>` — top sticky red banner on `navigator.onLine === false`
 - **Logout cache clear** — `clearPwaApiCaches()` in `src/utils/pwaCaches.ts` deletes `bom-api-list-cache` + `bom-api-detail-cache` before token clear (prevents next user on same device seeing prior user's data).
 - **Dev** — `vite-plugin-pwa` `devOptions.enabled = false`. Local `npm run dev` does NOT register SW; debugging clean. Production build emits `sw.js` only.
-- **Web Push frontend (P3 post-2026-04-28):**
-  - VAPID public key in `VITE_VAPID_PUBLIC_KEY` env var (Cloudflare Pages prod, `.env.local` dev). Must match backend's `WebPush:VapidPublicKey`.
-  - `src/api/pushSubscriptions.ts` — typed client for backend POST/DELETE.
-  - `src/utils/vapid.ts` — `urlBase64ToUint8Array()` for converting VAPID public key to PushManager-compatible BufferSource.
-  - `src/features/notifications/usePushSubscription.ts` — hook with `subscribe()` / `unsubscribe()` / `permission` / `isSubscribed`. Lazy reads VAPID from env (test-friendly). Also exports standalone `unsubscribePushOnLogout()` for non-React contexts.
-  - `src/components/pwa/NotificationPermissionPrompt.tsx` — Sonner toast post-install when `permission === "default"`. 14-day localStorage suppression on dismiss. Hidden in browser tabs (only shows when `isStandalone()`).
-  - `src/sw.ts` extended with `push` and `notificationclick` listeners. Push body parses JSON `{title, body}`; falls back to text or generic. notificationclick focuses existing window or opens new at "/".
-  - **Logout flow** — `useLogout` calls `unsubscribePushOnLogout()` BEFORE token clear (DELETE needs auth header), then `clearPwaApiCaches()` + `logoutRequest()` in parallel.
-  - **Title is hardcoded "FPF Quotations" by backend** (`NotificationService` P2). Body is the existing notification message string. No customer/price data on lock screen.
-  - **iOS/iPadOS critical:** Web Push only works if PWA installed via Safari Share→Add-to-Home-Screen. Chrome iOS install does NOT support push.
+- **Web Push backend (P2 post-2026-04-28):**
+  - `WebPush@1.0.13` NuGet wrapping VAPID + RFC 8030 push protocol
+  - `WebPushService` (`Infrastructure/Services/WebPushService.cs`) — singleton DI; `IsConfigured=false` when VAPID keys missing → all `SendAsync` calls become no-ops with one warning log at startup
+  - VAPID config: `WebPush:VapidPublicKey/VapidPrivateKey/Subject` in user-secrets (dev) / Fly secrets (prod). `appsettings.json` ships placeholders.
+  - `PushSubscription` table — `(UserId, Endpoint UNIQUE, P256dh, Auth, UserAgent?, CreatedAt, LastUsedAt?)`. FK Users with Cascade delete. Indexes: `(UserId)`, `(Endpoint)` unique.
+  - `POST/DELETE /api/notifications/push-subscribe` — own-user-only DELETE, idempotent (404→204), POST upserts by Endpoint. Both `[Authorize]` (any role).
+  - `NotificationService.SendAsync` + `SendToUsersAsync` extended with `FanOutWebPushAsync` — additive; failure NEVER breaks SignalR + DB. 410 Gone / 404 NotFound auto-deletes dead subscription. Title is hard-coded `"FPF Quotations"`; body is the existing notification message string.
+- **Web Push frontend** — P3 pending separate PR (spec `docs/superpowers/specs/2026-04-28-pwa-conversion-design.md`).
 
 ---
 

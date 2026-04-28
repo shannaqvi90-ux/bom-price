@@ -76,22 +76,22 @@ export function AddUserModal({ open, onClose }: Props) {
 
   return (
     <Dialog open={open} onClose={handleClose} title="Add User">
-      <form onSubmit={onSubmit} className="space-y-4" noValidate>
+      <form onSubmit={onSubmit} className="space-y-4" noValidate autoComplete="off">
         <div className="space-y-1">
           <Label htmlFor="user-name">Name</Label>
-          <Input id="user-name" {...register("name")} />
+          <Input id="user-name" autoComplete="off" {...register("name")} />
           {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
         </div>
 
         <div className="space-y-1">
           <Label htmlFor="user-email">Email</Label>
-          <Input id="user-email" type="email" {...register("email")} />
+          <Input id="user-email" type="email" autoComplete="off" {...register("email")} />
           {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
         </div>
 
         <div className="space-y-1">
           <Label htmlFor="user-password">Password</Label>
-          <Input id="user-password" type="password" {...register("password")} />
+          <Input id="user-password" type="password" autoComplete="new-password" {...register("password")} />
           {errors.password && (
             <p className="text-xs text-destructive">{errors.password.message}</p>
           )}

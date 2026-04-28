@@ -12,11 +12,12 @@ export const branchKeys = {
   list: () => [...branchKeys.all, "list"] as const,
 };
 
-export function useBranches() {
+export function useBranches(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: branchKeys.list(),
     queryFn: async () => (await api.get<Branch[]>("/branches")).data,
     staleTime: 5 * 60_000,
+    enabled: options?.enabled ?? true,
   });
 }
 

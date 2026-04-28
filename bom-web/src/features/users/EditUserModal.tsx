@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { useUpdateUser } from "./usersApi";
-import { useBranches } from "@/api/lookups";
+import { useBranches } from "@/api/branches";
 import { useUserBranches, useSetUserBranches } from "@/api/userBranches";
 import { useGroups } from "@/api/groups";
 import { useUserGroup, useSetUserGroup } from "@/api/userGroup";

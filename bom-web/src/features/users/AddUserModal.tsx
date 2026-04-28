@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { useCreateUser } from "./usersApi";
-import { useBranches } from "@/api/lookups";
+import { useBranches } from "@/api/branches";
 import type { UserRole } from "@/types/api";
 
 // Roles that are branch-scoped. Admin / Accountant / ManagingDirector are

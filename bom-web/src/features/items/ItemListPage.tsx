@@ -5,7 +5,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { useAuthStore } from "@/store/authStore";
-import { useBranches } from "@/api/lookups";
+import { useBranches } from "@/api/branches";
 import { useItems, useUpdateItemStatus } from "./itemsApi";
 import { AddItemModal } from "./AddItemModal";
 import { EditItemModal } from "./EditItemModal";

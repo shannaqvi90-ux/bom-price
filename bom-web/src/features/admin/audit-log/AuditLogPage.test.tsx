@@ -34,10 +34,14 @@ describe("AuditLogPage", () => {
     expect(screen.getByText(/duplicate/)).toBeInTheDocument();
   });
 
-  it("expand reveals diff panel", () => {
+  it("expand reveals diff panel with structured key-level diff", () => {
     render(wrap(<AuditLogPage />));
     fireEvent.click(screen.getAllByRole("button", { name: /diff/i })[0]);
-    expect(screen.getByText(/{"id":42}/)).toBeInTheDocument();
+    // After is null → "Entity deleted" badge + every key shown as removed
+    expect(screen.getByText(/Entity deleted/i)).toBeInTheDocument();
+    // The "id" key from the parsed BeforeJson `{"id":42}` is rendered as a row
+    expect(screen.getByText("id")).toBeInTheDocument();
+    expect(screen.getByText("42")).toBeInTheDocument();
   });
 
   it("renders filter controls", () => {

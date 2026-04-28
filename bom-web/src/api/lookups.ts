@@ -4,16 +4,6 @@ import type { Customer, Item, ExchangeRate, Process } from "@/types/api";
 
 const FIVE_MINUTES = 5 * 60 * 1000;
 
-export function useBranches(options?: { enabled?: boolean }) {
-  return useQuery({
-    queryKey: ["branches"],
-    queryFn: () =>
-      api.get<{ id: number; name: string }[]>("/branches").then((r) => r.data),
-    staleTime: FIVE_MINUTES,
-    enabled: options?.enabled ?? true,
-  });
-}
-
 export function useCustomers() {
   return useQuery({
     queryKey: ["customers"],

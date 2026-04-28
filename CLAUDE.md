@@ -33,6 +33,10 @@ Claude is permitted to run git commands autonomously as part of Superpowers work
   - **Auto Mode active:** push immediately after the commit; mention `pushed to <branch>` in the chat.
   - **Non-Auto Mode:** push only when user explicitly says "push karo" / "push to GitHub".
 - `git push origin <tag>` — pushing a tag (e.g., `mobile-shipped-vc<N>`). Same Auto Mode + Non-Auto rules as feature branches.
+- `gh pr create --base <default-branch> --head <feature-branch> --title <title> --body <body>` — opening a PR for a feature branch. Requires `gh auth login` (one-time interactive setup; Claude cannot run this — user does it once per machine).
+  - **Auto Mode active:** create PR immediately after the branch push; report the PR URL in the chat.
+  - **Non-Auto Mode:** wait for explicit user approval ("PR open karo" / "yes").
+  - **Never auto-merge.** Claude does NOT run `gh pr merge` autonomously — user reviews and clicks Merge on GitHub. (See Forbidden list.)
 
 ### ❌ Forbidden — NEVER do these without explicit user approval each time
 
@@ -41,7 +45,7 @@ Claude is permitted to run git commands autonomously as part of Superpowers work
 - **`git push --force` / `git push -f` / `git push --force-with-lease`** — rewrites remote history; requires explicit approval each time on every branch (not just default).
 - **`git branch -D`** — force-deletes unmerged branches.
 - **`git rm -rf`** or mass file deletions via scripts.
-- **PR creation** via `gh` CLI or API — NEVER. PRs are opened by user on GitHub manually.
+- **`gh pr merge`** / **`gh pr close`** — NEVER autonomous. Merging a PR moves work into the protected default branch; closing destroys review state. Always require explicit user approval each time. (PR _creation_ is allowed — see Allowed list.)
 
 ### 🔒 Mandatory safety procedure — follow for every commit
 
@@ -64,7 +68,7 @@ Before running `git push`, Claude MUST:
 2. **Auto Mode active:** push immediately after the commit; mention `pushed to <branch>` in the chat for transparency.
 3. **Non-Auto Mode:** wait for explicit user approval ("push karo" / "yes" / "push to GitHub").
 4. **Force push** (`--force`, `-f`, `--force-with-lease`) — NEVER autonomous, regardless of mode. Requires explicit approval each time, on every branch.
-5. **PR creation** still NEVER autonomous — user opens PRs on GitHub manually (no `gh pr create`).
+5. **PR creation** — see Allowed list (`gh pr create`). **Auto Mode active:** opens PR immediately after the branch push and reports the URL in chat. **Non-Auto Mode:** wait for user approval. **Never auto-merge** — `gh pr merge` always requires explicit approval each time.
 
 ### 🌳 Worktree discipline — mandatory hygiene
 
@@ -558,4 +562,4 @@ Always follow this order — no exceptions:
 
 ## Maintenance
 
-This file drifts over time as the codebase evolves. Re-audit it every ~2 months by running a "reality audit" session (compare each claim against the actual codebase). The last update was **2026-04-29** (post-PWA P3 ship: Auto Mode auto-commit + auto-push permissions + mobile build tracking via `mobile-shipped-vc<N>` tags).
+This file drifts over time as the codebase evolves. Re-audit it every ~2 months by running a "reality audit" session (compare each claim against the actual codebase). The last update was **2026-04-29** (post-PWA P3 ship: Auto Mode auto-commit + auto-push + auto-PR-create permissions + mobile build tracking via `mobile-shipped-vc<N>` tags).

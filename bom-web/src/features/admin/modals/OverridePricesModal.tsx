@@ -83,10 +83,17 @@ export function OverridePricesModal({ requisition, onClose }: Props) {
 
   const isForeignRequired = approval?.currencyCode !== "AED" && approval !== undefined;
 
+  // Initialize editable rows once when the async-fetched approval arrives.
+  // The hasInitialized flag prevents subsequent fetches from clobbering
+  // edits the user has made in-place. A "key on approval.id" pattern in
+  // the parent would also work but would require routing the prop down a
+  // dedicated wrapper component.
   useEffect(() => {
     if (approval && !hasInitialized) {
+      /* eslint-disable react-hooks/set-state-in-effect -- intentional one-time init from async-fetched approval */
       setRows(approval.items.map(toRow));
       setHasInitialized(true);
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [approval, hasInitialized]);
 

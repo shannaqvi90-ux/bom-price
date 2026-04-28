@@ -23,10 +23,6 @@ import GroupsPage from "@/features/admin/groups/GroupsPage";
 import { AuditLogPage } from "@/features/admin/audit-log/AuditLogPage";
 import ChangePasswordPage from "@/features/auth/ChangePasswordPage";
 import { ForceChangePasswordGuard } from "@/features/auth/ForceChangePasswordGuard";
-import { InstallModal } from "@/components/pwa/InstallModal";
-import { InstallBanner } from "@/components/pwa/InstallBanner";
-import { UpdateToast } from "@/components/pwa/UpdateToast";
-import { OfflineBanner } from "@/components/pwa/OfflineBanner";
 
 function NavigatorBridge() {
   const n = useNavigate();
@@ -195,11 +191,7 @@ const router = createBrowserRouter([
 export default function App() {
   return (
     <>
-      <OfflineBanner />
-      <InstallBanner />
       <RouterProvider router={router} />
-      <InstallModal />
-      <UpdateToast />
       <Toaster position="top-right" richColors closeButton />
     </>
   );

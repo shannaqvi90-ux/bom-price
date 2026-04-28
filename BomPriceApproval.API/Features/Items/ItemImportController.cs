@@ -41,7 +41,8 @@ public class ItemImportController(
     [HttpPost]
     [RequestSizeLimit(MaxUploadBytes)]
     [EnableRateLimiting("imports")]
-    public async Task<IActionResult> Import([FromForm] IFormFile file, [FromForm] int branchId)
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> Import(IFormFile file, [FromForm] int branchId)
     {
         if (ValidateUpload(file, ".xlsx", ".csv") is { } error) return error;
 
@@ -56,7 +57,8 @@ public class ItemImportController(
     [HttpPost("ledger/headers")]
     [RequestSizeLimit(MaxUploadBytes)]
     [EnableRateLimiting("imports")]
-    public IActionResult LedgerHeaders([FromForm] IFormFile file)
+    [Consumes("multipart/form-data")]
+    public IActionResult LedgerHeaders(IFormFile file)
     {
         if (ValidateUpload(file, ".xlsx") is { } error) return error;
 
@@ -68,8 +70,9 @@ public class ItemImportController(
     [HttpPost("ledger")]
     [RequestSizeLimit(MaxUploadBytes)]
     [EnableRateLimiting("imports")]
+    [Consumes("multipart/form-data")]
     public async Task<IActionResult> LedgerImport(
-        [FromForm] IFormFile file,
+        IFormFile file,
         [FromForm] string itemCodeColumn,
         [FromForm] string dateColumn,
         [FromForm] string unitPriceColumn,

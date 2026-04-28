@@ -47,6 +47,7 @@ builder.Services.AddScoped<ItemImportService>();
 builder.Services.AddScoped<CustomerImportService>();
 builder.Services.AddScoped<PurchaseLedgerService>();
 builder.Services.AddScoped<AdminAuditLogger>();
+builder.Services.AddSingleton<WebPushService>();
 builder.Services.AddHostedService<RevokedJtiCleanupService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

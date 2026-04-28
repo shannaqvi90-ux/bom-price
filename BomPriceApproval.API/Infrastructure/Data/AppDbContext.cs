@@ -29,6 +29,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<BranchChangeHistory> BranchChangeHistories => Set<BranchChangeHistory>();
     public DbSet<SalesGroup> SalesGroups => Set<SalesGroup>();
     public DbSet<AdminAuditLog> AdminAuditLogs => Set<AdminAuditLog>();
+    public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -320,5 +321,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<RefreshToken>().UseXminAsConcurrencyToken();
         mb.Entity<BomHeader>().UseXminAsConcurrencyToken();
         mb.Entity<QuotationApproval>().UseXminAsConcurrencyToken();
+
+        mb.Entity<PushSubscription>(e =>
+        {
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => x.Endpoint).IsUnique();
+            e.Property(x => x.Endpoint).HasMaxLength(2048);
+            e.Property(x => x.P256dh).HasMaxLength(512);
+            e.Property(x => x.Auth).HasMaxLength(512);
+            e.Property(x => x.UserAgent).HasMaxLength(512);
+            e.HasOne(x => x.User)
+             .WithMany()
+             .HasForeignKey(x => x.UserId)
+             .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 }

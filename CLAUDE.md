@@ -384,7 +384,14 @@ Serilog structured logging via `UseSerilog`. Development: human-readable console
   - `<OfflineBanner>` — top sticky red banner on `navigator.onLine === false`
 - **Logout cache clear** — `clearPwaApiCaches()` in `src/utils/pwaCaches.ts` deletes `bom-api-list-cache` + `bom-api-detail-cache` before token clear (prevents next user on same device seeing prior user's data).
 - **Dev** — `vite-plugin-pwa` `devOptions.enabled = false`. Local `npm run dev` does NOT register SW; debugging clean. Production build emits `sw.js` only.
-- **Web Push** — P2 (backend) + P3 (frontend) pending — separate PRs (specs in `docs/superpowers/specs/2026-04-28-pwa-conversion-design.md`).
+- **Web Push backend (P2 post-2026-04-28):**
+  - `WebPush@1.0.13` NuGet wrapping VAPID + RFC 8030 push protocol
+  - `WebPushService` (`Infrastructure/Services/WebPushService.cs`) — singleton DI; `IsConfigured=false` when VAPID keys missing → all `SendAsync` calls become no-ops with one warning log at startup
+  - VAPID config: `WebPush:VapidPublicKey/VapidPrivateKey/Subject` in user-secrets (dev) / Fly secrets (prod). `appsettings.json` ships placeholders.
+  - `PushSubscription` table — `(UserId, Endpoint UNIQUE, P256dh, Auth, UserAgent?, CreatedAt, LastUsedAt?)`. FK Users with Cascade delete. Indexes: `(UserId)`, `(Endpoint)` unique.
+  - `POST/DELETE /api/notifications/push-subscribe` — own-user-only DELETE, idempotent (404→204), POST upserts by Endpoint. Both `[Authorize]` (any role).
+  - `NotificationService.SendAsync` + `SendToUsersAsync` extended with `FanOutWebPushAsync` — additive; failure NEVER breaks SignalR + DB. 410 Gone / 404 NotFound auto-deletes dead subscription. Title is hard-coded `"FPF Quotations"`; body is the existing notification message string.
+- **Web Push frontend** — P3 pending separate PR (spec `docs/superpowers/specs/2026-04-28-pwa-conversion-design.md`).
 
 ---
 

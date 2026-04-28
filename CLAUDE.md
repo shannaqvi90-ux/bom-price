@@ -22,20 +22,30 @@ Claude is permitted to run git commands autonomously as part of Superpowers work
 
 - `git status`, `git diff`, `git log`, `git branch -v`, `git worktree list` — read-only inspection.
 - `git add <specific paths>` or `git add -u` — when staging a logical unit of work.
-- `git commit -m "<conventional-commit message>"` — after showing diff + message and receiving user approval (see Safety Procedure below).
+- `git commit -m "<conventional-commit message>"` — show `git diff --stat` + propose commit message in chat for transparency.
+  - **Auto Mode active:** commit immediately after the chat summary; no approval pause needed.
+  - **Non-Auto Mode:** wait for user approval (see Safety Procedure below).
 - `git checkout <existing branch>` — switching between existing branches.
 - `git worktree add <path> <branch>` — **only when Superpowers explicitly invokes this** as part of `using-git-worktrees` skill at the start of a feature (not ad-hoc).
 - `git worktree remove <path>` and `git worktree prune` — cleanup after feature completion.
 - `git pull` — only when user explicitly requests it.
+- `git push origin <feature-branch>` — pushing a feature/fix/chore branch (NOT `master`/`main`, which are hook-blocked).
+  - **Auto Mode active:** push immediately after the commit; mention `pushed to <branch>` in the chat.
+  - **Non-Auto Mode:** push only when user explicitly says "push karo" / "push to GitHub".
+- `git push origin <tag>` — pushing a tag (e.g., `mobile-shipped-vc<N>`). Same Auto Mode + Non-Auto rules as feature branches.
+- `gh pr create --base <default-branch> --head <feature-branch> --title <title> --body <body>` — opening a PR for a feature branch. Requires `gh auth login` (one-time interactive setup; Claude cannot run this — user does it once per machine).
+  - **Auto Mode active:** create PR immediately after the branch push; report the PR URL in the chat.
+  - **Non-Auto Mode:** wait for explicit user approval ("PR open karo" / "yes").
+  - **Never auto-merge.** Claude does NOT run `gh pr merge` autonomously — user reviews and clicks Merge on GitHub. (See Forbidden list.)
 
 ### ❌ Forbidden — NEVER do these without explicit user approval each time
 
-- **`git push`** — NEVER push autonomously. Push only happens when user explicitly says "push karo" / "push to GitHub".
+- **`git push origin master`** / **`git push origin main`** — NEVER. Default-branch push is hook-blocked anyway (PR-only workflow). Always go via PR on GitHub.
 - **`git reset --hard`** — destructive; wipes uncommitted work.
-- **`git push --force` / `git push -f`** — rewrites remote history; dangerous.
+- **`git push --force` / `git push -f` / `git push --force-with-lease`** — rewrites remote history; requires explicit approval each time on every branch (not just default).
 - **`git branch -D`** — force-deletes unmerged branches.
 - **`git rm -rf`** or mass file deletions via scripts.
-- **PR creation** via `gh` CLI or API — NEVER. PRs are opened by user on GitHub manually.
+- **`gh pr merge`** / **`gh pr close`** — NEVER autonomous. Merging a PR moves work into the protected default branch; closing destroys review state. Always require explicit user approval each time. (PR _creation_ is allowed — see Allowed list.)
 
 ### 🔒 Mandatory safety procedure — follow for every commit
 
@@ -47,7 +57,18 @@ Before running `git commit`, Claude MUST:
    ```
 2. **Propose the commit message** (conventional commit format: `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`).
 3. **Wait for user approval** before running `git commit`. Acceptable approval: "haan", "yes", "commit karo", "ok".
-4. **Never batch multiple unrelated changes** into one commit. If the diff spans unrelated concerns, propose splitting into multiple commits and ask which order to do them.
+   - **Exception (Auto Mode):** skip the pause; commit immediately after steps 1+2. Transparency (showing diff + message in chat) is mandatory; the pause is not.
+4. **Never batch multiple unrelated changes** into one commit. If the diff spans unrelated concerns, propose splitting into multiple commits and ask which order to do them. (Applies even in Auto Mode.)
+
+### 🚀 Push safety procedure — follow for every push
+
+Before running `git push`, Claude MUST:
+
+1. **Confirm target is NOT `master`/`main`** — hook will reject anyway, but check explicitly. Default-branch updates always go via PR.
+2. **Auto Mode active:** push immediately after the commit; mention `pushed to <branch>` in the chat for transparency.
+3. **Non-Auto Mode:** wait for explicit user approval ("push karo" / "yes" / "push to GitHub").
+4. **Force push** (`--force`, `-f`, `--force-with-lease`) — NEVER autonomous, regardless of mode. Requires explicit approval each time, on every branch.
+5. **PR creation** — see Allowed list (`gh pr create`). **Auto Mode active:** opens PR immediately after the branch push and reports the URL in chat. **Non-Auto Mode:** wait for user approval. **Never auto-merge** — `gh pr merge` always requires explicit approval each time.
 
 ### 🌳 Worktree discipline — mandatory hygiene
 
@@ -434,6 +455,55 @@ CORS allowlist in `Program.cs` permits origins `http://localhost:5300` (web) and
 
 ---
 
+## Mobile build tracking — drift detection
+
+The Android APK is built via EAS (`eas-cli build --profile preview --platform android`); EAS is **not** wired to GitHub auto-build, so every build is manually triggered from a developer's local machine. To detect when the existing APK has drifted from `master`, we **tag every shipped commit**.
+
+### Current shipped tag
+
+`mobile-shipped-vc1` → commit `1886940` (versionCode=1, 2026-04-28)
+APK URL: `https://expo.dev/artifacts/eas/cCAdUxAqQ15qWv9oD7CJka.apk`
+
+### Drift check (run before deciding rebuild vs OTA)
+
+```bash
+# Mobile changes since last shipped build:
+git log mobile-shipped-vc<latest>..HEAD --oneline -- bom-mobile/
+
+# Empty output → existing APK is current. No rebuild + no OTA needed.
+# Output present → decide:
+#   • Only .ts/.tsx in bom-mobile/app/ or bom-mobile/src/ → eas update (OTA) is enough.
+#   • app.config.ts / eas.json / package.json native dep changed → eas build (rebuild required).
+```
+
+### Tagging discipline (every shipped build)
+
+```bash
+# After a successful EAS build:
+git tag mobile-shipped-vc<N> <sha> -m "EAS preview build vc<N>: <date>"
+git push origin mobile-shipped-vc<N>
+```
+
+`<N>` = the `ANDROID_VERSION_CODE` used for that build (matches Play Store / EAS dashboard records). Increment monotonically; never reuse.
+
+### OTA (eas update) vs rebuild — decision rule
+
+| Change scope | Action |
+|---|---|
+| `bom-mobile/app/` or `bom-mobile/src/` JS/TS only | `npx eas-cli update --branch preview --message "..."` |
+| New JS-only npm dep (e.g. `lodash`, `dayjs`, `zod`) | `npx eas-cli update --branch preview --message "..."` |
+| `bom-mobile/package.json` adds a native dep (`expo-*`, `react-native-*` with native code) | Rebuild |
+| `bom-mobile/app.config.ts` (version, plugins, permissions, icons, cleartext, package) | Rebuild |
+| `bom-mobile/eas.json` (env vars baked at build, profiles) | Rebuild |
+| `bom-mobile/.npmrc` | Rebuild |
+| Expo SDK upgrade | Rebuild |
+
+OTA updates do NOT need a tag bump — same APK consumes the new bundle. Only `git tag mobile-shipped-vc<N+1>` after a fresh APK rebuild.
+
+Full deploy runbook (one-time setup, build commands, troubleshooting): `bom-mobile/docs/DEPLOY.md`.
+
+---
+
 # Global Workflow Instructions
 
 ## Model Strategy
@@ -492,4 +562,4 @@ Always follow this order — no exceptions:
 
 ## Maintenance
 
-This file drifts over time as the codebase evolves. Re-audit it every ~2 months by running a "reality audit" session (compare each claim against the actual codebase). The last update was **2026-04-27** (post-V2.3-C P2: C6 + C8 + R1 fan-out + R2 admin split).
+This file drifts over time as the codebase evolves. Re-audit it every ~2 months by running a "reality audit" session (compare each claim against the actual codebase). The last update was **2026-04-29** (post-PWA P3 ship: Auto Mode auto-commit + auto-push + auto-PR-create permissions + mobile build tracking via `mobile-shipped-vc<N>` tags).

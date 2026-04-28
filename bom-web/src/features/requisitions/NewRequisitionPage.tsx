@@ -118,7 +118,7 @@ export default function NewRequisitionPage() {
           ) : isErrorLookups ? (
             <p className="text-sm text-destructive">Failed to load form data. Please refresh.</p>
           ) : (
-            <form onSubmit={onSubmit} className="space-y-4" noValidate>
+            <form onSubmit={onSubmit} className="space-y-4" noValidate autoComplete="off">
               <div className="mb-4">
                 <label htmlFor="branch-picker" className="block text-sm font-medium text-slate-700 mb-1">Branch</label>
                 <BranchPicker id="branch-picker" value={pickedBranchId} onChange={setPickedBranchId} />

@@ -80,6 +80,18 @@ public class NotificationServiceWebPushTests : IClassFixture<WebPushTestFactory>
         return sub.Id;
     }
 
+    private async Task ClearUserSubsAsync(int userId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var leftover = await db.PushSubscriptions.Where(s => s.UserId == userId).ToListAsync();
+        if (leftover.Count > 0)
+        {
+            db.PushSubscriptions.RemoveRange(leftover);
+            await db.SaveChangesAsync();
+        }
+    }
+
     private async Task<int> GetTestUserIdAsync()
     {
         using var scope = _factory.Services.CreateScope();
@@ -92,6 +104,7 @@ public class NotificationServiceWebPushTests : IClassFixture<WebPushTestFactory>
     public async Task SendAsync_FansOutWebPush_OnHappyPath()
     {
         var userId = await GetTestUserIdAsync();
+        await ClearUserSubsAsync(userId);
         var endpoint = $"https://web.push.apple.com/{Guid.NewGuid():N}";
         var subId = await SeedSubscriptionAsync(userId, endpoint);
 

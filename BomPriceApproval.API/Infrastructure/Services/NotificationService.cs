@@ -1,12 +1,21 @@
+using System.Net;
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Features.Notifications;
 using BomPriceApproval.API.Infrastructure.Data;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
+using WebPushException = WebPush.WebPushException;
 
 namespace BomPriceApproval.API.Infrastructure.Services;
 
-public class NotificationService(AppDbContext db, IHubContext<NotificationHub> hub)
+public class NotificationService(
+    AppDbContext db,
+    IHubContext<NotificationHub> hub,
+    WebPushService webPush,
+    ILogger<NotificationService> logger)
 {
+    private const string PushTitle = "FPF Quotations";
+
     public virtual async Task SendAsync(int userId, string message, int referenceId, string referenceType)
     {
         var notification = new Notification
@@ -23,6 +32,8 @@ public class NotificationService(AppDbContext db, IHubContext<NotificationHub> h
             notification.ReferenceId, notification.ReferenceType,
             notification.CreatedAt, notification.IsRead
         });
+
+        await FanOutWebPushAsync(new[] { userId }, message);
     }
 
     /// <summary>
@@ -64,5 +75,48 @@ public class NotificationService(AppDbContext db, IHubContext<NotificationHub> h
                 },
                 ct);
         }
+
+        await FanOutWebPushAsync(distinctIds, message, ct);
+    }
+
+    /// <summary>
+    /// Best-effort web push fan-out. Failure NEVER breaks the SignalR + DB
+    /// notification flow — exceptions are logged and swallowed. 410 Gone /
+    /// 404 NotFound responses (per RFC 8030) auto-delete the dead subscription.
+    /// </summary>
+    private async Task FanOutWebPushAsync(IEnumerable<int> userIds, string body, CancellationToken ct = default)
+    {
+        if (!webPush.IsConfigured) return;
+
+        var ids = userIds.Distinct().ToList();
+        if (ids.Count == 0) return;
+
+        var subs = await db.PushSubscriptions
+            .Where(s => ids.Contains(s.UserId))
+            .ToListAsync(ct);
+        if (subs.Count == 0) return;
+
+        var dead = new List<BomPriceApproval.API.Domain.Entities.PushSubscription>();
+        foreach (var sub in subs)
+        {
+            try
+            {
+                await webPush.SendAsync(sub, PushTitle, body, ct);
+                sub.LastUsedAt = DateTime.UtcNow;
+            }
+            catch (WebPushException ex) when (
+                ex.StatusCode == HttpStatusCode.Gone ||
+                ex.StatusCode == HttpStatusCode.NotFound)
+            {
+                dead.Add(sub);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Web push failed for sub {SubId}", sub.Id);
+            }
+        }
+
+        if (dead.Count > 0) db.PushSubscriptions.RemoveRange(dead);
+        await db.SaveChangesAsync(ct);
     }
 }

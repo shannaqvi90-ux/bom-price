@@ -6,11 +6,16 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace BomPriceApproval.Tests.Shared;
 
-public class ThrowingNotificationService(AppDbContext db, IHubContext<NotificationHub> hub)
-    : NotificationService(db, hub)
+public class ThrowingNotificationService(
+    AppDbContext db,
+    IHubContext<NotificationHub> hub,
+    WebPushService webPush,
+    ILogger<NotificationService> logger)
+    : NotificationService(db, hub, webPush, logger)
 {
     public override Task SendAsync(int userId, string message, int referenceId, string referenceType)
         => throw new InvalidOperationException("Simulated notification failure");

@@ -2,6 +2,19 @@ import { useEffect, useState, useCallback } from "react";
 import { pushSubscriptions } from "@/api/pushSubscriptions";
 import { urlBase64ToUint8Array } from "@/utils/vapid";
 
+export async function unsubscribePushOnLogout(): Promise<void> {
+  if (!("serviceWorker" in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return;
+    await pushSubscriptions.unsubscribe(sub.endpoint).catch(() => {});
+    await sub.unsubscribe().catch(() => {});
+  } catch {
+    // best-effort; logout proceeds regardless
+  }
+}
+
 function getVapidKey(): string {
   return (import.meta.env.VITE_VAPID_PUBLIC_KEY ?? "") as string;
 }

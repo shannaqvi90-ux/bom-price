@@ -50,16 +50,21 @@ public class BomController(
             var bomStatus = bom is null ? "NotStarted"
                 : bom.SubmittedAt.HasValue ? "Submitted" : "InProgress";
 
-            var lines = bom?.Lines.Select(l =>
-            {
-                var cl = costLinesByBom[bom.Id].FirstOrDefault(c => c.BomLineId == l.Id);
-                decimal? contribution = cl is not null
-                    ? cl.CostPerKgInAed * l.QtyPerKg * (1 + l.WastagePct / 100) : null;
-                return new BomLineResponse(l.Id, l.ProcessId, l.Process.Name,
-                    l.RawMaterialItemId, l.RawMaterial.Description,
-                    l.QtyPerKg, l.WastagePct,
-                    cl?.CostPerKg, cl?.CurrencyCode, cl?.CostPerKgInAed, contribution);
-            }).ToList() ?? [];
+            // V2.2: BOM lines render in canonical Process.DisplayOrder, not insertion order.
+            // ThenBy(Id) keeps lines stable when two share the same DisplayOrder.
+            var lines = bom?.Lines
+                .OrderBy(l => l.Process.DisplayOrder)
+                .ThenBy(l => l.Id)
+                .Select(l =>
+                {
+                    var cl = costLinesByBom[bom.Id].FirstOrDefault(c => c.BomLineId == l.Id);
+                    decimal? contribution = cl is not null
+                        ? cl.CostPerKgInAed * l.QtyPerKg * (1 + l.WastagePct / 100) : null;
+                    return new BomLineResponse(l.Id, l.ProcessId, l.Process.Name,
+                        l.RawMaterialItemId, l.RawMaterial.Description,
+                        l.QtyPerKg, l.WastagePct,
+                        cl?.CostPerKg, cl?.CurrencyCode, cl?.CostPerKgInAed, contribution);
+                }).ToList() ?? [];
 
             return new BomItemResponse(ri.Id, ri.ItemId, ri.Item.Description,
                 ri.ExpectedQty, ri.SortOrder, bom?.Id, bomStatus,

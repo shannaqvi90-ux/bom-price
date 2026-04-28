@@ -69,15 +69,19 @@ public class CostingController(
                     c.LandedCostValue, c.FohAmount, c.TotalCostPerKg, c.SubmittedAt)
                 : null;
 
-            var bomLines = bom.Lines.Select(l =>
-            {
-                LastCostInfo? lc = lastCosts.TryGetValue(l.RawMaterialItemId, out var v)
-                    ? new LastCostInfo(v.CostPerKg, v.CurrencyCode, v.UpdatedAt)
-                    : null;
-                return new CostingBomLineResponse(l.Id, l.ProcessId, l.Process.Name,
-                    l.RawMaterialItemId, l.RawMaterial.Description,
-                    l.QtyPerKg, l.WastagePct, lc);
-            }).ToList();
+            // V2.2: BOM lines render in canonical Process.DisplayOrder, matching BomController.Get.
+            var bomLines = bom.Lines
+                .OrderBy(l => l.Process.DisplayOrder)
+                .ThenBy(l => l.Id)
+                .Select(l =>
+                {
+                    LastCostInfo? lc = lastCosts.TryGetValue(l.RawMaterialItemId, out var v)
+                        ? new LastCostInfo(v.CostPerKg, v.CurrencyCode, v.UpdatedAt)
+                        : null;
+                    return new CostingBomLineResponse(l.Id, l.ProcessId, l.Process.Name,
+                        l.RawMaterialItemId, l.RawMaterial.Description,
+                        l.QtyPerKg, l.WastagePct, lc);
+                }).ToList();
 
             CostingDraftResponse? draftResp = null;
             if (drafts.TryGetValue(bom.Id, out var draftRow))

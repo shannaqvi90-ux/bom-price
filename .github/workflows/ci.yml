@@ -45,6 +45,20 @@ jobs:
         run: dotnet list package --vulnerable --include-transitive
         continue-on-error: true
 
+      # Apply migrations BEFORE tests run so the parallel WebApplicationFactory
+      # instances inside the test process don't race each other when each
+      # constructor calls db.Database.Migrate(). EF's Migrate() is idempotent
+      # only at the migration-history level — if the history is empty and
+      # multiple processes call it simultaneously, they all try to CREATE
+      # TABLE and second-and-later attempts fail with "relation already exists".
+      - name: Install dotnet-ef tool
+        run: dotnet tool install --global dotnet-ef --version 8.*
+
+      - name: Apply migrations
+        env:
+          ConnectionStrings__DefaultConnection: "Host=localhost;Port=5432;Database=bom_price_approval;Username=postgres;Password=testpass"
+        run: dotnet ef database update --project BomPriceApproval.API --configuration Release --no-build
+
       - name: Test
         env:
           # ASP.NET Core conventions: __ replaces : in env-var keys for

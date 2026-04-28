@@ -2,6 +2,7 @@ using System.Security.Claims;
 using BomPriceApproval.API.Domain.Enums;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Services;
+using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -17,9 +18,10 @@ public class AdminUsersController(AppDbContext db, AdminAuditLogger audit) : Con
     public async Task<IActionResult> ResetPassword(int id, [FromBody] ResetPasswordRequest? body)
     {
         if (body is null)
-            return BadRequest(new { error = "Request body is required" });
+            return Validation.Detail("Request body is required").Return();
         if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Length < 5)
-            return BadRequest(new { error = "Reason is required (min 5 chars)" });
+            return Validation.Detail("Reason is required (min 5 chars)")
+                .Field("Reason", "Reason is required (min 5 chars).").Return();
 
         var user = await db.Users.Include(u => u.RefreshTokens).FirstOrDefaultAsync(u => u.Id == id);
         if (user is null) return NotFound();

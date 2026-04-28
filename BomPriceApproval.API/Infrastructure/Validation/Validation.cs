@@ -15,6 +15,7 @@ public sealed class ValidationProblemBuilder
 {
     private readonly string _detail;
     private readonly ModelStateDictionary _errors = new();
+    private int _status = StatusCodes.Status400BadRequest;
 
     internal ValidationProblemBuilder(string detail)
     {
@@ -32,18 +33,28 @@ public sealed class ValidationProblemBuilder
     }
 
     /// <summary>
-    /// Build the 400 ActionResult with Content-Type application/problem+json.
+    /// Override the response status code. Default is 400. Use 409 for Conflict
+    /// (e.g. business-rule violations: "already exists", "in-use", etc.).
+    /// </summary>
+    public ValidationProblemBuilder Status(int statusCode)
+    {
+        _status = statusCode;
+        return this;
+    }
+
+    /// <summary>
+    /// Build the ActionResult with Content-Type application/problem+json.
     /// </summary>
     public ActionResult Return()
     {
         var problem = new ValidationProblemDetails(_errors)
         {
             Detail = _detail,
-            Status = StatusCodes.Status400BadRequest,
+            Status = _status,
         };
         return new ObjectResult(problem)
         {
-            StatusCode = StatusCodes.Status400BadRequest,
+            StatusCode = _status,
             ContentTypes = { "application/problem+json" },
         };
     }

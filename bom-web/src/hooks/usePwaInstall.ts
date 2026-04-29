@@ -37,6 +37,11 @@ export function usePwaInstall(): PwaInstallState {
   }, []);
 
   const dismissedAt = Number(localStorage.getItem(DISMISS_KEY) ?? 0);
+  // Date.now() is intentionally read on each render: dismissTick state
+  // forces a re-render after dismissIosModal writes to localStorage, and
+  // the comparison decides whether the iOS install modal should hide. A
+  // pure computation isn't possible without polling or a tick interval.
+  // eslint-disable-next-line react-hooks/purity
   const dismissedRecently = Date.now() - dismissedAt < DISMISS_TTL_MS;
   void dismissTick;
 

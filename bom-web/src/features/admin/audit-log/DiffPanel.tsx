@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 
 interface Props {
   before: string;
@@ -116,20 +115,14 @@ function ChangeRow({ change }: { change: KeyChange }) {
 }
 
 export function DiffPanel({ before, after }: Props) {
-  const { changes, beforeRaw, afterRaw, parseFailed } = useMemo(() => {
-    const b = tryParse(before);
-    const a = tryParse(after);
-    const parseFailed = b === undefined || (after !== null && after !== undefined && a === undefined);
-    if (parseFailed) {
-      return { changes: [], beforeRaw: before, afterRaw: after, parseFailed: true };
-    }
-    return {
-      changes: diffKeys(b, a),
-      beforeRaw: before,
-      afterRaw: after,
-      parseFailed: false,
-    };
-  }, [before, after]);
+  // No useMemo needed — React Compiler auto-memoizes pure derivations.
+  // tryParse + diffKeys are pure functions of before/after.
+  const b = tryParse(before);
+  const a = tryParse(after);
+  const parseFailed = b === undefined || (after !== null && after !== undefined && a === undefined);
+  const changes = parseFailed ? [] : diffKeys(b, a);
+  const beforeRaw = before;
+  const afterRaw = after;
 
   if (parseFailed) {
     return (

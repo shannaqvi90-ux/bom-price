@@ -7,6 +7,8 @@ import type {
   CustomerChangeHistoryEntry,
   RequisitionDetail,
   RequisitionListItem,
+  V3CreateRequisitionPayload,
+  V3Requisition,
 } from "@/types/api";
 
 export const requisitionKeys = {
@@ -170,5 +172,61 @@ export function useBranchChangeHistory(requisitionId: number, enabled = true) {
       (await api.get<BranchChangeHistoryEntry[]>(`/requisitions/${requisitionId}/branch-history`)).data,
     enabled: enabled && Number.isFinite(requisitionId) && requisitionId > 0,
     staleTime: 30_000,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// V3 hooks — added alongside V2.3 hooks during the transition.
+//   - useV3Requisition shares the requisitionKeys.detail(id) cache key with the
+//     legacy useRequisition above. After Tasks 16-20 delete the V2.3 pages, only
+//     useV3Requisition will remain.
+//   - useCreateV3Requisition replaces the V2.3 split sales-then-BOM flow with
+//     a single combined-payload Create.
+// ---------------------------------------------------------------------------
+
+export function useV3Requisition(id: number) {
+  return useQuery({
+    queryKey: requisitionKeys.detail(id),
+    queryFn: () => api.get<V3Requisition>(`/requisitions/${id}`).then((r) => r.data),
+    enabled: Number.isFinite(id) && id > 0,
+  });
+}
+
+export function useCreateV3Requisition() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: V3CreateRequisitionPayload) =>
+      api
+        .post<{ id: number; refNo: string; status: string }>("/requisitions", body)
+        .then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: requisitionKeys.all });
+    },
+  });
+}
+
+export function useSubmitRequisition() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api.post<{ id: number; status: string }>(`/requisitions/${id}/submit`).then((r) => r.data),
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: requisitionKeys.detail(id) });
+      qc.invalidateQueries({ queryKey: requisitionKeys.list() });
+    },
+  });
+}
+
+export function useCancelRequisition() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
+      api
+        .post<{ id: number; status: string }>(`/requisitions/${id}/cancel`, { reason })
+        .then((r) => r.data),
+    onSuccess: (_d, { id }) => {
+      qc.invalidateQueries({ queryKey: requisitionKeys.detail(id) });
+      qc.invalidateQueries({ queryKey: requisitionKeys.list() });
+    },
   });
 }

@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/axios";
-import type { CreateCustomerRequest, Customer, ImportResult } from "@/types/api";
+import type {
+  CreateCustomerRequest,
+  Customer,
+  ImplicitItemResponse,
+  ImportResult,
+} from "@/types/api";
 
 export const customerKeys = {
   all: ["customers"] as const,
@@ -40,5 +45,21 @@ export function useImportCustomers() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: customerKeys.all });
     },
+  });
+}
+
+// V3 — implicit items (i.e. items the customer has historically ordered, derived
+// from past requisitions). Backend: GET /api/customers/{id}/items.
+// Returns empty array when customerId is null/0 without calling the API.
+export function useCustomerImplicitItems(customerId: number | null) {
+  return useQuery({
+    queryKey: ["customer", customerId, "implicit-items"],
+    queryFn: () =>
+      customerId
+        ? api
+            .get<ImplicitItemResponse[]>(`/customers/${customerId}/items`)
+            .then((r) => r.data)
+        : Promise.resolve([] as ImplicitItemResponse[]),
+    enabled: !!customerId && customerId > 0,
   });
 }

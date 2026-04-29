@@ -188,9 +188,19 @@ export default function NewRequisitionPage() {
                 )}
               </div>
 
-              <Button type="submit" disabled={isSubmitting || create.isPending}>
-                {create.isPending ? "Creating…" : "Create"}
-              </Button>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => navigate(-1)}
+                  disabled={create.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmitting || create.isPending}>
+                  {create.isPending ? "Creating…" : "Create"}
+                </Button>
+              </div>
             </form>
           )}
         </CardContent>

@@ -1,3 +1,5 @@
+using BomPriceApproval.API.Domain.Enums;
+
 namespace BomPriceApproval.API.Domain.Entities;
 
 public class QuotationApproval
@@ -16,6 +18,13 @@ public class QuotationApproval
     // C6 override creates a new QuotationApproval row with the current rate.
     // Null when CurrencyCode == "AED".
     public decimal? RateSnapshot { get; set; }
+
+    // V3 — stage of this approval (legacy V2.3 rows backfilled to FinalSign)
+    public ApprovalStage Stage { get; set; } = ApprovalStage.InitialPricing;
+
+    // V3 — FX rate used to convert foreign-currency RM costs to AED at accountant submit time.
+    // Distinct from RateSnapshot (sale-side rate at MD margin entry).
+    public decimal? CostFxSnapshot { get; set; }
 
     public QuotationRequest QuotationRequest { get; set; } = null!;
     public User ApprovedBy { get; set; } = null!;

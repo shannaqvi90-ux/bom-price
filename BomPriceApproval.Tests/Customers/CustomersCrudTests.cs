@@ -18,23 +18,23 @@ public class CustomersCrudTests(WebApplicationFactory<Program> factory) : IClass
     }
 
     [Fact]
-    public async Task Create_DuplicateCode_Returns409()
+    public async Task Create_AutoGeneratesCustomerCode_AndIgnoresClientPayload()
     {
         var login = await LoginAsync("ali@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
 
-        var code = $"DUPTEST-{Guid.NewGuid():N}".Substring(0, 20);
-        var first = await _client.PostAsJsonAsync("/api/customers", new
+        var resp = await _client.PostAsJsonAsync("/api/customers", new
         {
-            Code = code, Name = "A", Address = "", Email = "", PhoneNumber = ""
+            Code = "MANUAL-IGNORED",
+            Name = $"AutoCode Test {Guid.NewGuid():N}",
+            Address = "",
+            Email = "",
+            PhoneNumber = ""
         });
-        first.StatusCode.Should().Be(HttpStatusCode.Created);
-
-        var second = await _client.PostAsJsonAsync("/api/customers", new
-        {
-            Code = code, Name = "B", Address = "", Email = "", PhoneNumber = ""
-        });
-        second.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        resp.StatusCode.Should().Be(HttpStatusCode.Created);
+        var body = await resp.Content.ReadFromJsonAsync<CustomerResponse>();
+        body!.Code.Should().MatchRegex(@"^CUST-\d{4,}$");
+        body.Code.Should().NotBe("MANUAL-IGNORED");
     }
 
     [Fact]
@@ -190,6 +190,30 @@ public class CustomersCrudTests(WebApplicationFactory<Program> factory) : IClass
         upd.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    [Fact]
+    public async Task GetImplicitItems_NewCustomer_ReturnsEmpty()
+    {
+        var login = await LoginAsync("ali@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
+
+        var create = await _client.PostAsJsonAsync("/api/customers", new
+        {
+            Name = $"Implicit Items Test {Guid.NewGuid():N}",
+            Address = "",
+            Email = "",
+            PhoneNumber = ""
+        });
+        create.StatusCode.Should().Be(HttpStatusCode.Created);
+        var customer = await create.Content.ReadFromJsonAsync<CustomerResponse>();
+
+        var resp = await _client.GetAsync($"/api/customers/{customer!.Id}/items");
+        resp.StatusCode.Should().Be(HttpStatusCode.OK);
+        var items = await resp.Content.ReadFromJsonAsync<List<ImplicitItemResponse>>();
+        items.Should().NotBeNull();
+        items!.Should().BeEmpty();
+    }
+
     private record LoginResponse(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId);
     private record CustomerResponse(int Id, string Code, string Name, string Address, string Email, string PhoneNumber, int? SalesPersonId, string? SalesPersonName, int CreatedByUserId);
+    private record ImplicitItemResponse(int Id, string Code, string Description);
 }

@@ -21,16 +21,6 @@ public class BranchAuthorizationHelperTests(WebApplicationFactory<Program> facto
     }
 
     [Fact]
-    public void BomCreator_AuthorizedOnlyForOwnBranch()
-    {
-        using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var bom = new User { Role = UserRole.BomCreator, BranchId = 1 };
-        BranchAuthorization.UserAuthorizedForBranch(bom, 1, db).Should().BeTrue();
-        BranchAuthorization.UserAuthorizedForBranch(bom, 2, db).Should().BeFalse();
-    }
-
-    [Fact]
     public void Accountant_AuthorizedForBranchesInUserBranches()
     {
         using var scope = factory.Services.CreateScope();

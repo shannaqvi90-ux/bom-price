@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Domain.Enums;
+using BomPriceApproval.API.Domain.Workflow;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Services;
 using BomPriceApproval.API.Infrastructure.Validation;
@@ -71,9 +72,12 @@ public class AdminRequisitionsController(
     {
         if (body is null)
             return Validation.Detail("Request body is required").Return();
-        if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Length < 5)
+        if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Trim().Length < 5)
             return Validation.Detail("Reason is required (min 5 chars)")
                 .Field("Reason", "Reason is required (min 5 chars).").Return();
+        if (body.ConfirmationToken != "OVERRIDE")
+            return Validation.Detail("ConfirmationToken must be \"OVERRIDE\"")
+                .Field("ConfirmationToken", "Must equal \"OVERRIDE\" exactly to break the lock.").Return();
         if (body.Items is null || body.Items.Count == 0)
             return Validation.Detail("Items are required")
                 .Field("Items", "At least one item is required.").Return();
@@ -88,9 +92,10 @@ public class AdminRequisitionsController(
             .FirstOrDefaultAsync(q => q.Id == id);
         if (req is null) return NotFound();
 
-        if (req.Status != RequisitionStatus.Approved)
+        // V3 extends override to Signed status (in addition to legacy V2.3 Approved).
+        if (req.Status != RequisitionStatus.Approved && req.Status != RequisitionStatus.Signed)
             return Validation.Detail($"Cannot override prices on a {req.Status} requisition")
-                .Field("Status", $"Status must be Approved (current: {req.Status}).").Return();
+                .Field("Status", $"Status must be Approved or Signed (current: {req.Status}).").Return();
 
         var currentApproval = req.Approvals.FirstOrDefault(a => !a.IsSuperseded && a.IsApproved);
         if (currentApproval is null)
@@ -172,12 +177,13 @@ public class AdminRequisitionsController(
         currentApproval.IsSuperseded = true;
         currentApproval.SupersededAt = DateTime.UtcNow;
 
+        var notesBody = string.IsNullOrWhiteSpace(body.Notes) ? body.Reason : body.Notes;
         var newApproval = new QuotationApproval
         {
             QuotationRequestId = req.Id,
             ApprovedByUserId = CurrentUserId,
             ApprovedAt = DateTime.UtcNow,
-            Notes = $"[Override] {body.Reason}",
+            Notes = $"[Override] {notesBody}",
             IsApproved = true,
             IsSuperseded = false,
             RateSnapshot = newRateSnapshot,
@@ -196,7 +202,7 @@ public class AdminRequisitionsController(
             });
         }
         db.QuotationApprovals.Add(newApproval);
-        req.UpdatedAt = DateTime.UtcNow; // Status stays Approved (D10)
+        req.UpdatedAt = DateTime.UtcNow; // Status unchanged — Approved (V2.3) or Signed (V3) (D10)
 
         // After-snapshot uses transient values — Id is 0 until SaveChanges
         var afterSnapshotItems = newApproval.Items.Select(ai => new
@@ -363,12 +369,14 @@ public class AdminRequisitionsController(
         var req = await db.QuotationRequests.FindAsync(id);
         if (req is null) return NotFound();
 
-        if (!Infrastructure.Authorization.AdminOverrideAuthorization.CanRollback(req.Status, body.TargetStatus))
+        var allowedTargets = RequisitionStateMachine.AdminRollbackTargets(req.Status);
+        if (!allowedTargets.Contains(body.TargetStatus))
             return Validation.Detail($"Cannot rollback {req.Status} → {body.TargetStatus}")
                 .Field("TargetStatus", $"Rollback from {req.Status} to {body.TargetStatus} is not allowed.").Return();
 
         var before = new { req.Id, req.Status };
         req.Status = body.TargetStatus;
+        req.UpdatedAt = DateTime.UtcNow;
         var after = new { req.Id, req.Status };
 
         audit.Log(CurrentUserId, AdminActionType.RollbackStatus, "Requisition", id, body.Reason, before, after);
@@ -427,63 +435,31 @@ public class AdminRequisitionsController(
         return Ok(new { req.Id, req.SalesPersonId });
     }
 
-    [HttpPost("requisitions/{id}/unlock-bom")]
-    public async Task<IActionResult> UnlockBom(int id, [FromBody] UnlockBomRequest? body)
+    [HttpPost("requisitions/{id}/rollback-to-costing")]
+    public async Task<IActionResult> RollbackToCosting(int id, [FromBody] RollbackToCostingRequest? body)
     {
         if (body is null)
             return Validation.Detail("Request body is required").Return();
-        if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Length < 5)
+        if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Trim().Length < 5)
             return Validation.Detail("Reason is required (min 5 chars)")
                 .Field("Reason", "Reason is required (min 5 chars).").Return();
 
         var req = await db.QuotationRequests.FindAsync(id);
         if (req is null) return NotFound();
 
-        if (!Infrastructure.Authorization.AdminOverrideAuthorization.CanUnlockBom(req.Status))
-            return Validation.Detail($"Cannot unlock BOM from status {req.Status}")
-                .Field("Status", $"BOM cannot be unlocked from {req.Status}.").Return();
+        // V3: only MdPricing can be rolled back to Costing via this dedicated UX action.
+        // For deeper rollbacks (CustomerConfirm/MdFinalSign), admin uses the generic
+        // rollback-status endpoint with an explicit target.
+        if (req.Status != RequisitionStatus.MdPricing)
+            return Validation.Detail($"Cannot rollback to Costing from status {req.Status}")
+                .Field("Status", $"Only MdPricing can be rolled back to Costing (current: {req.Status}).").Return();
 
         var before = new { req.Id, req.Status };
-        req.Status = RequisitionStatus.BomInProgress;
+        req.Status = RequisitionStatus.Costing;
+        req.UpdatedAt = DateTime.UtcNow;
         var after = new { req.Id, req.Status };
 
-        audit.Log(CurrentUserId, AdminActionType.UnlockBom, "Requisition", id, body.Reason, before, after);
-        await db.SaveChangesAsync();
-
-        var recipientIds = await db.Users
-            .Where(u => u.BranchId == req.BranchId && (u.Role == UserRole.BomCreator || u.Role == UserRole.Accountant))
-            .Select(u => u.Id).ToListAsync();
-
-        await notify.SendToUsersAsync(
-            recipientIds,
-            $"BOM for requisition {req.RefNo} has been unlocked by Admin",
-            referenceId: id,
-            referenceType: nameof(NotificationType.BomUnlocked));
-
-        return Ok(new { req.Id, req.Status });
-    }
-
-    [HttpPost("requisitions/{id}/unlock-costing")]
-    public async Task<IActionResult> UnlockCosting(int id, [FromBody] UnlockCostingRequest? body)
-    {
-        if (body is null)
-            return Validation.Detail("Request body is required").Return();
-        if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Length < 5)
-            return Validation.Detail("Reason is required (min 5 chars)")
-                .Field("Reason", "Reason is required (min 5 chars).").Return();
-
-        var req = await db.QuotationRequests.FindAsync(id);
-        if (req is null) return NotFound();
-
-        if (!Infrastructure.Authorization.AdminOverrideAuthorization.CanUnlockCosting(req.Status))
-            return Validation.Detail($"Cannot unlock costing from status {req.Status}")
-                .Field("Status", $"Costing cannot be unlocked from {req.Status}.").Return();
-
-        var before = new { req.Id, req.Status };
-        req.Status = RequisitionStatus.CostingInProgress;
-        var after = new { req.Id, req.Status };
-
-        audit.Log(CurrentUserId, AdminActionType.UnlockCosting, "Requisition", id, body.Reason, before, after);
+        audit.Log(CurrentUserId, AdminActionType.RollbackToCosting, "Requisition", id, body.Reason, before, after);
         await db.SaveChangesAsync();
 
         var recipientIds = await db.Users
@@ -492,7 +468,7 @@ public class AdminRequisitionsController(
 
         await notify.SendToUsersAsync(
             recipientIds,
-            $"Costing for requisition {req.RefNo} has been unlocked by Admin",
+            $"Requisition {req.RefNo} rolled back to Costing by Admin",
             referenceId: id,
             referenceType: nameof(NotificationType.CostingUnlocked));
 

@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using System.Text.RegularExpressions;
 using BomPriceApproval.API.Domain.Entities;
+using BomPriceApproval.API.Domain.Enums;
 using BomPriceApproval.API.Infrastructure.Authorization;
 using BomPriceApproval.API.Infrastructure.Data;
+using BomPriceApproval.API.Infrastructure.Services;
 using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,7 +15,7 @@ namespace BomPriceApproval.API.Features.Customers;
 [ApiController]
 [Route("api/customers")]
 [Authorize]
-public class CustomersController(AppDbContext db) : ControllerBase
+public class CustomersController(AppDbContext db, ICodeGeneratorService codeGen) : ControllerBase
 {
     // Defense-in-depth: reject obvious HTML/script-like payloads in customer text
     // fields before they hit the DB. Frontend (mobile + web) also sanitize on
@@ -75,12 +77,6 @@ public class CustomersController(AppDbContext db) : ControllerBase
     [Authorize(Roles = "SalesPerson,Admin,Accountant")]
     public async Task<IActionResult> Create(CreateCustomerRequest req)
     {
-        if (string.IsNullOrWhiteSpace(req.Code))
-            return Validation
-                .Detail("Customer code is required.")
-                .Field("Code", "Customer code is required.")
-                .Return();
-
         if (ContainsHtmlPayload(req.Name) || ContainsHtmlPayload(req.Address))
             return Validation
                 .Detail("HTML or script-like content is not allowed in Name or Address.")
@@ -88,12 +84,9 @@ public class CustomersController(AppDbContext db) : ControllerBase
                        "Remove tags / event handlers / javascript: links.")
                 .Return();
 
-        if (await db.Customers.AnyAsync(c => c.Code == req.Code))
-            return Conflict(new { message = $"Customer with code '{req.Code}' already exists." });
-
         var customer = new Customer
         {
-            Code = req.Code.Trim(),
+            Code = await codeGen.NextCustomerCodeAsync(),
             Name = req.Name,
             Address = req.Address,
             Email = req.Email,
@@ -135,5 +128,30 @@ public class CustomersController(AppDbContext db) : ControllerBase
         c.PhoneNumber = req.PhoneNumber;
         await db.SaveChangesAsync();
         return NoContent();
+    }
+
+    // V3 D20 — implicit FG filter for NewRequisitionPage. Returns active FGs ever
+    // quoted for this customer (any past requisition status). UI uses this to
+    // narrow the FG picker to items with prior history with the customer.
+    [HttpGet("{id}/items")]
+    public async Task<IActionResult> GetImplicitItems(int id)
+    {
+        var customer = await db.Customers
+            .FirstOrDefaultAsync(c => c.Id == id && !c.IsDeleted);
+        if (customer is null) return NotFound();
+
+        var itemIds = await db.RequisitionItems
+            .Where(ri => ri.QuotationRequest.CustomerId == id)
+            .Select(ri => ri.ItemId)
+            .Distinct()
+            .ToListAsync();
+
+        var items = await db.Items
+            .Where(i => itemIds.Contains(i.Id) && i.Type == ItemType.FinishedGood && i.IsActive)
+            .OrderBy(i => i.Description)
+            .Select(i => new ImplicitItemResponse(i.Id, i.Code, i.Description))
+            .ToListAsync();
+
+        return Ok(items);
     }
 }

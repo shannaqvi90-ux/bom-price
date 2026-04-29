@@ -82,6 +82,10 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<decimal?>("MarginPerKg")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
                     b.Property<decimal>("MaterialCostPct")
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)");
@@ -115,10 +119,7 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                     b.HasIndex("RequisitionItemId")
                         .IsUnique();
 
-                    b.ToTable("ApprovalItems", t =>
-                        {
-                            t.HasCheckConstraint("ck_approval_items_sales_price_positive", "\"SalesPricePerKgAed\" > 0");
-                        });
+                    b.ToTable("ApprovalItems");
                 });
 
             modelBuilder.Entity("BomPriceApproval.API.Domain.Entities.BomCost", b =>
@@ -132,7 +133,15 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                     b.Property<int>("BomHeaderId")
                         .HasColumnType("integer");
 
+                    b.Property<decimal>("CommissionPerKg")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
                     b.Property<decimal>("FohAmount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<decimal>("FohPerKg")
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)");
 
@@ -140,6 +149,14 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<decimal>("LandedCostValue")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<string>("PrintingCostCurrency")
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<decimal?>("PrintingCostPerKg")
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)");
 
@@ -155,6 +172,10 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
 
                     b.Property<decimal>("TotalCostPerKg")
                         .HasColumnType("numeric");
+
+                    b.Property<decimal>("TransportPerKg")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
 
                     b.HasKey("Id");
 
@@ -256,6 +277,15 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                     b.Property<int>("BomHeaderId")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("LastModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("LastModifiedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Micron")
+                        .HasColumnType("text");
+
                     b.Property<int>("ProcessId")
                         .HasColumnType("integer");
 
@@ -273,6 +303,8 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BomHeaderId");
+
+                    b.HasIndex("LastModifiedByUserId");
 
                     b.HasIndex("ProcessId");
 
@@ -361,6 +393,20 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                     b.HasIndex("RequisitionId");
 
                     b.ToTable("BranchChangeHistories");
+                });
+
+            modelBuilder.Entity("BomPriceApproval.API.Domain.Entities.CodeCounter", b =>
+                {
+                    b.Property<string>("Sequence")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("NextValue")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Sequence");
+
+                    b.ToTable("CodeCounters");
                 });
 
             modelBuilder.Entity("BomPriceApproval.API.Domain.Entities.CostingDraft", b =>
@@ -749,6 +795,9 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                     b.Property<int>("ApprovedByUserId")
                         .HasColumnType("integer");
 
+                    b.Property<decimal?>("CostFxSnapshot")
+                        .HasColumnType("numeric");
+
                     b.Property<bool>("IsApproved")
                         .HasColumnType("boolean");
 
@@ -764,6 +813,9 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                     b.Property<decimal?>("RateSnapshot")
                         .HasPrecision(18, 6)
                         .HasColumnType("numeric(18,6)");
+
+                    b.Property<int>("Stage")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime?>("SupersededAt")
                         .HasColumnType("timestamp with time zone");
@@ -796,6 +848,16 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                     b.Property<int>("BranchId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("CancelledByUserId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -810,11 +872,19 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                         .HasPrecision(18, 6)
                         .HasColumnType("numeric(18,6)");
 
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
                     b.Property<string>("RefNo")
                         .IsRequired()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("text")
                         .HasComputedColumnSql("'REQ-' || LPAD(\"Id\"::text, 4, '0')", true);
+
+                    b.Property<string>("ReferenceNumber")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<int>("SalesPersonId")
                         .HasColumnType("integer");
@@ -828,6 +898,8 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BranchId");
+
+                    b.HasIndex("CancelledByUserId");
 
                     b.HasIndex("CustomerId");
 
@@ -884,6 +956,9 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                     b.Property<decimal>("ExpectedQty")
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)");
+
+                    b.Property<bool>("HasPrinting")
+                        .HasColumnType("boolean");
 
                     b.Property<int>("ItemId")
                         .HasColumnType("integer");
@@ -1000,6 +1075,9 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
 
                     b.Property<int>("Role")
                         .HasColumnType("integer");
+
+                    b.Property<string>("SignatureImagePath")
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -1126,6 +1204,11 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("BomPriceApproval.API.Domain.Entities.User", "LastModifiedBy")
+                        .WithMany()
+                        .HasForeignKey("LastModifiedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("BomPriceApproval.API.Domain.Entities.Process", "Process")
                         .WithMany()
                         .HasForeignKey("ProcessId")
@@ -1139,6 +1222,8 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("BomHeader");
+
+                    b.Navigation("LastModifiedBy");
 
                     b.Navigation("Process");
 
@@ -1345,6 +1430,11 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("BomPriceApproval.API.Domain.Entities.User", "CancelledBy")
+                        .WithMany()
+                        .HasForeignKey("CancelledByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("BomPriceApproval.API.Domain.Entities.Customer", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
@@ -1358,6 +1448,8 @@ namespace BomPriceApproval.API.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Branch");
+
+                    b.Navigation("CancelledBy");
 
                     b.Navigation("Customer");
 

@@ -1,7 +1,12 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using BomPriceApproval.API.Domain.Entities;
+using BomPriceApproval.API.Domain.Enums;
+using BomPriceApproval.API.Infrastructure.Data;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BomPriceApproval.Tests.Requisitions;
 
@@ -17,28 +22,30 @@ public class ListDateFilterTests(WebApplicationFactory<Program> factory) : IClas
         return body.AccessToken;
     }
 
-    // Seeds a minimal requisition as Sales (BomPending). Returns the new RefNo.
+    // Seeds a minimal requisition directly via DB (V3 status Draft). Returns the new RefNo.
+    // V3 inline-BOM Create payload is heavyweight to wire up here; date-filter tests only
+    // care about UpdatedAt, so a direct DB seed is sufficient and avoids coupling to the
+    // V3 Create endpoint's branch/process/item validation.
     private async Task<string> SeedAnyRequisitionAsSalesAsync()
     {
-        var salesToken = await LoginAsync("ali@test.com", "Test@1234");
-        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", salesToken);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var sp = await db.Users.FirstAsync(u => u.Email == "ali@test.com");
+        var customer = await db.Customers.FirstAsync();
 
-        var customers = (await _client.GetFromJsonAsync<List<CustomerShort>>("/api/customers"))!;
-        var items = (await _client.GetFromJsonAsync<List<ItemShort>>("/api/items"))!;
-        customers.Should().NotBeEmpty();
-        items.Should().NotBeEmpty();
-
-        var finishedGood = items.First(i => i.Type == "FinishedGood");
-
-        var create = await _client.PostAsJsonAsync("/api/requisitions", new
+        var req = new QuotationRequest
         {
-            CustomerId = customers[0].Id,
+            BranchId = sp.BranchId!.Value,
+            SalesPersonId = sp.Id,
+            CustomerId = customer.Id,
             CurrencyCode = "AED",
-            Items = new[] { new { ItemId = finishedGood.Id, ExpectedQty = 5m } }
-        });
-        create.EnsureSuccessStatusCode();
-        var created = (await create.Content.ReadFromJsonAsync<CreateResponse>())!;
-        return created.RefNo;
+            Status = RequisitionStatus.Draft,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        db.QuotationRequests.Add(req);
+        await db.SaveChangesAsync();
+        return req.RefNo;
     }
 
     private record CountedListItem(int Id, string RefNo, string Status);
@@ -145,7 +152,4 @@ public class ListDateFilterTests(WebApplicationFactory<Program> factory) : IClas
     }
 
     private record LoginResponse(string AccessToken, string RefreshToken);
-    private record CustomerShort(int Id, string Name);
-    private record ItemShort(int Id, string Code, string Description, string Type);
-    private record CreateResponse(int Id, string RefNo);
 }

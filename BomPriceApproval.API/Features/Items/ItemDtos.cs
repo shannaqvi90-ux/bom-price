@@ -4,7 +4,7 @@ using BomPriceApproval.API.Domain.Enums;
 namespace BomPriceApproval.API.Features.Items;
 
 public record CreateItemRequest(
-    [Required, MaxLength(50)] string Code,
+    [MaxLength(50)] string? Code,
     [Required, MaxLength(500)] string Description,
     [Required] ItemType Type,
     [Range(0, 999999999)] decimal? LastPurchasePrice,

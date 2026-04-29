@@ -13,6 +13,15 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace BomPriceApproval.Tests.Admin;
 
+/// <summary>
+/// V3 admin status rollback. Whitelist comes from RequisitionStateMachine.AdminRollback:
+///   Signed → MdFinalSign
+///   MdFinalSign → CustomerConfirm
+///   CustomerConfirm → MdPricing
+///   MdPricing → Costing
+///   Costing → Draft
+/// Cancelled and Rejected are terminal and cannot be rolled back.
+/// </summary>
 public class AdminRollbackStatusTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
 {
     private readonly HttpClient _client = factory.CreateClient();
@@ -65,12 +74,16 @@ public class AdminRollbackStatusTests(WebApplicationFactory<Program> factory) : 
         await cleanupDb.SaveChangesAsync();
     }
 
+    // ──────────────────────────────────────────────────────────────
+    // V3 whitelisted transitions (one step back per source)
+    // ──────────────────────────────────────────────────────────────
+
     [Theory]
-    [InlineData(RequisitionStatus.Approved, RequisitionStatus.MdReview)]
-    [InlineData(RequisitionStatus.MdReview, RequisitionStatus.CostingPending)]
-    [InlineData(RequisitionStatus.CostingInProgress, RequisitionStatus.CostingPending)]
-    [InlineData(RequisitionStatus.CostingPending, RequisitionStatus.BomInProgress)]
-    [InlineData(RequisitionStatus.BomInProgress, RequisitionStatus.BomPending)]
+    [InlineData(RequisitionStatus.Signed, RequisitionStatus.MdFinalSign)]
+    [InlineData(RequisitionStatus.MdFinalSign, RequisitionStatus.CustomerConfirm)]
+    [InlineData(RequisitionStatus.CustomerConfirm, RequisitionStatus.MdPricing)]
+    [InlineData(RequisitionStatus.MdPricing, RequisitionStatus.Costing)]
+    [InlineData(RequisitionStatus.Costing, RequisitionStatus.Draft)]
     public async Task Rollback_AllowedTransition_Returns200AndFlipsStatus(
         RequisitionStatus fromStatus, RequisitionStatus toStatus)
     {
@@ -83,11 +96,10 @@ public class AdminRollbackStatusTests(WebApplicationFactory<Program> factory) : 
 
             var resp = await _client.PostAsJsonAsync(
                 $"/api/admin/requisitions/{reqId}/rollback-status",
-                new { TargetStatus = toStatus, Reason = "allowed rollback test" });
+                new { TargetStatus = toStatus, Reason = "allowed V3 rollback test" });
 
             resp.StatusCode.Should().Be(HttpStatusCode.OK, $"transition {fromStatus} → {toStatus} should be allowed");
 
-            // Behavioral: verify DB was updated
             using var verifyScope = factory.Services.CreateScope();
             var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
             var req = await verifyDb.QuotationRequests.FindAsync(reqId);
@@ -95,7 +107,6 @@ public class AdminRollbackStatusTests(WebApplicationFactory<Program> factory) : 
         }
         finally
         {
-            // Cleanup audit rows + req
             using var cleanupScope = factory.Services.CreateScope();
             var cleanupDb = cleanupScope.ServiceProvider.GetRequiredService<AppDbContext>();
             var auditRows = await cleanupDb.AdminAuditLogs
@@ -107,10 +118,17 @@ public class AdminRollbackStatusTests(WebApplicationFactory<Program> factory) : 
         }
     }
 
-    [Fact]
-    public async Task Rollback_FromRejected_Returns400()
+    // ──────────────────────────────────────────────────────────────
+    // V3 terminal statuses cannot be rolled back
+    // ──────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(RequisitionStatus.Rejected, RequisitionStatus.MdPricing)]
+    [InlineData(RequisitionStatus.Cancelled, RequisitionStatus.Draft)]
+    public async Task Rollback_FromTerminalStatus_Returns400(
+        RequisitionStatus fromStatus, RequisitionStatus toStatus)
     {
-        var reqId = await SeedRequisitionAsync(RequisitionStatus.Rejected);
+        var reqId = await SeedRequisitionAsync(fromStatus);
 
         try
         {
@@ -119,9 +137,10 @@ public class AdminRollbackStatusTests(WebApplicationFactory<Program> factory) : 
 
             var resp = await _client.PostAsJsonAsync(
                 $"/api/admin/requisitions/{reqId}/rollback-status",
-                new { TargetStatus = RequisitionStatus.MdReview, Reason = "attempt rollback from rejected" });
+                new { TargetStatus = toStatus, Reason = "attempt rollback from terminal" });
 
-            resp.StatusCode.Should().Be(HttpStatusCode.BadRequest, "Rejected is not on the rollback whitelist");
+            resp.StatusCode.Should().Be(HttpStatusCode.BadRequest,
+                $"{fromStatus} is terminal and not on the rollback whitelist");
         }
         finally
         {
@@ -129,10 +148,19 @@ public class AdminRollbackStatusTests(WebApplicationFactory<Program> factory) : 
         }
     }
 
-    [Fact]
-    public async Task Rollback_ForwardJump_Returns400()
+    // ──────────────────────────────────────────────────────────────
+    // Forward jumps and skip-jumps are blocked
+    // ──────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(RequisitionStatus.Draft, RequisitionStatus.Costing)]              // forward
+    [InlineData(RequisitionStatus.MdPricing, RequisitionStatus.Draft)]            // skip-jump (target not in whitelist for this source)
+    [InlineData(RequisitionStatus.Signed, RequisitionStatus.Costing)]             // skip-jump
+    [InlineData(RequisitionStatus.CustomerConfirm, RequisitionStatus.Costing)]    // skip-jump
+    public async Task Rollback_NonWhitelistedTarget_Returns400(
+        RequisitionStatus fromStatus, RequisitionStatus toStatus)
     {
-        var reqId = await SeedRequisitionAsync(RequisitionStatus.BomPending);
+        var reqId = await SeedRequisitionAsync(fromStatus);
 
         try
         {
@@ -141,9 +169,10 @@ public class AdminRollbackStatusTests(WebApplicationFactory<Program> factory) : 
 
             var resp = await _client.PostAsJsonAsync(
                 $"/api/admin/requisitions/{reqId}/rollback-status",
-                new { TargetStatus = RequisitionStatus.Approved, Reason = "forward jump attempt" });
+                new { TargetStatus = toStatus, Reason = "forward jump or skip target attempt" });
 
-            resp.StatusCode.Should().Be(HttpStatusCode.BadRequest, "BomPending → Approved is a forward jump, not a rollback");
+            resp.StatusCode.Should().Be(HttpStatusCode.BadRequest,
+                $"{fromStatus} → {toStatus} is not on the whitelist");
         }
         finally
         {
@@ -154,7 +183,7 @@ public class AdminRollbackStatusTests(WebApplicationFactory<Program> factory) : 
     [Fact]
     public async Task Rollback_WritesAuditLog()
     {
-        var reqId = await SeedRequisitionAsync(RequisitionStatus.Approved);
+        var reqId = await SeedRequisitionAsync(RequisitionStatus.Signed);
         var uniqueReason = $"rollback-audit-{Guid.NewGuid():N}";
         int? auditId = null;
 
@@ -165,11 +194,10 @@ public class AdminRollbackStatusTests(WebApplicationFactory<Program> factory) : 
 
             var resp = await _client.PostAsJsonAsync(
                 $"/api/admin/requisitions/{reqId}/rollback-status",
-                new { TargetStatus = RequisitionStatus.MdReview, Reason = uniqueReason });
+                new { TargetStatus = RequisitionStatus.MdFinalSign, Reason = uniqueReason });
 
             resp.StatusCode.Should().Be(HttpStatusCode.OK);
 
-            // Behavioral: verify audit row written
             using var verifyScope = factory.Services.CreateScope();
             var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
             var auditRow = await verifyDb.AdminAuditLogs.FirstOrDefaultAsync(a =>
@@ -179,9 +207,9 @@ public class AdminRollbackStatusTests(WebApplicationFactory<Program> factory) : 
 
             auditRow.Should().NotBeNull("an audit row must be written for the rollback");
             auditRow!.ActionType.Should().Be(AdminActionType.RollbackStatus);
-            auditRow!.BeforeJson.Should().MatchRegex("\"Status\"\\s*:\\s*\"Approved\"", "before snapshot must capture original Approved status as string");
+            auditRow!.BeforeJson.Should().MatchRegex("\"Status\"\\s*:\\s*\"Signed\"", "before snapshot must capture original Signed status as string");
             auditRow.AfterJson.Should().NotBeNull();
-            auditRow.AfterJson!.Should().MatchRegex("\"Status\"\\s*:\\s*\"MdReview\"", "after snapshot must capture target MdReview status as string");
+            auditRow.AfterJson!.Should().MatchRegex("\"Status\"\\s*:\\s*\"MdFinalSign\"", "after snapshot must capture target MdFinalSign status as string");
             auditId = auditRow.Id;
         }
         finally
@@ -193,7 +221,7 @@ public class AdminRollbackStatusTests(WebApplicationFactory<Program> factory) : 
     [Fact]
     public async Task Rollback_MissingReason_Returns400()
     {
-        var reqId = await SeedRequisitionAsync(RequisitionStatus.Approved);
+        var reqId = await SeedRequisitionAsync(RequisitionStatus.Signed);
 
         try
         {
@@ -202,7 +230,7 @@ public class AdminRollbackStatusTests(WebApplicationFactory<Program> factory) : 
 
             var resp = await _client.PostAsJsonAsync(
                 $"/api/admin/requisitions/{reqId}/rollback-status",
-                new { TargetStatus = RequisitionStatus.MdReview, Reason = "" });
+                new { TargetStatus = RequisitionStatus.MdFinalSign, Reason = "" });
 
             resp.StatusCode.Should().Be(HttpStatusCode.BadRequest, "empty reason should be rejected");
         }
@@ -233,7 +261,7 @@ public class AdminRollbackStatusTests(WebApplicationFactory<Program> factory) : 
 
         var resp = await _client.PostAsJsonAsync(
             "/api/admin/requisitions/1/rollback-status",
-            new { TargetStatus = RequisitionStatus.MdReview, Reason = "unauthorized attempt here" });
+            new { TargetStatus = RequisitionStatus.MdFinalSign, Reason = "unauthorized attempt here" });
 
         resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -246,7 +274,7 @@ public class AdminRollbackStatusTests(WebApplicationFactory<Program> factory) : 
 
         var resp = await _client.PostAsJsonAsync(
             "/api/admin/requisitions/9999999/rollback-status",
-            new { TargetStatus = RequisitionStatus.MdReview, Reason = "looking for nonexistent req" });
+            new { TargetStatus = RequisitionStatus.MdFinalSign, Reason = "looking for nonexistent req" });
 
         resp.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }

@@ -5,8 +5,7 @@ namespace BomPriceApproval.API.Features.Admin;
 public record DeleteRequisitionRequest(string Reason);
 public record RollbackStatusRequest(RequisitionStatus TargetStatus, string Reason);
 public record ReassignSpRequest(int NewSalesPersonId, string Reason);
-public record UnlockBomRequest(string Reason);
-public record UnlockCostingRequest(string Reason);
+public record RollbackToCostingRequest(string Reason);
 public record ResetPasswordRequest(string Reason);
 public record ResetPasswordResponse(string TempPassword);
 

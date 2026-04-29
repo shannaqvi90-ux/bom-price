@@ -76,6 +76,13 @@ public class RequisitionsListBranchScopingTests(WebApplicationFactory<Program> f
     [Fact]
     public async Task Accountant_AssignedToBranch1Only_DoesNotSeeBranch2Reqs()
     {
+        // Self-seed reqs in both branches to remove order dependence (matches PR #25 pattern
+        // for Sara_AssignedToBothBranches_SeesBothBranchesReqs). Without this, a fresh-DB CI run
+        // that orders the Sara test AFTER this one leaves no branch-1 reqs to assert against,
+        // and FluentAssertions OnlyContain fails on an empty collection.
+        await EnsureRequisitionExistsInBranchAsync(branchId: 1);
+        await EnsureRequisitionExistsInBranchAsync(branchId: 2);
+
         // Create a branch-1-only Accountant via admin
         var admin = await LoginAsync("admin@test.com", "Admin@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", admin.AccessToken);

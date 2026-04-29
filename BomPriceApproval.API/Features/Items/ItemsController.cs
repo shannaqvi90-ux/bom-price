@@ -2,18 +2,18 @@ using System.Security.Claims;
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Domain.Enums;
 using BomPriceApproval.API.Infrastructure.Data;
+using BomPriceApproval.API.Infrastructure.Services;
 using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace BomPriceApproval.API.Features.Items;
 
 [ApiController]
 [Route("api/items")]
 [Authorize]
-public class ItemsController(AppDbContext db) : ControllerBase
+public class ItemsController(AppDbContext db, ICodeGeneratorService codeGen) : ControllerBase
 {
     private int? CurrentBranchId => int.TryParse(User.FindFirstValue("branchId"), out var b) && b > 0 ? b : null;
     private string? CurrentRole => User.FindFirstValue(ClaimTypes.Role);
@@ -95,33 +95,16 @@ public class ItemsController(AppDbContext db) : ControllerBase
                 .Field("BranchId", "Invalid branch.")
                 .Return();
 
-        var duplicateExists = await db.Items.AnyAsync(i =>
-            i.Code == req.Code &&
-            i.BranchId == branchId);
-        if (duplicateExists)
-            return Validation
-                .Detail("An item with this code already exists in the branch.")
-                .Field("Code", "Already exists.")
-                .Return();
-
         var item = new Item
         {
-            Code = req.Code, Description = req.Description, Type = req.Type,
+            Code = await codeGen.NextItemCodeAsync(req.Type),
+            Description = req.Description,
+            Type = req.Type,
             BranchId = branchId,
             LastPurchasePrice = req.LastPurchasePrice
         };
         db.Items.Add(item);
-        try
-        {
-            await db.SaveChangesAsync();
-        }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
-        {
-            return Validation
-                .Detail("An item with this code already exists in the branch.")
-                .Field("Code", "Already exists.")
-                .Return();
-        }
+        await db.SaveChangesAsync();
         return CreatedAtAction(nameof(GetAll),
             new ItemResponse(item.Id, item.Code, item.Description, item.Type.ToString(), item.BranchId, item.IsActive, item.LastPurchasePrice));
     }

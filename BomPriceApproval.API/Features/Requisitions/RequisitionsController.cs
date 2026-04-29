@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Domain.Enums;
+using BomPriceApproval.API.Domain.Workflow;
 using BomPriceApproval.API.Infrastructure.Authorization;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Services;
@@ -173,158 +174,211 @@ public class RequisitionsController(
     }
 
     [HttpPost]
-    [Authorize(Roles = "SalesPerson,Accountant,Admin")]
-    public async Task<IActionResult> Create(CreateRequisitionRequest req)
+    [Authorize(Roles = "SalesPerson,Admin")]
+    public async Task<IActionResult> Create([FromBody] CreateRequisitionV3Request req)
     {
-        // V23a: SP picks branch per-req. Accept payload BranchId.
-        // Transition fallback (1 release): if SP omits BranchId, fall back to User.BranchId (logged).
-        int branchId;
-        if (req.BranchId.HasValue)
-        {
-            branchId = req.BranchId.Value;
-        }
-        else if (CurrentBranchId.HasValue)
-        {
-            logger.LogWarning("V23a transition: requisition created without payload BranchId by user {UserId}; falling back to User.BranchId={BranchId}",
-                CurrentUserId, CurrentBranchId.Value);
-            branchId = CurrentBranchId.Value;
-        }
-        else
-        {
-            return Validation
-                .Detail("BranchId is required.")
-                .Field("BranchId", "Branch must be specified.")
-                .Return();
-        }
+        // Validate customer exists + not deleted
+        var customer = await db.Customers
+            .FirstOrDefaultAsync(c => c.Id == req.CustomerId && !c.IsDeleted);
+        if (customer is null) return NotFound(new { error = "Customer not found" });
 
-        // Validate branch exists and is active
-        var branch = await db.Branches.FindAsync(branchId);
-        if (branch is null || !branch.IsActive)
-            return Validation.Detail("Branch not found or inactive.").Field("BranchId", "Invalid branch.").Return();
+        // Validate currency
+        if (string.IsNullOrWhiteSpace(req.QuotationCurrency))
+            return BadRequest(new { error = "QuotationCurrency required" });
 
-        if (req.Items.Count == 0)
-            return Validation
-                .Detail("At least one item is required.")
-                .Field("Items", "At least one item is required.")
-                .Return();
+        // Validate at least one FG
+        if (req.FinishedGoods is null || req.FinishedGoods.Count == 0)
+            return BadRequest(new { error = "At least one finished good required" });
 
-        if (req.Items.Any(i => i.ExpectedQty <= 0))
+        // V3 — each FG must appear at most once (D17 whole-req state per FG)
+        var duplicateFg = req.FinishedGoods.GroupBy(fg => fg.ItemId).FirstOrDefault(g => g.Count() > 1);
+        if (duplicateFg is not null)
+            return BadRequest(new { error = $"Finished good item {duplicateFg.Key} appears more than once in payload" });
+
+        // Validate all referenced items (FG + RM) exist + active
+        var allItemIds = req.FinishedGoods
+            .SelectMany(fg => new[] { fg.ItemId }.Concat(fg.BomLines.Select(b => b.ItemId)))
+            .Distinct()
+            .ToList();
+        var items = await db.Items
+            .Where(i => allItemIds.Contains(i.Id) && i.IsActive)
+            .ToDictionaryAsync(i => i.Id);
+        foreach (var id in allItemIds)
+            if (!items.ContainsKey(id))
+                return BadRequest(new { error = $"Item {id} not found or inactive" });
+
+        // Validate all referenced ProcessIds exist
+        var allProcessIds = req.FinishedGoods
+            .SelectMany(fg => fg.BomLines.Select(b => b.ProcessId))
+            .Distinct()
+            .ToList();
+        if (allProcessIds.Count > 0)
         {
-            var builder = Validation.Detail("ExpectedQty must be greater than 0.");
-            for (int i = 0; i < req.Items.Count; i++)
-                if (req.Items[i].ExpectedQty <= 0)
-                    builder.Field($"Items[{i}].ExpectedQty", "Must be greater than 0.");
-            return builder.Return();
-        }
-
-        var distinctItemIds = req.Items.Select(i => i.ItemId).Distinct().ToList();
-        if (distinctItemIds.Count != req.Items.Count)
-            return Validation
-                .Detail("Duplicate items in requisition are not allowed.")
-                .Field("Items", "Duplicate items are not allowed.")
-                .Return();
-
-        var activeItemIds = await db.Items
-            .Where(i => distinctItemIds.Contains(i.Id) && i.IsActive)
-            .Select(i => i.Id)
-            .ToListAsync();
-        var missingItems = distinctItemIds.Except(activeItemIds).ToList();
-        if (missingItems.Count > 0)
-        {
-            var builder = Validation.Detail($"Unknown or inactive items: {string.Join(", ", missingItems)}");
-            for (int i = 0; i < req.Items.Count; i++)
-                if (missingItems.Contains(req.Items[i].ItemId))
-                    builder.Field($"Items[{i}].ItemId", "Unknown or inactive.");
-            return builder.Return();
+            var validProcessIds = await db.Processes
+                .Where(p => allProcessIds.Contains(p.Id) && p.IsActive)
+                .Select(p => p.Id)
+                .ToListAsync();
+            var invalidProcessId = allProcessIds.Except(validProcessIds).FirstOrDefault();
+            if (invalidProcessId != 0)
+                return BadRequest(new { error = $"Process {invalidProcessId} not found or inactive" });
         }
 
-        // Validate every item belongs to the chosen branch
-        var dbItems = await db.Items.Where(i => distinctItemIds.Contains(i.Id)).ToListAsync();
-        var mismatched = dbItems.Where(i => i.BranchId != branchId).ToList();
-        if (mismatched.Count > 0)
-            return Validation
-                .Detail($"{mismatched.Count} item(s) do not belong to the selected branch.")
-                .Field("Items", $"Items not in branch {branchId}: {string.Join(", ", mismatched.Select(m => m.Code))}")
-                .Return();
+        // Find Alain branch (V3 scope)
+        var alainBranch = await db.Branches
+            .FirstOrDefaultAsync(b => b.Name == "Al Ain" && b.IsActive);
+        if (alainBranch is null) return BadRequest(new { error = "Al Ain branch not configured" });
 
-        bool customerExists;
-        if (CurrentRole == "SalesPerson")
-        {
-            var spUser = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == CurrentUserId);
-            if (spUser is null) return Forbid();
-            var visibleSpIds = SalesAuthorization.VisibleSalesPersonIds(spUser, db);
-            customerExists = await db.Customers.AnyAsync(c =>
-                c.Id == req.CustomerId &&
-                c.SalesPersonId.HasValue && visibleSpIds.Contains(c.SalesPersonId.Value));
-        }
-        else
-        {
-            customerExists = await db.Customers.AnyAsync(c =>
-                c.Id == req.CustomerId &&
-                (!CurrentBranchId.HasValue || CurrentRole == "Accountant" || c.SalesPersonId == CurrentUserId));
-        }
-        if (!customerExists)
-            return Validation
-                .Detail("Customer not found.")
-                .Field("CustomerId", "Unknown customer.")
-                .Return();
+        // Sales person id: SP uses self; Admin uses customer's SP or falls back to self
+        int salesPersonId = CurrentRole == "SalesPerson"
+            ? CurrentUserId
+            : (customer.SalesPersonId ?? CurrentUserId);
 
-        decimal? rateSnapshot = null;
-        if (req.CurrencyCode != "AED")
-        {
-            var rate = await db.ExchangeRates
-                .Where(e => e.CurrencyCode == req.CurrencyCode && e.IsActive)
-                .OrderByDescending(e => e.EffectiveDate).FirstOrDefaultAsync();
-            if (rate is null)
-                return Validation
-                    .Detail($"No active exchange rate for {req.CurrencyCode}")
-                    .Field("CurrencyCode", "No active exchange rate.")
-                    .Return();
-            rateSnapshot = rate.RateToAed;
-        }
+        await using var tx = await db.Database.BeginTransactionAsync();
 
         var requisition = new QuotationRequest
         {
-            BranchId = branchId,
-            SalesPersonId = CurrentUserId,
-            CustomerId = req.CustomerId,
-            CurrencyCode = req.CurrencyCode,
-            ExchangeRateSnapshot = rateSnapshot,
-            Status = RequisitionStatus.BomPending,
-            Items = req.Items.Select((item, i) => new RequisitionItem
-            {
-                ItemId = item.ItemId,
-                ExpectedQty = item.ExpectedQty,
-                SortOrder = i + 1
-            }).ToList()
+            BranchId = alainBranch.Id,
+            CustomerId = customer.Id,
+            SalesPersonId = salesPersonId,
+            Status = RequisitionStatus.Draft,
+            CurrencyCode = req.QuotationCurrency,
+            Notes = req.Notes,                      // V3 — persist free-text note
+            ReferenceNumber = req.ReferenceNumber,  // V3 — persist customer ref
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         };
-
         db.QuotationRequests.Add(requisition);
+        await db.SaveChangesAsync();
+
+        foreach (var (fg, sortIndex) in req.FinishedGoods.Select((x, i) => (x, i)))
+        {
+            var reqItem = new RequisitionItem
+            {
+                QuotationRequestId = requisition.Id,
+                ItemId = fg.ItemId,
+                ExpectedQty = fg.ExpectedQtyKg,
+                HasPrinting = fg.Printing,
+                SortOrder = sortIndex + 1
+            };
+            db.RequisitionItems.Add(reqItem);
+            await db.SaveChangesAsync();
+
+            var bomHeader = new BomHeader
+            {
+                RequisitionItemId = reqItem.Id,
+                CreatedByUserId = CurrentUserId,
+                CreatedAt = DateTime.UtcNow
+            };
+            db.BomHeaders.Add(bomHeader);
+            await db.SaveChangesAsync();
+
+            foreach (var line in fg.BomLines)
+            {
+                db.BomLines.Add(new BomLine
+                {
+                    BomHeaderId = bomHeader.Id,
+                    ProcessId = line.ProcessId,
+                    RawMaterialItemId = line.ItemId,
+                    QtyPerKg = line.QtyPerKg,
+                    WastagePct = 0m,
+                    Micron = line.Micron
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        await tx.CommitAsync();
+
+        return CreatedAtAction(nameof(Get), new { id = requisition.Id },
+            new { id = requisition.Id, status = requisition.Status.ToString() });
+    }
+
+    [HttpPost("{id}/submit")]
+    [Authorize(Roles = "SalesPerson,Admin")]
+    public async Task<IActionResult> Submit(int id)
+    {
+        var req = await db.QuotationRequests
+            .Include(r => r.Items)
+                .ThenInclude(ri => ri.BomHeader)
+                    .ThenInclude(bh => bh!.Lines)
+            .FirstOrDefaultAsync(r => r.Id == id);
+        if (req is null) return NotFound();
+
+        if (CurrentRole == "SalesPerson" && req.SalesPersonId != CurrentUserId)
+            return Forbid();
+
+        if (!RequisitionStateMachine.CanTransition(req.Status, RequisitionStatus.Costing))
+            return BadRequest(new { error = $"Cannot submit from status {req.Status}" });
+
+        if (req.Items.Count == 0 || req.Items.Any(ri => ri.BomHeader is null || ri.BomHeader.Lines.Count == 0))
+            return BadRequest(new { error = "All finished goods must have a BOM with at least one line" });
+
+        req.Status = RequisitionStatus.Costing;
+        req.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
         try
         {
-            var bomCreatorCandidates = await db.Users
-                .Where(u => u.Role == UserRole.BomCreator && u.IsActive)
+            var accountantIds = await db.UserBranches
+                .Where(ub => ub.BranchId == req.BranchId && ub.User.Role == UserRole.Accountant && ub.User.IsActive)
+                .Select(ub => ub.UserId)
                 .ToListAsync();
-            var bomCreators = bomCreatorCandidates
-                .Where(u => BranchAuthorization.UserAuthorizedForBranch(u, requisition.BranchId, db))
-                .ToList();
 
             await notificationService.SendToUsersAsync(
-                bomCreators.Select(u => u.Id),
-                $"New BOM request: {requisition.RefNo}",
-                requisition.Id,
+                accountantIds,
+                $"{req.RefNo} submitted for costing",
+                req.Id,
                 "QuotationRequest");
         }
         catch (Exception ex)
         {
             logger.LogError(ex,
-                "Notification dispatch failed after successful commit for {Entity} {Id}",
-                "QuotationRequest", requisition.Id);
+                "Notification dispatch failed after successful submit for {Entity} {Id}",
+                "QuotationRequest", req.Id);
         }
 
-        return CreatedAtAction(nameof(Get), new { id = requisition.Id }, new { requisition.Id, requisition.RefNo });
+        return Ok(new { id = req.Id, status = req.Status.ToString() });
+    }
+
+    [HttpPost("{id}/cancel")]
+    [Authorize(Roles = "SalesPerson,Admin")]
+    public async Task<IActionResult> Cancel(int id, [FromBody] CancelRequisitionRequest body)
+    {
+        if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Trim().Length < 5)
+            return BadRequest(new { error = "Reason >= 5 chars required" });
+
+        var req = await db.QuotationRequests.FirstOrDefaultAsync(r => r.Id == id);
+        if (req is null) return NotFound();
+
+        if (CurrentRole == "SalesPerson" && req.SalesPersonId != CurrentUserId)
+            return Forbid();
+
+        if (!RequisitionStateMachine.CanTransition(req.Status, RequisitionStatus.Cancelled))
+            return BadRequest(new { error = $"Cannot cancel from status {req.Status}" });
+
+        req.Status = RequisitionStatus.Cancelled;
+        req.CancelledAt = DateTime.UtcNow;
+        req.CancelledByUserId = CurrentUserId;
+        req.CancelReason = body.Reason.Trim();
+        req.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        try
+        {
+            await notificationService.SendAsync(
+                req.SalesPersonId,
+                $"{req.RefNo} cancelled: {body.Reason.Trim()}",
+                req.Id,
+                "QuotationRequest");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Notification dispatch failed after successful cancel for {Entity} {Id}",
+                "QuotationRequest", req.Id);
+        }
+
+        return Ok(new { id = req.Id, status = req.Status.ToString() });
     }
 
     [HttpPost("{id}/items")]
@@ -405,10 +459,22 @@ public class RequisitionsController(
         return NoContent();
     }
 
+    // V3 DEPRECATED — kept for legacy V2.3 reqs in BomPending state.
+    // V3 state machine has no Resubmit semantics: rejected reqs are terminal,
+    // and the V3 cutover SQL (Phase C) cancels all in-flight V2.3 reqs.
+    // This endpoint sets Status=BomPending which is no longer a valid V3 transition
+    // target — a successful call would leave the req in a state V3 UI cannot render.
+    // Returns 410 Gone to prevent accidental use; full removal in Phase B cleanup.
     [HttpPost("{id}/resubmit")]
     [Authorize(Roles = "SalesPerson,Accountant")]
+    [Obsolete("V3 has no Resubmit flow; endpoint returns 410 Gone. Removed in Phase B.")]
     public async Task<IActionResult> Resubmit(int id, ResubmitRequisitionRequest req)
     {
+        return StatusCode(StatusCodes.Status410Gone, new
+        {
+            error = "Resubmit is not supported in V3. Rejected requisitions are terminal — create a new requisition."
+        });
+#pragma warning disable CS0162 // Unreachable code — body kept for legacy reference until Phase B removal.
         var q = await db.QuotationRequests
             .Include(r => r.Items)
             .Include(r => r.Approvals)
@@ -528,6 +594,7 @@ public class RequisitionsController(
         }
 
         return Ok(new { q.Id, q.RefNo, Status = q.Status.ToString() });
+#pragma warning restore CS0162
     }
 
     [HttpPatch("{id}/customer")]

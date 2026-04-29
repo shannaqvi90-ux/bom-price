@@ -27,6 +27,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CustomerChangeHistory> CustomerChangeHistories => Set<CustomerChangeHistory>();
     public DbSet<UserBranch> UserBranches => Set<UserBranch>();
     public DbSet<BranchChangeHistory> BranchChangeHistories => Set<BranchChangeHistory>();
+    public DbSet<CodeCounter> CodeCounters => Set<CodeCounter>();
     public DbSet<SalesGroup> SalesGroups => Set<SalesGroup>();
     public DbSet<AdminAuditLog> AdminAuditLogs => Set<AdminAuditLog>();
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
@@ -71,6 +72,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasMany(q => q.Items)
             .WithOne(ri => ri.QuotationRequest)
             .HasForeignKey(ri => ri.QuotationRequestId);
+
+        mb.Entity<QuotationRequest>(e =>
+        {
+            e.HasOne(q => q.CancelledBy)
+                .WithMany()
+                .HasForeignKey(q => q.CancelledByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.Property(q => q.CancelReason).HasMaxLength(500);
+            e.Property(q => q.Notes).HasMaxLength(2000);
+            e.Property(q => q.ReferenceNumber).HasMaxLength(200);
+        });
 
         // BomHeader → RequisitionItem (1:1)
         mb.Entity<BomHeader>()
@@ -136,6 +149,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany()
             .HasForeignKey(l => l.RawMaterialItemId);
 
+        mb.Entity<BomLine>()
+            .HasOne(b => b.LastModifiedBy)
+            .WithMany()
+            .HasForeignKey(b => b.LastModifiedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // ─── Validation constraints ──────────────────────────────────────────
         mb.Entity<RequisitionItem>()
             .HasIndex(ri => new { ri.QuotationRequestId, ri.ItemId })
@@ -151,10 +170,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 "ck_bom_lines_qty_per_kg_positive",
                 "\"QtyPerKg\" > 0"));
 
-        mb.Entity<ApprovalItem>()
-            .ToTable(t => t.HasCheckConstraint(
-                "ck_approval_items_sales_price_positive",
-                "\"SalesPricePerKgAed\" > 0"));
+        // V3: legacy "ck_approval_items_sales_price_positive" check constraint
+        // dropped — V3 SetMargin creates ApprovalItem with only MarginPerKg
+        // populated; SalesPricePerKgAed is computed at PDF render time (Task 31).
 
         // Decimal precision
         mb.Entity<RequisitionItem>().Property(ri => ri.ExpectedQty).HasPrecision(18, 4);
@@ -163,11 +181,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<BomCost>().Property(b => b.RawMaterialCostTotal).HasPrecision(18, 4);
         mb.Entity<BomCost>().Property(b => b.LandedCostValue).HasPrecision(18, 4);
         mb.Entity<BomCost>().Property(b => b.FohAmount).HasPrecision(18, 4);
+        mb.Entity<BomCost>().Property(b => b.PrintingCostPerKg).HasPrecision(18, 4);
+        mb.Entity<BomCost>().Property(b => b.PrintingCostCurrency).HasMaxLength(3);
+        mb.Entity<BomCost>().Property(b => b.FohPerKg).HasPrecision(18, 4);
+        mb.Entity<BomCost>().Property(b => b.TransportPerKg).HasPrecision(18, 4);
+        mb.Entity<BomCost>().Property(b => b.CommissionPerKg).HasPrecision(18, 4);
         mb.Entity<ApprovalItem>().Property(a => a.SalesPricePerKgAed).HasPrecision(18, 4);
         mb.Entity<ApprovalItem>().Property(a => a.SalesPricePerKgForeign).HasPrecision(18, 4);
         mb.Entity<ApprovalItem>().Property(a => a.ProfitMarginPct).HasPrecision(18, 4);
         mb.Entity<ApprovalItem>().Property(a => a.MaterialCostPct).HasPrecision(18, 4);
         mb.Entity<ApprovalItem>().Property(a => a.OtherCostPct).HasPrecision(18, 4);
+        mb.Entity<ApprovalItem>().Property(a => a.MarginPerKg).HasPrecision(18, 4);
         mb.Entity<ExchangeRate>().Property(e => e.RateToAed).HasPrecision(18, 6);
         mb.Entity<QuotationRequest>().Property(q => q.ExchangeRateSnapshot).HasPrecision(18, 6);
         mb.Entity<QuotationApproval>().Property(a => a.RateSnapshot).HasPrecision(18, 6);
@@ -334,6 +358,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
              .WithMany()
              .HasForeignKey(x => x.UserId)
              .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        mb.Entity<CodeCounter>(e =>
+        {
+            e.HasKey(c => c.Sequence);
+            e.Property(c => c.Sequence).HasMaxLength(20);
         });
     }
 }

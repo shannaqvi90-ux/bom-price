@@ -1,9 +1,12 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using BomPriceApproval.API.Domain.Entities;
+using BomPriceApproval.API.Infrastructure.Data;
 using ClosedXML.Excel;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BomPriceApproval.Tests.Customers;
 
@@ -51,11 +54,24 @@ public class CustomerImportTests(WebApplicationFactory<Program> factory) : IClas
         var existingCode = $"EXIST-{Guid.NewGuid():N}".Substring(0, 20);
         var newCode = $"IMP-NEW-{Guid.NewGuid():N}".Substring(0, 20);
 
-        // Pre-create the "existing" customer so the import sees it as a duplicate
-        await _client.PostAsJsonAsync("/api/customers", new
+        // Pre-seed the "existing" customer directly via DB so the import sees it as a duplicate.
+        // (Web POST /api/customers auto-generates Code via CodeGeneratorService and ignores
+        // any payload Code, so pre-creation by HTTP would not give us a known duplicate code.)
+        using (var scope = factory.Services.CreateScope())
         {
-            Code = existingCode, Name = "Existing Co", Address = "", Email = "", PhoneNumber = ""
-        });
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var admin = db.Users.First(u => u.Email == "admin@test.com");
+            db.Customers.Add(new Customer
+            {
+                Code = existingCode,
+                Name = "Existing Co",
+                Address = "",
+                Email = "",
+                PhoneNumber = "",
+                CreatedByUserId = admin.Id
+            });
+            await db.SaveChangesAsync();
+        }
 
         // Build xlsx with: 1 new code + 1 duplicate
         byte[] bytes;

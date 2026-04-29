@@ -11,6 +11,9 @@ public class QuotationRequest
     public int CustomerId { get; set; }
     public string CurrencyCode { get; set; } = "AED";
     public decimal? ExchangeRateSnapshot { get; set; }
+    // V3 — sales-supplied free-text fields
+    public string? Notes { get; set; }
+    public string? ReferenceNumber { get; set; }
     public RequisitionStatus Status { get; set; } = RequisitionStatus.Draft;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
@@ -19,4 +22,10 @@ public class QuotationRequest
     public Customer Customer { get; set; } = null!;
     public ICollection<RequisitionItem> Items { get; set; } = [];
     public ICollection<QuotationApproval> Approvals { get; set; } = [];
+
+    // V3 — cancellation tracking (sales/admin cancel + cutover migration)
+    public DateTime? CancelledAt { get; set; }
+    public int? CancelledByUserId { get; set; }
+    public string? CancelReason { get; set; }
+    public User? CancelledBy { get; set; }
 }

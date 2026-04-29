@@ -15,11 +15,11 @@ public class SalesAuthorizationHelperTests(WebApplicationFactory<Program> factor
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var bom = new User { Role = UserRole.BomCreator, BranchId = 1 };
-        SalesAuthorization.VisibleSalesPersonIds(bom, db).Should().BeEmpty();
-
         var acct = new User { Role = UserRole.Accountant };
         SalesAuthorization.VisibleSalesPersonIds(acct, db).Should().BeEmpty();
+
+        var md = new User { Role = UserRole.ManagingDirector };
+        SalesAuthorization.VisibleSalesPersonIds(md, db).Should().BeEmpty();
     }
 
     [Fact]
@@ -43,12 +43,12 @@ public class SalesAuthorizationHelperTests(WebApplicationFactory<Program> factor
 
         var sp1 = new User { Email = $"sp1-{Guid.NewGuid():N}@test.com", Name = "SP One", Role = UserRole.SalesPerson, BranchId = 1, GroupId = group.Id, IsActive = true };
         var sp2 = new User { Email = $"sp2-{Guid.NewGuid():N}@test.com", Name = "SP Two", Role = UserRole.SalesPerson, BranchId = 2, GroupId = group.Id, IsActive = true };
-        var bomInGroup = new User { Email = $"bom-{Guid.NewGuid():N}@test.com", Name = "BOM In Grp", Role = UserRole.BomCreator, BranchId = 1, GroupId = group.Id, IsActive = true };
-        db.Users.AddRange(sp1, sp2, bomInGroup);
+        var acctInGroup = new User { Email = $"acct-{Guid.NewGuid():N}@test.com", Name = "Acct In Grp", Role = UserRole.Accountant, BranchId = 1, GroupId = group.Id, IsActive = true };
+        db.Users.AddRange(sp1, sp2, acctInGroup);
         db.SaveChanges();
 
         var visible = SalesAuthorization.VisibleSalesPersonIds(sp1, db);
         visible.Should().BeEquivalentTo(new[] { sp1.Id, sp2.Id });
-        visible.Should().NotContain(bomInGroup.Id, "non-SP members of the same group are excluded");
+        visible.Should().NotContain(acctInGroup.Id, "non-SP members of the same group are excluded");
     }
 }

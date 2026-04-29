@@ -89,6 +89,7 @@ public record FinishedGoodLine(
     List<BomLineDto> BomLines);
 
 public record BomLineDto(
+    int ProcessId,
     int ItemId,
     decimal QtyPerKg,
     string? Micron);

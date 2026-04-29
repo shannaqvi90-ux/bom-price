@@ -93,3 +93,6 @@ public record BomLineDto(
     int ItemId,
     decimal QtyPerKg,
     string? Micron);
+
+// V3 — sales/admin cancellation with mandatory reason
+public record CancelRequisitionRequest(string Reason);

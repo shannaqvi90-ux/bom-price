@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Domain.Enums;
+using BomPriceApproval.API.Domain.Workflow;
 using BomPriceApproval.API.Infrastructure.Authorization;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Services;
@@ -290,6 +291,94 @@ public class RequisitionsController(
 
         return CreatedAtAction(nameof(Get), new { id = requisition.Id },
             new { id = requisition.Id, status = requisition.Status.ToString() });
+    }
+
+    [HttpPost("{id}/submit")]
+    [Authorize(Roles = "SalesPerson,Admin")]
+    public async Task<IActionResult> Submit(int id)
+    {
+        var req = await db.QuotationRequests
+            .Include(r => r.Items)
+                .ThenInclude(ri => ri.BomHeader)
+                    .ThenInclude(bh => bh!.Lines)
+            .FirstOrDefaultAsync(r => r.Id == id);
+        if (req is null) return NotFound();
+
+        if (CurrentRole == "SalesPerson" && req.SalesPersonId != CurrentUserId)
+            return Forbid();
+
+        if (!RequisitionStateMachine.CanTransition(req.Status, RequisitionStatus.Costing))
+            return BadRequest(new { error = $"Cannot submit from status {req.Status}" });
+
+        if (req.Items.Count == 0 || req.Items.Any(ri => ri.BomHeader is null || ri.BomHeader.Lines.Count == 0))
+            return BadRequest(new { error = "All finished goods must have a BOM with at least one line" });
+
+        req.Status = RequisitionStatus.Costing;
+        req.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        try
+        {
+            var accountantIds = await db.UserBranches
+                .Where(ub => ub.BranchId == req.BranchId && ub.User.Role == UserRole.Accountant && ub.User.IsActive)
+                .Select(ub => ub.UserId)
+                .ToListAsync();
+
+            await notificationService.SendToUsersAsync(
+                accountantIds,
+                $"{req.RefNo} submitted for costing",
+                req.Id,
+                "QuotationRequest");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Notification dispatch failed after successful submit for {Entity} {Id}",
+                "QuotationRequest", req.Id);
+        }
+
+        return Ok(new { id = req.Id, status = req.Status.ToString() });
+    }
+
+    [HttpPost("{id}/cancel")]
+    [Authorize(Roles = "SalesPerson,Admin")]
+    public async Task<IActionResult> Cancel(int id, [FromBody] CancelRequisitionRequest body)
+    {
+        if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Trim().Length < 5)
+            return BadRequest(new { error = "Reason >= 5 chars required" });
+
+        var req = await db.QuotationRequests.FirstOrDefaultAsync(r => r.Id == id);
+        if (req is null) return NotFound();
+
+        if (CurrentRole == "SalesPerson" && req.SalesPersonId != CurrentUserId)
+            return Forbid();
+
+        if (!RequisitionStateMachine.CanTransition(req.Status, RequisitionStatus.Cancelled))
+            return BadRequest(new { error = $"Cannot cancel from status {req.Status}" });
+
+        req.Status = RequisitionStatus.Cancelled;
+        req.CancelledAt = DateTime.UtcNow;
+        req.CancelledByUserId = CurrentUserId;
+        req.CancelReason = body.Reason.Trim();
+        req.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        try
+        {
+            await notificationService.SendAsync(
+                req.SalesPersonId,
+                $"{req.RefNo} cancelled: {body.Reason.Trim()}",
+                req.Id,
+                "QuotationRequest");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Notification dispatch failed after successful cancel for {Entity} {Id}",
+                "QuotationRequest", req.Id);
+        }
+
+        return Ok(new { id = req.Id, status = req.Status.ToString() });
     }
 
     [HttpPost("{id}/items")]

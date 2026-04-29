@@ -24,14 +24,19 @@ export function Dialog({ open, onClose, title, children, className }: DialogProp
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
+      onMouseDown={(e) => {
+        // Close only when the press *starts* on the backdrop itself.
+        // Using mousedown (not click) and checking target===currentTarget
+        // prevents close when a text-select drag begins inside an input
+        // and the mouse is released over the backdrop.
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         className={cn(
           "relative w-full max-w-md rounded-lg bg-background p-6 shadow-xl",
           className,
         )}
-        onClick={(e) => e.stopPropagation()}
       >
         <h2 className="mb-4 text-lg font-semibold">{title}</h2>
         {children}

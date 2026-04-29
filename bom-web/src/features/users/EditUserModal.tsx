@@ -140,16 +140,16 @@ export function EditUserModal({ open, user, onClose }: Props) {
 
   return (
     <Dialog open={open} onClose={handleClose} title="Edit User">
-      <form onSubmit={onSubmit} className="space-y-4" noValidate>
+      <form onSubmit={onSubmit} className="space-y-4" noValidate autoComplete="off">
         <div className="space-y-1">
           <Label htmlFor="edit-user-name">Name</Label>
-          <Input id="edit-user-name" {...register("name")} />
+          <Input id="edit-user-name" autoComplete="off" {...register("name")} />
           {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
         </div>
 
         <div className="space-y-1">
           <Label htmlFor="edit-user-email">Email</Label>
-          <Input id="edit-user-email" type="email" {...register("email")} />
+          <Input id="edit-user-email" type="email" autoComplete="off" {...register("email")} />
           {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
         </div>
 

@@ -18,27 +18,26 @@ public class ItemEditTests(WebApplicationFactory<Program> factory) : IClassFixtu
         return body!.AccessToken;
     }
 
-    private async Task<int> CreateItemAsAliAsync(string code)
+    // Returns (Id, server-generated Code). descSuffix is used only for Description.
+    private async Task<(int Id, string Code)> CreateItemAsAliAsync(string descSuffix)
     {
         var token = await LoginAsync("ali@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         var resp = await _client.PostAsJsonAsync("/api/items", new
         {
-            Code = code,
-            Description = $"Test Item {code}",
+            Description = $"Test Item {descSuffix}",
             Type = 1, // ItemType.RawMaterial
             LastPurchasePrice = (decimal?)null
         });
         resp.StatusCode.Should().Be(HttpStatusCode.Created);
         var body = await resp.Content.ReadFromJsonAsync<ItemDto>();
-        return body!.Id;
+        return (body!.Id, body.Code);
     }
 
     [Fact]
     public async Task EditItem_AsAdmin_Succeeds()
     {
-        var code = $"ADM-{Guid.NewGuid():N}"[..12];
-        var id = await CreateItemAsAliAsync(code);
+        var (id, code) = await CreateItemAsAliAsync($"admin-{Guid.NewGuid():N}");
 
         var adminToken = await LoginAsync("admin@test.com", "Admin@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
@@ -60,8 +59,7 @@ public class ItemEditTests(WebApplicationFactory<Program> factory) : IClassFixtu
     [Fact]
     public async Task EditItem_AsAccountant_OwnBranch_Succeeds()
     {
-        var code = $"ACC-{Guid.NewGuid():N}"[..12];
-        var id = await CreateItemAsAliAsync(code); // ali is branch 1, sara is also branch 1
+        var (id, code) = await CreateItemAsAliAsync($"acc-{Guid.NewGuid():N}"); // ali is branch 1, sara is also branch 1
 
         var saraToken = await LoginAsync("sara@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", saraToken);
@@ -97,7 +95,6 @@ public class ItemEditTests(WebApplicationFactory<Program> factory) : IClassFixtu
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", sp2Token);
         var createResp = await _client.PostAsJsonAsync("/api/items", new
         {
-            Code = $"B2-{Guid.NewGuid():N}"[..12],
             Description = "Branch 2 Item",
             Type = 1,
             LastPurchasePrice = (decimal?)null
@@ -122,15 +119,14 @@ public class ItemEditTests(WebApplicationFactory<Program> factory) : IClassFixtu
     [Fact]
     public async Task EditItem_DuplicateCode_Returns409()
     {
-        var codeA = $"DUP-A-{Guid.NewGuid():N}"[..14];
-        var codeB = $"DUP-B-{Guid.NewGuid():N}"[..14];
-        await CreateItemAsAliAsync(codeA);
-        var idB = await CreateItemAsAliAsync(codeB);
+        // Create two items; both get distinct auto-generated codes from the server
+        var (_, codeA) = await CreateItemAsAliAsync($"dup-a-{Guid.NewGuid():N}");
+        var (idB, _) = await CreateItemAsAliAsync($"dup-b-{Guid.NewGuid():N}");
 
         var adminToken = await LoginAsync("admin@test.com", "Admin@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
 
-        // Try to rename item B to use item A's code
+        // Try to rename item B to use item A's server-generated code — must 409
         var resp = await _client.PutAsJsonAsync($"/api/items/{idB}", new
         {
             Code = codeA,
@@ -144,8 +140,7 @@ public class ItemEditTests(WebApplicationFactory<Program> factory) : IClassFixtu
     [Fact]
     public async Task DeactivateItem_ItemDisappearsFromDefaultList()
     {
-        var code = $"DEACT-{Guid.NewGuid():N}"[..14];
-        var id = await CreateItemAsAliAsync(code);
+        var (id, _) = await CreateItemAsAliAsync($"deact-{Guid.NewGuid():N}");
 
         var adminToken = await LoginAsync("admin@test.com", "Admin@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
@@ -165,8 +160,7 @@ public class ItemEditTests(WebApplicationFactory<Program> factory) : IClassFixtu
     [Fact]
     public async Task ReactivateItem_ItemAppearsInDefaultList()
     {
-        var code = $"REACT-{Guid.NewGuid():N}"[..14];
-        var id = await CreateItemAsAliAsync(code);
+        var (id, _) = await CreateItemAsAliAsync($"react-{Guid.NewGuid():N}");
 
         var adminToken = await LoginAsync("admin@test.com", "Admin@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);

@@ -5,12 +5,7 @@ import { notify } from "@/lib/notify";
 import { extractFieldErrors } from "@/lib/apiError";
 import { Button } from "@/components/ui/Button";
 import { useActiveExchangeRates } from "@/api/lookups";
-import {
-  useRequisition,
-  useCustomerChangeHistory,
-} from "@/features/requisitions/requisitionsApi";
-import { ChangeCustomerModal } from "@/features/requisitions/ChangeCustomerModal";
-import { CustomerHistoryModal } from "@/features/requisitions/CustomerHistoryModal";
+import { useRequisition } from "@/features/requisitions/requisitionsApi";
 import { useAuthStore } from "@/store/authStore";
 import {
   useCosting,
@@ -79,11 +74,8 @@ export default function CostingEntryPage() {
   const saveDraft = useSaveCostingItemDraft();
   const submitCostingItem = useSubmitCostingItem();
 
-  const role = useAuthStore((s) => s.user?.role);
-  const [changeCustomerOpen, setChangeCustomerOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const historyQ = useCustomerChangeHistory(requisitionId, true);
-  const historyCount = historyQ.data?.length ?? 0;
+  // Auth role kept here as a hook anchor; no longer read directly after V2.3 modal cleanup.
+  useAuthStore((s) => s.user?.role);
 
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [lines, setLines] = useState<LocalCostLine[]>([]);
@@ -345,29 +337,9 @@ export default function CostingEntryPage() {
       </div>
 
       {/* Customer info row */}
-      <div className="rounded-lg border border-border px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <span className="text-xs text-muted-foreground">Customer</span>
-          <p className="text-sm font-medium">{requisition.customerName}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {historyCount > 0 && (
-            <button
-              type="button"
-              onClick={() => setHistoryOpen(true)}
-              className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800 hover:bg-amber-200"
-            >
-              Customer changed ({historyCount})
-            </button>
-          )}
-          {(role === "Accountant" || role === "Admin") &&
-            (requisition.status === "CostingPending" ||
-              requisition.status === "CostingInProgress") && (
-              <Button size="sm" variant="outline" onClick={() => setChangeCustomerOpen(true)}>
-                Change customer
-              </Button>
-            )}
-        </div>
+      <div className="rounded-lg border border-border px-4 py-3">
+        <span className="text-xs text-muted-foreground">Customer</span>
+        <p className="text-sm font-medium">{requisition.customerName}</p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr]">
@@ -583,19 +555,6 @@ export default function CostingEntryPage() {
         </div>
       </div>
 
-      <ChangeCustomerModal
-        open={changeCustomerOpen}
-        onClose={() => setChangeCustomerOpen(false)}
-        requisitionId={requisitionId}
-        currentCustomerId={requisition.customerId}
-        currentCustomerName={requisition.customerName}
-      />
-
-      <CustomerHistoryModal
-        open={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-        requisitionId={requisitionId}
-      />
     </div>
   );
 }

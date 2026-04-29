@@ -6,7 +6,6 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import CostingEntryPage from "./CostingEntryPage";
 import { api } from "@/api/axios";
-import { useAuthStore } from "@/store/authStore";
 
 vi.mock("@/api/axios", () => ({
   api: {
@@ -286,34 +285,6 @@ describe("CostingEntryPage", () => {
     expect(btn).not.toBeDisabled();
   });
 
-  it("shows Change customer button for Accountant+CostingPending, hides for BomCreator", async () => {
-    const costing = makeCostingReview();
-    const pendingRequisition = { ...baseRequisition, status: "CostingPending" };
-
-    // Test 1: Accountant should see the button
-    useAuthStore.getState().setSession({
-      accessToken: "at", refreshToken: "rt",
-      role: "Accountant", userId: 11, name: "Sara", branchId: null, mustChangePassword: false,
-    });
-    defaultGetHandler(costing, pendingRequisition);
-    const { unmount } = renderPage();
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /Change customer/i })).toBeInTheDocument(),
-    );
-    unmount();
-
-    // Test 2: BomCreator should NOT see the button
-    useAuthStore.getState().setSession({
-      accessToken: "at", refreshToken: "rt",
-      role: "BomCreator", userId: 12, name: "Bob", branchId: 1, mustChangePassword: false,
-    });
-    defaultGetHandler(costing, pendingRequisition);
-    renderPage();
-    await waitFor(() =>
-      // Wait until page has loaded (Back link appears)
-      expect(screen.getByText(/Back to REQ-0005/i)).toBeInTheDocument(),
-    );
-    expect(screen.queryByRole("button", { name: /Change customer/i })).not.toBeInTheDocument();
-    useAuthStore.getState().logout();
-  });
+  // V2.3 "Change customer" button removed in Task 20 — customer is immutable post-Create
+  // in V3 (the V3 NewRequisitionPage flow handles customer selection). Test deleted.
 });

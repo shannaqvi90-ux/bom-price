@@ -4,7 +4,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import type { ReactNode } from "react";
-import type { V3Requisition, V3RequisitionStatus } from "@/types/api";
+import type { V3Requisition } from "@/types/api";
 import { useAuthStore } from "@/store/authStore";
 
 vi.mock("@/api/axios", () => ({ api: { get: vi.fn(), post: vi.fn() } }));
@@ -263,38 +263,6 @@ describe("RequisitionDetailPage", () => {
     expect(screen.getByRole("button", { name: /confirm cancel/i })).toBeInTheDocument();
   });
 
-  // V2.3 modal trigger preserved — verifies V2.3 modals still render until Task 20 cleanup.
-  it("shows amber badge when customer change history has entries", async () => {
-    const historyEntry = {
-      id: 1,
-      oldCustomerId: 2,
-      oldCustomerName: "Old Corp",
-      newCustomerId: 3,
-      newCustomerName: "New Corp",
-      changedByUserId: 10,
-      changedByUserName: "Ali",
-      changedAt: "2026-04-20T10:00:00Z",
-      reason: "Customer request",
-    };
-    setUser("SalesPerson", 10);
-    vi.mocked(api.get).mockImplementation((url: string) => {
-      if (url.includes("customer-history"))
-        return Promise.resolve({ data: [historyEntry] });
-      if (url.includes("branch-history")) return Promise.resolve({ data: [] });
-      return Promise.resolve({ data: makeReq() });
-    });
-    render(wrap(<RequisitionDetailPage />));
-    await waitFor(() =>
-      expect(screen.getByText(/Customer changed \(1\)/i)).toBeInTheDocument(),
-    );
-  });
-
-  it("shows V2.3 Change-branch button for Accountant when status=Costing", async () => {
-    setUser("Accountant", 11);
-    mockReqGet(makeReq({ status: "Costing" as V3RequisitionStatus }));
-    render(wrap(<RequisitionDetailPage />));
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /change branch/i })).toBeInTheDocument(),
-    );
-  });
+  // V2.3 customer-history + branch-swap modals removed in Task 20 (V3 = Alain only,
+  // customer immutable post-Create). Tests for those triggers deleted with the modals.
 });

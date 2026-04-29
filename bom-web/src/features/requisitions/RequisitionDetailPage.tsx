@@ -8,12 +8,7 @@ import {
   useV3Requisition,
   useSubmitRequisition,
   useCancelRequisition,
-  useCustomerChangeHistory,
-  useBranchChangeHistory,
 } from "./requisitionsApi";
-import { CustomerHistoryModal } from "./CustomerHistoryModal";
-import { BranchSwapModal } from "./BranchSwapModal";
-import { BranchChangeHistoryModal } from "./BranchChangeHistoryModal";
 import { useAuthStore } from "@/store/authStore";
 import { V3StatusBadge } from "@/components/v3/V3StatusBadge";
 import { BomEditorTable } from "@/components/v3/BomEditorTable";
@@ -44,15 +39,6 @@ export default function RequisitionDetailPage() {
 
   const [showCancelInput, setShowCancelInput] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
-
-  // V2.3 modals + history (preserved for Task 20 cleanup).
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const historyQ = useCustomerChangeHistory(numericId, true);
-  const historyCount = historyQ.data?.length ?? 0;
-  const [branchSwapOpen, setBranchSwapOpen] = useState(false);
-  const [branchHistoryOpen, setBranchHistoryOpen] = useState(false);
-  const branchHistQ = useBranchChangeHistory(numericId, true);
-  const branchChangeCount = branchHistQ.data?.length ?? 0;
 
   const httpStatus = (error as { response?: { status?: number } } | null)?.response?.status;
 
@@ -99,11 +85,6 @@ export default function RequisitionDetailPage() {
   const status = req.status as V3RequisitionStatus;
   const isOwnSalesPerson = role === "SalesPerson" && req.salesPerson.id === user?.userId;
   const isAdmin = role === "Admin";
-
-  // V2.3 "Change branch" trigger guard preserved (Task 20 cleanup target).
-  const canChangeBranch =
-    (role === "Accountant" || role === "Admin") &&
-    (status === "Costing");
 
   async function onSubmit() {
     try {
@@ -239,18 +220,7 @@ export default function RequisitionDetailPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr,1fr]">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              Customer
-              {historyCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setHistoryOpen(true)}
-                  className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800 hover:bg-amber-200"
-                >
-                  Customer changed ({historyCount})
-                </button>
-              )}
-            </CardTitle>
+            <CardTitle>Customer</CardTitle>
           </CardHeader>
           <CardContent>
             <LabeledValue label="Name" value={req.customer.name} />
@@ -260,27 +230,7 @@ export default function RequisitionDetailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              Quotation
-              {canChangeBranch && (
-                <button
-                  type="button"
-                  onClick={() => setBranchSwapOpen(true)}
-                  className="text-sm text-blue-700 underline ml-3"
-                >
-                  Change branch
-                </button>
-              )}
-              {branchChangeCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setBranchHistoryOpen(true)}
-                  className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800 hover:bg-amber-200"
-                >
-                  Branch changed ({branchChangeCount})
-                </button>
-              )}
-            </CardTitle>
+            <CardTitle>Quotation</CardTitle>
           </CardHeader>
           <CardContent>
             <LabeledValue label="Currency" value={req.currencyCode} />
@@ -343,24 +293,6 @@ export default function RequisitionDetailPage() {
       </Card>
 
       <AdminActionsCard requisition={{ id: req.id, refNo: req.refNo, status: req.status }} />
-
-      {/* V2.3 modals retained — Task 20 will delete with their imports. */}
-      <CustomerHistoryModal
-        open={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-        requisitionId={numericId}
-      />
-      <BranchSwapModal
-        requisitionId={req.id}
-        currentBranchId={0}
-        open={branchSwapOpen}
-        onClose={() => setBranchSwapOpen(false)}
-      />
-      <BranchChangeHistoryModal
-        requisitionId={req.id}
-        open={branchHistoryOpen}
-        onClose={() => setBranchHistoryOpen(false)}
-      />
     </div>
   );
 }

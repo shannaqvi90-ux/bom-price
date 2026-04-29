@@ -9,12 +9,9 @@ import DashboardRouter from "@/features/dashboard/DashboardRouter";
 import RequisitionListPage from "@/features/requisitions/RequisitionListPage";
 import { NewRequisitionPage } from "@/features/requisitions/NewRequisitionPage";
 import RequisitionDetailPage from "@/features/requisitions/RequisitionDetailPage";
-import EditRequisitionPage from "@/features/requisitions/EditRequisitionPage";
 import CustomerListPage from "@/features/customers/CustomerListPage";
 import ItemListPage from "@/features/items/ItemListPage";
-import BomEntryPage from "@/features/bom/BomEntryPage";
 import CostingEntryPage from "@/features/costing/CostingEntryPage";
-import MdReviewPage from "@/features/approvals/MdReviewPage";
 import { CustomerConfirmPage } from "@/features/requisitions/CustomerConfirmPage";
 import { MdMarginPage } from "@/features/approvals/MdMarginPage";
 import { MdFinalSignPage } from "@/features/approvals/MdFinalSignPage";
@@ -161,34 +158,10 @@ const router = createBrowserRouter([
         ),
       },
       {
-        path: "requisitions/:id/edit",
-        element: (
-          <ProtectedRoute allow={["SalesPerson"]}>
-            <EditRequisitionPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: "requisitions/:id/bom",
-        element: (
-          <ProtectedRoute allow={["BomCreator"]}>
-            <BomEntryPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
         path: "requisitions/:id/costing",
         element: (
           <ProtectedRoute allow={["Accountant"]}>
             <CostingEntryPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: "requisitions/:id/approval",
-        element: (
-          <ProtectedRoute allow={["ManagingDirector"]}>
-            <MdReviewPage />
           </ProtectedRoute>
         ),
       },

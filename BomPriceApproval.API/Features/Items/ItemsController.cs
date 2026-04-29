@@ -67,15 +67,37 @@ public class ItemsController(AppDbContext db) : ControllerBase
     [Authorize(Roles = "SalesPerson,Admin")]
     public async Task<IActionResult> Create(CreateItemRequest req)
     {
-        if (CurrentBranchId is null)
+        // Resolve target branch: payload BranchId (admin path) OR caller's
+        // branch from JWT (SP path). Admin has CurrentBranchId == null and
+        // must specify a branch in the payload.
+        int branchId;
+        if (req.BranchId.HasValue)
+        {
+            branchId = req.BranchId.Value;
+        }
+        else if (CurrentBranchId.HasValue)
+        {
+            branchId = CurrentBranchId.Value;
+        }
+        else
+        {
             return Validation
-                .Detail("A branch-assigned user is required to create items.")
-                .Field("BranchId", "A branch-assigned user is required.")
+                .Detail("BranchId is required.")
+                .Field("BranchId", "Select a branch.")
+                .Return();
+        }
+
+        // Validate branch exists and is active
+        var branch = await db.Branches.FindAsync(branchId);
+        if (branch is null || !branch.IsActive)
+            return Validation
+                .Detail("Branch not found or inactive.")
+                .Field("BranchId", "Invalid branch.")
                 .Return();
 
         var duplicateExists = await db.Items.AnyAsync(i =>
             i.Code == req.Code &&
-            i.BranchId == CurrentBranchId.Value);
+            i.BranchId == branchId);
         if (duplicateExists)
             return Validation
                 .Detail("An item with this code already exists in the branch.")
@@ -85,7 +107,7 @@ public class ItemsController(AppDbContext db) : ControllerBase
         var item = new Item
         {
             Code = req.Code, Description = req.Description, Type = req.Type,
-            BranchId = CurrentBranchId.Value,
+            BranchId = branchId,
             LastPurchasePrice = req.LastPurchasePrice
         };
         db.Items.Add(item);

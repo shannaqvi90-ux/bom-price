@@ -156,6 +156,7 @@ export interface CreateItemRequest {
   description: string;
   type: ItemKind;
   lastPurchasePrice: number | null;
+  branchId?: number | null;
 }
 
 export interface UpdateItemRequest {

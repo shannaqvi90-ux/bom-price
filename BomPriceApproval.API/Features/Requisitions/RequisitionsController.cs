@@ -173,7 +173,7 @@ public class RequisitionsController(
     }
 
     [HttpPost]
-    [Authorize(Roles = "SalesPerson,Accountant")]
+    [Authorize(Roles = "SalesPerson,Accountant,Admin")]
     public async Task<IActionResult> Create(CreateRequisitionRequest req)
     {
         // V23a: SP picks branch per-req. Accept payload BranchId.

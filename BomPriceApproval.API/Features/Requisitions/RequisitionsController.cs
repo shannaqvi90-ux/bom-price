@@ -459,10 +459,22 @@ public class RequisitionsController(
         return NoContent();
     }
 
+    // V3 DEPRECATED — kept for legacy V2.3 reqs in BomPending state.
+    // V3 state machine has no Resubmit semantics: rejected reqs are terminal,
+    // and the V3 cutover SQL (Phase C) cancels all in-flight V2.3 reqs.
+    // This endpoint sets Status=BomPending which is no longer a valid V3 transition
+    // target — a successful call would leave the req in a state V3 UI cannot render.
+    // Returns 410 Gone to prevent accidental use; full removal in Phase B cleanup.
     [HttpPost("{id}/resubmit")]
     [Authorize(Roles = "SalesPerson,Accountant")]
+    [Obsolete("V3 has no Resubmit flow; endpoint returns 410 Gone. Removed in Phase B.")]
     public async Task<IActionResult> Resubmit(int id, ResubmitRequisitionRequest req)
     {
+        return StatusCode(StatusCodes.Status410Gone, new
+        {
+            error = "Resubmit is not supported in V3. Rejected requisitions are terminal — create a new requisition."
+        });
+#pragma warning disable CS0162 // Unreachable code — body kept for legacy reference until Phase B removal.
         var q = await db.QuotationRequests
             .Include(r => r.Items)
             .Include(r => r.Approvals)
@@ -582,6 +594,7 @@ public class RequisitionsController(
         }
 
         return Ok(new { q.Id, q.RefNo, Status = q.Status.ToString() });
+#pragma warning restore CS0162
     }
 
     [HttpPatch("{id}/customer")]

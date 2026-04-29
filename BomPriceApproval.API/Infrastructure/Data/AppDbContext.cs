@@ -27,6 +27,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CustomerChangeHistory> CustomerChangeHistories => Set<CustomerChangeHistory>();
     public DbSet<UserBranch> UserBranches => Set<UserBranch>();
     public DbSet<BranchChangeHistory> BranchChangeHistories => Set<BranchChangeHistory>();
+    public DbSet<CodeCounter> CodeCounters => Set<CodeCounter>();
     public DbSet<SalesGroup> SalesGroups => Set<SalesGroup>();
     public DbSet<AdminAuditLog> AdminAuditLogs => Set<AdminAuditLog>();
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
@@ -334,6 +335,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
              .WithMany()
              .HasForeignKey(x => x.UserId)
              .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        mb.Entity<CodeCounter>(e =>
+        {
+            e.HasKey(c => c.Sequence);
+            e.Property(c => c.Sequence).HasMaxLength(20);
         });
     }
 }

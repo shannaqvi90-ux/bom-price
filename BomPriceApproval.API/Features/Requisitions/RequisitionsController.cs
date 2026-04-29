@@ -189,6 +189,11 @@ public class RequisitionsController(
         if (req.FinishedGoods is null || req.FinishedGoods.Count == 0)
             return BadRequest(new { error = "At least one finished good required" });
 
+        // V3 — each FG must appear at most once (D17 whole-req state per FG)
+        var duplicateFg = req.FinishedGoods.GroupBy(fg => fg.ItemId).FirstOrDefault(g => g.Count() > 1);
+        if (duplicateFg is not null)
+            return BadRequest(new { error = $"Finished good item {duplicateFg.Key} appears more than once in payload" });
+
         // Validate all referenced items (FG + RM) exist + active
         var allItemIds = req.FinishedGoods
             .SelectMany(fg => new[] { fg.ItemId }.Concat(fg.BomLines.Select(b => b.ItemId)))

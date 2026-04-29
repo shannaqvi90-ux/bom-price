@@ -126,7 +126,7 @@ dotnet build --nologo -v q
 dotnet test --nologo -v q
 ```
 
-Expected: Build succeeds. Tests: ~318 passing (or matches CLAUDE.md's most-recent count).
+Expected: Build succeeds. Tests: **342 passing / 344 total** (2 documented skips per `BomPriceApproval.Tests/AssemblyAttributes.cs` — `AuthTests.Login_WithInvalidEmail_TakesSimilarTimeAsInvalidPassword` and `ChangeCustomerTests.GetCustomerHistory_OrdersEntriesDescendingByChangedAt`). Run time ~50s (parallelism off — see CLAUDE.md V2.3 invariants).
 
 If build or tests fail BEFORE any changes, STOP. The failure is in master and must be fixed first.
 
@@ -1386,6 +1386,12 @@ git commit -m "feat(v3): drop BomCreator from authorization helpers
 Helpers no longer special-case BomCreator role. Enum value retained for
 legacy User row reads. Auth-helper tests updated; broader test failures
 in BOM-specific test files will be addressed when those files are deleted.
+
+NOTE on seed users: Program.cs seed block still creates bob@test.com,
+eve@test.com, frank@test.com with Role=BomCreator. After Phase A they
+become orphan accounts (auth helpers correctly ignore them). They are
+deactivated formally in Phase C cutover SQL (D12). No Phase A change
+needed to Program.cs seed.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```
@@ -3494,7 +3500,7 @@ dotnet test --nologo -v q --filter "FullyQualifiedName~<TestClass>"
 dotnet test --nologo -v q
 ```
 
-Expected: ~340 tests passing (V2.3 had 318 — Phase A adds ~30 new, deletes ~10 deprecated).
+Expected: **~360 tests passing** (V2.3 baseline 342/344 — Phase A adds ~30 new from Tasks 4/8/22/30/33, deletes ~10 deprecated BOM-controller tests in Task 18, and ~5 BomCreator-specific authorization tests in Task 17).
 
 - [ ] **Step 4: Commit**
 

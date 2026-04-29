@@ -357,10 +357,11 @@ public static class V3WorkflowTestHelpers
         resp.EnsureSuccessStatusCode();
         var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
         var ids = new List<int>();
-        if (body.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
+        // V3 GET shape: finishedGoods[] (was V2.3 items[])
+        if (body.TryGetProperty("finishedGoods", out var fgs) && fgs.ValueKind == JsonValueKind.Array)
         {
-            foreach (var item in items.EnumerateArray())
-                ids.Add(item.GetProperty("id").GetInt32());
+            foreach (var fg in fgs.EnumerateArray())
+                ids.Add(fg.GetProperty("id").GetInt32());
         }
         return ids;
     }

@@ -141,36 +141,87 @@ public class RequisitionsController(
         return Ok(new { count = await query.CountAsync() });
     }
 
+    // V3 GET shape — nested finishedGoods[].bomLines[] + costs (matches bom-web V3Requisition).
+    // BomLine + BomCost reads mirror CostingController.Get's projection so the wastage/purchase
+    // mapping stays consistent across the two read endpoints.
     [HttpGet("{id}")]
     public async Task<IActionResult> Get(int id)
     {
         var q = await db.QuotationRequests
-            .Include(r => r.Items).ThenInclude(ri => ri.Item)
             .Include(r => r.Customer)
             .Include(r => r.Branch).Include(r => r.SalesPerson)
-            .Include(r => r.Approvals.Where(a => !a.IsSuperseded)).ThenInclude(a => a.Items)
+            .Include(r => r.Items).ThenInclude(ri => ri.Item)
+            .Include(r => r.Items).ThenInclude(ri => ri.BomHeader).ThenInclude(b => b!.Cost)
+            .Include(r => r.Items).ThenInclude(ri => ri.BomHeader)
+                .ThenInclude(b => b!.Lines).ThenInclude(l => l.Process)
+            .Include(r => r.Items).ThenInclude(ri => ri.BomHeader)
+                .ThenInclude(b => b!.Lines).ThenInclude(l => l.RawMaterial)
             .FirstOrDefaultAsync(r => r.Id == id);
 
         if (q is null) return NotFound();
         if (!CanAccess(q)) return Forbid();
 
-        return Ok(new RequisitionDetail(
-            q.Id, q.RefNo, q.Status.ToString(),
-            q.CustomerId, q.Customer.Name, q.Customer.Email, q.Customer.PhoneNumber, q.Customer.Address,
-            q.CurrencyCode, q.ExchangeRateSnapshot,
-            q.BranchId, q.Branch.Name, q.SalesPersonId, q.SalesPerson.Name,
-            q.CreatedAt, q.UpdatedAt,
-            q.Items.OrderBy(ri => ri.SortOrder).Select(ri => new RequisitionItemDto(
-                ri.Id, ri.ItemId, ri.Item.Description, ri.ExpectedQty, ri.SortOrder)).ToList(),
-            q.Approvals
-                .Where(a => !a.IsSuperseded)
-                .Select(a => new ApprovalSummary(
-                    a.IsApproved, a.Notes, a.ApprovedAt,
-                    a.Items.Select(ai => new ApprovalItemPrice(
-                        ai.RequisitionItemId,
-                        ai.SalesPricePerKgAed,
-                        ai.SalesPricePerKgForeign)).ToList()))
-                .FirstOrDefault()));
+        // BomCostLines key on BomLineId — needed to merge purchaseValuePerKg/currency
+        // (BomCostLine) with wastagePercent (BomLine.WastagePct).
+        var bomHeaderIds = q.Items
+            .Where(ri => ri.BomHeader is not null)
+            .Select(ri => ri.BomHeader!.Id).ToList();
+        var costLinesByBomLineId = bomHeaderIds.Count > 0
+            ? await db.BomCostLines
+                .Where(bcl => bomHeaderIds.Contains(bcl.BomHeaderId))
+                .ToDictionaryAsync(bcl => bcl.BomLineId)
+            : new Dictionary<int, BomCostLine>();
+
+        var finishedGoods = q.Items.OrderBy(ri => ri.SortOrder).Select(ri =>
+        {
+            var bom = ri.BomHeader;
+            var cost = bom?.Cost;
+
+            List<V3BomLineDto>? bomLines = bom is null ? null : bom.Lines
+                .OrderBy(l => l.Process.DisplayOrder)
+                .ThenBy(l => l.Id)
+                .Select(l => new V3BomLineDto(
+                    l.Id,
+                    l.QtyPerKg,
+                    l.Micron,
+                    new V3ItemSummary(l.RawMaterial.Id, l.RawMaterial.Code, l.RawMaterial.Description),
+                    l.LastModifiedByUserId,
+                    l.LastModifiedAt))
+                .ToList();
+
+            V3BomCostDto? costs = cost is null ? null : new V3BomCostDto(
+                cost.PrintingCostPerKg,
+                cost.PrintingCostCurrency,
+                cost.FohPerKg,
+                cost.TransportPerKg,
+                cost.CommissionPerKg,
+                bom!.Lines.Select(l => new V3BomCostLineDto(
+                    l.Id,
+                    l.WastagePct,
+                    costLinesByBomLineId.TryGetValue(l.Id, out var bcl)
+                        ? (decimal?)bcl.CostPerKg : null,
+                    costLinesByBomLineId.TryGetValue(l.Id, out var bcl2)
+                        ? bcl2.CurrencyCode : null))
+                .ToList());
+
+            return new V3FinishedGoodDto(
+                ri.Id,
+                ri.ExpectedQty,
+                ri.HasPrinting,
+                new V3ItemSummary(ri.Item.Id, ri.Item.Code, ri.Item.Description),
+                bomLines,
+                costs);
+        }).ToList();
+
+        return Ok(new V3RequisitionDetail(
+            q.Id,
+            q.RefNo,
+            q.Status.ToString(),
+            q.CurrencyCode,
+            q.Notes,
+            new V3CustomerSummary(q.Customer.Id, q.Customer.Name, q.Customer.Code),
+            new V3SalesPersonSummary(q.SalesPerson.Id, q.SalesPerson.Name),
+            finishedGoods));
     }
 
     [HttpPost]

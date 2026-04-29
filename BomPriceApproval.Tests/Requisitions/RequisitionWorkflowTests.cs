@@ -6,6 +6,7 @@ using BomPriceApproval.API.Domain.Enums;
 using BomPriceApproval.API.Infrastructure.Data;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace BomPriceApproval.Tests.Requisitions;
@@ -146,30 +147,34 @@ public class RequisitionWorkflowTests(WebApplicationFactory<Program> factory)
         client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", mdTokens.AccessToken);
 
+        // GET still resolves the V2.3 historical req (anonymize-style preservation).
+        // V3 GET shape no longer surfaces approval/items in the response body — the FE fetches
+        // approvals via the dedicated /api/approvals endpoints — so we read directly from the
+        // DbContext here to verify approval-item prices are intact (the V2.3 contract this test
+        // was written for).
         var resp = await client.GetAsync($"/api/requisitions/{reqId}");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var detail = await resp.Content.ReadFromJsonAsync<ReqDetailWithApproval>();
-        detail.Should().NotBeNull();
-        detail!.Approval.Should().NotBeNull("approved requisition must include Approval summary");
-        detail.Approval!.Items.Should().NotBeNull("approval must expose item prices");
-        detail.Approval.Items!.Should().HaveCount(2, "both approval items must be returned");
+        using (var verifyScope = factory.Services.CreateScope())
+        {
+            var db = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var approvalItems = await db.QuotationApprovals
+                .Where(a => a.QuotationRequestId == reqId && !a.IsSuperseded)
+                .SelectMany(a => a.Items)
+                .ToListAsync();
 
-        // Verify both prices appear — order-independent
-        detail.Approval.Items.Should().ContainSingle(
-            ai => ai.PricePerKg == 100m,
-            "first approval item must have PricePerKg = 100");
-        detail.Approval.Items.Should().ContainSingle(
-            ai => ai.PricePerKg == 250m,
-            "second approval item must have PricePerKg = 250");
+            approvalItems.Should().HaveCount(2, "both approval items must be persisted");
+            approvalItems.Should().ContainSingle(
+                ai => ai.SalesPricePerKgAed == 100m,
+                "first approval item must have SalesPricePerKgAed = 100");
+            approvalItems.Should().ContainSingle(
+                ai => ai.SalesPricePerKgAed == 250m,
+                "second approval item must have SalesPricePerKgAed = 250");
+        }
     }
 
     // Scoped private records:
     private record LoginResponse(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId);
     private record ReqListItem(int Id, string RefNo, string Status, int ItemCount, string CustomerName,
         string CurrencyCode, string BranchName, string SalesPersonName, DateTime CreatedAt);
-
-    private record ApprovalItemPriceDto(int RequisitionItemId, decimal PricePerKg, decimal? PricePerKgForeign);
-    private record ApprovalSummaryDto(bool IsApproved, string? Notes, DateTime ApprovedAt, List<ApprovalItemPriceDto>? Items);
-    private record ReqDetailWithApproval(int Id, string RefNo, string Status, ApprovalSummaryDto? Approval);
 }

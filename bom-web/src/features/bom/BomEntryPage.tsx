@@ -67,8 +67,16 @@ export default function BomEntryPage() {
   const { data: requisition } = useRequisition(requisitionId);
   const { data: bom, isLoading: bomLoading, refetch: refetchBom } = useBom(requisitionId);
   const { data: allProcesses = [] } = useProcesses();
-  const { data: allItems = [] } = useItems();
-  const rawMaterials = useMemo(() => allItems.filter((i) => i.type === "RawMaterial"), [allItems]);
+  // Scope raw materials to the requisition's branch (not the user's JWT
+  // branch). Without this, admin (BranchId=null) sees all-branch items
+  // until the requisition loads, and Accountant (cross-branch via
+  // UserBranches) would otherwise fall through to a null branch query.
+  // Server also filters by type=RawMaterial so we don't ship FG to the
+  // client just to drop them in a useMemo.
+  const { data: rawMaterials = [] } = useItems({
+    branchId: requisition?.branchId,
+    type: "RawMaterial",
+  });
 
   // Mutations
   const startBomItem = useStartBomItem();

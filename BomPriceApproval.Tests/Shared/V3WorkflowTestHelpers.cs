@@ -121,6 +121,20 @@ public static class V3WorkflowTestHelpers
     }
 
     /// <summary>
+    /// Clears the MD's seeded signature path so signature-related tests can
+    /// assert the "no signature on file" branch independent of execution order.
+    /// Does NOT delete the on-disk file (cheap to leave, harmless to re-overwrite).
+    /// </summary>
+    public static async Task ClearMdSignatureAsync(IServiceProvider services)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var md = await db.Users.FirstAsync(u => u.Email == "md@test.com");
+        md.SignatureImagePath = null;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
     /// Sara's seeded BranchId is Fujairah (1). For V3 (Alain-only) + the V3
     /// Costing.Submit notification fan-out (which queries UserBranches for
     /// branch-scoped accountants), she needs a UserBranches row for Alain.

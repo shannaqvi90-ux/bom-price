@@ -81,6 +81,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .OnDelete(DeleteBehavior.Restrict);
 
             e.Property(q => q.CancelReason).HasMaxLength(500);
+            e.Property(q => q.Notes).HasMaxLength(2000);
+            e.Property(q => q.ReferenceNumber).HasMaxLength(200);
         });
 
         // BomHeader → RequisitionItem (1:1)

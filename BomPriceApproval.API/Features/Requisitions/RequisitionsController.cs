@@ -236,6 +236,8 @@ public class RequisitionsController(
             SalesPersonId = salesPersonId,
             Status = RequisitionStatus.Draft,
             CurrencyCode = req.QuotationCurrency,
+            Notes = req.Notes,                      // V3 — persist free-text note
+            ReferenceNumber = req.ReferenceNumber,  // V3 — persist customer ref
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };

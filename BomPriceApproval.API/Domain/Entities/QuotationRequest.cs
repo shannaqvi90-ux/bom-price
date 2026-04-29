@@ -11,6 +11,9 @@ public class QuotationRequest
     public int CustomerId { get; set; }
     public string CurrencyCode { get; set; } = "AED";
     public decimal? ExchangeRateSnapshot { get; set; }
+    // V3 — sales-supplied free-text fields
+    public string? Notes { get; set; }
+    public string? ReferenceNumber { get; set; }
     public RequisitionStatus Status { get; set; } = RequisitionStatus.Draft;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

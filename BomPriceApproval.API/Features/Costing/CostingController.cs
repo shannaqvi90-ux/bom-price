@@ -24,10 +24,9 @@ public class CostingController(
     private int? CurrentBranchId => int.TryParse(User.FindFirstValue("branchId"), out var b) && b > 0 ? b : null;
 
     // V3 — full BOM tree + cost data per FG. New-shape JSON consumed by V3 web UI (Phase B).
-    // Some V3 cost fields (printingCost*, fohPerKg, transportPerKg, commissionPerKg,
-    // wastagePercent on cost line, purchaseValuePerKg/Currency) are not yet on the
-    // V2.3 entity model — emitted as null/best-effort source until the V3 cost-entity
-    // reshape migration. See Phase A plan §Task 23 deferral note.
+    // wastagePercent + purchaseValuePerKg/Currency on cost lines are still derived from
+    // BomLine + BomCostLine (V2.3 entities). The V3 BomCost reshape (Task 25.5) added
+    // PrintingCost*, FohPerKg, TransportPerKg, CommissionPerKg as real columns.
     [HttpGet("{requisitionId}")]
     public async Task<IActionResult> Get(int requisitionId)
     {
@@ -77,12 +76,11 @@ public class CostingController(
 
             object? costs = cost is null ? null : new
             {
-                // V3 cost fields not yet on entity — emitted as null until reshape lands.
-                PrintingCostPerKg = (decimal?)null,
-                PrintingCostCurrency = (string?)null,
-                FohPerKg = (decimal?)null,
-                TransportPerKg = (decimal?)null,
-                CommissionPerKg = (decimal?)null,
+                cost.PrintingCostPerKg,
+                cost.PrintingCostCurrency,
+                cost.FohPerKg,
+                cost.TransportPerKg,
+                cost.CommissionPerKg,
                 Lines = bom!.Lines.Select(l => new
                 {
                     BomLineId = l.Id,

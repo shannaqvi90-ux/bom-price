@@ -182,6 +182,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<BomCost>().Property(b => b.RawMaterialCostTotal).HasPrecision(18, 4);
         mb.Entity<BomCost>().Property(b => b.LandedCostValue).HasPrecision(18, 4);
         mb.Entity<BomCost>().Property(b => b.FohAmount).HasPrecision(18, 4);
+        mb.Entity<BomCost>().Property(b => b.PrintingCostPerKg).HasPrecision(18, 4);
+        mb.Entity<BomCost>().Property(b => b.PrintingCostCurrency).HasMaxLength(3);
+        mb.Entity<BomCost>().Property(b => b.FohPerKg).HasPrecision(18, 4);
+        mb.Entity<BomCost>().Property(b => b.TransportPerKg).HasPrecision(18, 4);
+        mb.Entity<BomCost>().Property(b => b.CommissionPerKg).HasPrecision(18, 4);
         mb.Entity<ApprovalItem>().Property(a => a.SalesPricePerKgAed).HasPrecision(18, 4);
         mb.Entity<ApprovalItem>().Property(a => a.SalesPricePerKgForeign).HasPrecision(18, 4);
         mb.Entity<ApprovalItem>().Property(a => a.ProfitMarginPct).HasPrecision(18, 4);

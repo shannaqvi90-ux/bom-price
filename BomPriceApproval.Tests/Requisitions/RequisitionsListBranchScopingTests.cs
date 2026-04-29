@@ -1,8 +1,13 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using BomPriceApproval.API.Domain.Entities;
+using BomPriceApproval.API.Domain.Enums;
+using BomPriceApproval.API.Infrastructure.Data;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BomPriceApproval.Tests.Requisitions;
 
@@ -17,9 +22,49 @@ public class RequisitionsListBranchScopingTests(WebApplicationFactory<Program> f
         return (await resp.Content.ReadFromJsonAsync<LoginResponse>())!;
     }
 
+    // Ensures the test sees at least one requisition in the given branch,
+    // regardless of test execution order or DB seed state. Without this guard,
+    // the assertion below depends on whichever prior test happened to create
+    // a branch-2 req — flaky in fresh CI DBs.
+    private async Task EnsureRequisitionExistsInBranchAsync(int branchId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        if (await db.QuotationRequests.AnyAsync(r => r.BranchId == branchId))
+            return;
+
+        var sp = await db.Users.FirstAsync(u => u.Email == "ali@test.com");
+        var customer = await db.Customers.FirstAsync(c => c.SalesPersonId == sp.Id);
+        var item = await db.Items.FirstAsync(i => i.BranchId == branchId);
+
+        var req = new QuotationRequest
+        {
+            CustomerId = customer.Id,
+            SalesPersonId = sp.Id,
+            BranchId = branchId,
+            Status = RequisitionStatus.BomPending,
+            CreatedAt = DateTime.UtcNow
+        };
+        db.QuotationRequests.Add(req);
+        await db.SaveChangesAsync();
+
+        db.RequisitionItems.Add(new RequisitionItem
+        {
+            QuotationRequestId = req.Id,
+            ItemId = item.Id,
+            ExpectedQty = 100m
+        });
+        await db.SaveChangesAsync();
+    }
+
     [Fact]
     public async Task Sara_AssignedToBothBranches_SeesBothBranchesReqs()
     {
+        // Self-seed reqs in both branches to remove order dependence.
+        await EnsureRequisitionExistsInBranchAsync(branchId: 1);
+        await EnsureRequisitionExistsInBranchAsync(branchId: 2);
+
         var sara = await LoginAsync("sara@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", sara.AccessToken);
 

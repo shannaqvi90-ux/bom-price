@@ -1,8 +1,14 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using BomPriceApproval.API.Domain.Entities;
+using BomPriceApproval.API.Domain.Enums;
+using BomPriceApproval.API.Infrastructure.Data;
+using BomPriceApproval.Tests.Shared;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BomPriceApproval.Tests.Authorization;
 
@@ -17,12 +23,12 @@ public class SalesGroupAccessTests(WebApplicationFactory<Program> factory) : ICl
         return (await resp.Content.ReadFromJsonAsync<LoginResponse>())!;
     }
 
-    private async Task<(int spId, string email)> CreateSpAsync(string namePrefix)
+    private async Task<(int spId, string email)> CreateSpAsync(string namePrefix, int branchId = 1)
     {
         var email = $"{namePrefix}-{Guid.NewGuid():N}".Substring(0, 22) + "@test.com";
         var resp = await _client.PostAsJsonAsync("/api/users", new
         {
-            Name = $"SP {namePrefix}", Email = email, Password = "Test@1234", Role = 1, BranchId = 1
+            Name = $"SP {namePrefix}", Email = email, Password = "Test@1234", Role = 1, BranchId = branchId
         });
         resp.EnsureSuccessStatusCode();
         var u = (await resp.Content.ReadFromJsonAsync<UserShort>())!;
@@ -54,6 +60,31 @@ public class SalesGroupAccessTests(WebApplicationFactory<Program> factory) : ICl
         return (await resp.Content.ReadFromJsonAsync<CustShort>())!.Id;
     }
 
+    /// <summary>
+    /// Direct DB seed of a Draft requisition for the given SP. V3 inline-BOM Create
+    /// requires Alain branch + process + RM/FG; visibility tests only need an existing
+    /// req row, so we seed directly.
+    /// </summary>
+    private async Task<int> SeedDraftReqForSpAsync(int spUserId, int customerId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var sp = await db.Users.FirstAsync(u => u.Id == spUserId);
+        var req = new QuotationRequest
+        {
+            BranchId = sp.BranchId ?? 1,
+            SalesPersonId = spUserId,
+            CustomerId = customerId,
+            CurrencyCode = "AED",
+            Status = RequisitionStatus.Draft,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        db.QuotationRequests.Add(req);
+        await db.SaveChangesAsync();
+        return req.Id;
+    }
+
     [Fact]
     public async Task GroupMember_CanGet_PeerReqDetail()
     {
@@ -63,18 +94,12 @@ public class SalesGroupAccessTests(WebApplicationFactory<Program> factory) : ICl
         var (spB_Id, spB_email) = await CreateSpAsync("acB");
         await SetupGroupAsync("acGrp", new[] { spA_Id, spB_Id });
 
-        // SP B creates a customer and a req using that customer
+        // SP B creates a customer
         var spB = await LoginAsync(spB_email, "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", spB.AccessToken);
         var custId = await CreateCustomerAsync("acB");
-        var items = (await _client.GetFromJsonAsync<List<ItemShort>>("/api/items?branchId=1&type=FinishedGood"))!;
-        var create = await _client.PostAsJsonAsync("/api/requisitions", new
-        {
-            BranchId = 1, CustomerId = custId, CurrencyCode = "AED",
-            Items = new[] { new { ItemId = items.First().Id, ExpectedQty = 1m } }
-        });
-        create.EnsureSuccessStatusCode();
-        var spBReqId = (await create.Content.ReadFromJsonAsync<CreateResponse>())!.Id;
+
+        var spBReqId = await SeedDraftReqForSpAsync(spB_Id, custId);
 
         // SP A GETs B's req detail — should succeed (group-mate)
         var spA = await LoginAsync(spA_email, "Test@1234");
@@ -92,18 +117,12 @@ public class SalesGroupAccessTests(WebApplicationFactory<Program> factory) : ICl
         var (spB_Id, spB_email) = await CreateSpAsync("ngB");
         // No group — both solo
 
-        // SP B creates a customer and a req
+        // SP B creates a customer
         var spB = await LoginAsync(spB_email, "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", spB.AccessToken);
         var custId = await CreateCustomerAsync("ngB");
-        var items = (await _client.GetFromJsonAsync<List<ItemShort>>("/api/items?branchId=1&type=FinishedGood"))!;
-        var create = await _client.PostAsJsonAsync("/api/requisitions", new
-        {
-            BranchId = 1, CustomerId = custId, CurrencyCode = "AED",
-            Items = new[] { new { ItemId = items.First().Id, ExpectedQty = 1m } }
-        });
-        create.EnsureSuccessStatusCode();
-        var spBReqId = (await create.Content.ReadFromJsonAsync<CreateResponse>())!.Id;
+
+        var spBReqId = await SeedDraftReqForSpAsync(spB_Id, custId);
 
         // SP A (solo, different SP) tries to GET B's req — should be 403 or 404
         var spA = await LoginAsync(spA_email, "Test@1234");
@@ -117,6 +136,7 @@ public class SalesGroupAccessTests(WebApplicationFactory<Program> factory) : ICl
     {
         var admin = await LoginAsync("admin@test.com", "Admin@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", admin.AccessToken);
+        // Both SPs in branch 1 — V3 pins to Alain anyway
         var (spA_Id, spA_email) = await CreateSpAsync("crA");
         var (spB_Id, spB_email) = await CreateSpAsync("crB");
         await SetupGroupAsync("crGrp", new[] { spA_Id, spB_Id });
@@ -126,14 +146,29 @@ public class SalesGroupAccessTests(WebApplicationFactory<Program> factory) : ICl
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", spB.AccessToken);
         var custId = await CreateCustomerAsync("crB");
 
-        // SP A creates a req against B's customer — should succeed
+        // Seed an Alain FG + RM + ensure a process exists for the V3 inline payload
+        var (fgId, rmId, processId) = await SeedAlainItemsAndProcessAsync();
+
+        // SP A creates a V3 req against B's customer — should succeed
         var spA = await LoginAsync(spA_email, "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", spA.AccessToken);
-        var items = (await _client.GetFromJsonAsync<List<ItemShort>>("/api/items?branchId=1&type=FinishedGood"))!;
         var create = await _client.PostAsJsonAsync("/api/requisitions", new
         {
-            BranchId = 1, CustomerId = custId, CurrencyCode = "AED",
-            Items = new[] { new { ItemId = items.First().Id, ExpectedQty = 1m } }
+            customerId = custId,
+            quotationCurrency = "AED",
+            finishedGoods = new[]
+            {
+                new
+                {
+                    itemId = fgId,
+                    expectedQtyKg = 1m,
+                    printing = false,
+                    bomLines = new[]
+                    {
+                        new { processId, itemId = rmId, qtyPerKg = 0.5m, micron = "20" }
+                    }
+                }
+            }
         });
         create.StatusCode.Should().Be(HttpStatusCode.Created);
 
@@ -152,20 +187,14 @@ public class SalesGroupAccessTests(WebApplicationFactory<Program> factory) : ICl
         var (spB_Id, spB_email) = await CreateSpAsync("cmB");
         await SetupGroupAsync("cmGrp", new[] { spA_Id, spB_Id });
 
-        // SP B creates a customer and 2 reqs
+        // SP B creates a customer
         var spB = await LoginAsync(spB_email, "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", spB.AccessToken);
         var custId = await CreateCustomerAsync("cmB");
-        var items = (await _client.GetFromJsonAsync<List<ItemShort>>("/api/items?branchId=1&type=FinishedGood"))!;
-        for (var i = 0; i < 2; i++)
-        {
-            var r = await _client.PostAsJsonAsync("/api/requisitions", new
-            {
-                BranchId = 1, CustomerId = custId, CurrencyCode = "AED",
-                Items = new[] { new { ItemId = items.First().Id, ExpectedQty = 1m } }
-            });
-            r.EnsureSuccessStatusCode();
-        }
+
+        // Seed 2 reqs for SP B directly via DB
+        await SeedDraftReqForSpAsync(spB_Id, custId);
+        await SeedDraftReqForSpAsync(spB_Id, custId);
 
         // SP A logs in — Count must match GetAll length, and must be > 0
         var spA = await LoginAsync(spA_email, "Test@1234");
@@ -177,14 +206,31 @@ public class SalesGroupAccessTests(WebApplicationFactory<Program> factory) : ICl
         countResp.Count.Should().Be(listResp.Count, "Count endpoint should match GetAll list length");
     }
 
+    private async Task<(int FgId, int RmId, int ProcessId)> SeedAlainItemsAndProcessAsync()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var suffix = Guid.NewGuid().ToString("N").Substring(0, 8);
+        var fg = new Item { Code = $"V3FG-{suffix}", Description = $"V3 FG {suffix}", Type = ItemType.FinishedGood, BranchId = V3WorkflowTestHelpers.AlainBranchId, IsActive = true };
+        var rm = new Item { Code = $"V3RM-{suffix}", Description = $"V3 RM {suffix}", Type = ItemType.RawMaterial, BranchId = V3WorkflowTestHelpers.AlainBranchId, IsActive = true };
+        db.Items.Add(fg);
+        db.Items.Add(rm);
+        var process = await db.Processes.FirstOrDefaultAsync(p => p.IsActive);
+        if (process is null)
+        {
+            process = new Process { Name = $"Extrusion-{suffix}", DisplayOrder = 1, IsActive = true };
+            db.Processes.Add(process);
+        }
+        await db.SaveChangesAsync();
+        return (fg.Id, rm.Id, process.Id);
+    }
+
     private record LoginResponse(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId);
     private record UserShort(int Id, string Email, string Name, string Role);
     private record GroupShort(int Id, string Name, bool IsActive);
     private record CustShort(int Id, string Code, string Name);
-    private record ItemShort(int Id, string Code, string Description, string Type, int BranchId);
     private record CreateResponse(int Id, string RefNo);
     private record ReqDetail(int Id, int SalesPersonId);
     private record CountResponse(int Count);
     private record ReqListItem(int Id, string RefNo);
-    private record CustomerShort(int Id, string Name);
 }

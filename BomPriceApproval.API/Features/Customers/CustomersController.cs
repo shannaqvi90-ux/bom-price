@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text.RegularExpressions;
 using BomPriceApproval.API.Domain.Entities;
+using BomPriceApproval.API.Domain.Enums;
 using BomPriceApproval.API.Infrastructure.Authorization;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Services;
@@ -127,5 +128,30 @@ public class CustomersController(AppDbContext db, ICodeGeneratorService codeGen)
         c.PhoneNumber = req.PhoneNumber;
         await db.SaveChangesAsync();
         return NoContent();
+    }
+
+    // V3 D20 — implicit FG filter for NewRequisitionPage. Returns active FGs ever
+    // quoted for this customer (any past requisition status). UI uses this to
+    // narrow the FG picker to items with prior history with the customer.
+    [HttpGet("{id}/items")]
+    public async Task<IActionResult> GetImplicitItems(int id)
+    {
+        var customer = await db.Customers
+            .FirstOrDefaultAsync(c => c.Id == id && !c.IsDeleted);
+        if (customer is null) return NotFound();
+
+        var itemIds = await db.RequisitionItems
+            .Where(ri => ri.QuotationRequest.CustomerId == id)
+            .Select(ri => ri.ItemId)
+            .Distinct()
+            .ToListAsync();
+
+        var items = await db.Items
+            .Where(i => itemIds.Contains(i.Id) && i.Type == ItemType.FinishedGood && i.IsActive)
+            .OrderBy(i => i.Description)
+            .Select(i => new ImplicitItemResponse(i.Id, i.Code, i.Description))
+            .ToListAsync();
+
+        return Ok(items);
     }
 }

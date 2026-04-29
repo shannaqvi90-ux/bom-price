@@ -18,23 +18,23 @@ public class CustomersCrudTests(WebApplicationFactory<Program> factory) : IClass
     }
 
     [Fact]
-    public async Task Create_DuplicateCode_Returns409()
+    public async Task Create_AutoGeneratesCustomerCode_AndIgnoresClientPayload()
     {
         var login = await LoginAsync("ali@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
 
-        var code = $"DUPTEST-{Guid.NewGuid():N}".Substring(0, 20);
-        var first = await _client.PostAsJsonAsync("/api/customers", new
+        var resp = await _client.PostAsJsonAsync("/api/customers", new
         {
-            Code = code, Name = "A", Address = "", Email = "", PhoneNumber = ""
+            Code = "MANUAL-IGNORED",
+            Name = $"AutoCode Test {Guid.NewGuid():N}",
+            Address = "",
+            Email = "",
+            PhoneNumber = ""
         });
-        first.StatusCode.Should().Be(HttpStatusCode.Created);
-
-        var second = await _client.PostAsJsonAsync("/api/customers", new
-        {
-            Code = code, Name = "B", Address = "", Email = "", PhoneNumber = ""
-        });
-        second.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        resp.StatusCode.Should().Be(HttpStatusCode.Created);
+        var body = await resp.Content.ReadFromJsonAsync<CustomerResponse>();
+        body!.Code.Should().MatchRegex(@"^CUST-\d{4,}$");
+        body.Code.Should().NotBe("MANUAL-IGNORED");
     }
 
     [Fact]

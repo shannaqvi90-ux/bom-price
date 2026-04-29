@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Infrastructure.Authorization;
 using BomPriceApproval.API.Infrastructure.Data;
+using BomPriceApproval.API.Infrastructure.Services;
 using BomPriceApproval.API.Infrastructure.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,7 +14,7 @@ namespace BomPriceApproval.API.Features.Customers;
 [ApiController]
 [Route("api/customers")]
 [Authorize]
-public class CustomersController(AppDbContext db) : ControllerBase
+public class CustomersController(AppDbContext db, ICodeGeneratorService codeGen) : ControllerBase
 {
     // Defense-in-depth: reject obvious HTML/script-like payloads in customer text
     // fields before they hit the DB. Frontend (mobile + web) also sanitize on
@@ -75,12 +76,6 @@ public class CustomersController(AppDbContext db) : ControllerBase
     [Authorize(Roles = "SalesPerson,Admin,Accountant")]
     public async Task<IActionResult> Create(CreateCustomerRequest req)
     {
-        if (string.IsNullOrWhiteSpace(req.Code))
-            return Validation
-                .Detail("Customer code is required.")
-                .Field("Code", "Customer code is required.")
-                .Return();
-
         if (ContainsHtmlPayload(req.Name) || ContainsHtmlPayload(req.Address))
             return Validation
                 .Detail("HTML or script-like content is not allowed in Name or Address.")
@@ -88,12 +83,9 @@ public class CustomersController(AppDbContext db) : ControllerBase
                        "Remove tags / event handlers / javascript: links.")
                 .Return();
 
-        if (await db.Customers.AnyAsync(c => c.Code == req.Code))
-            return Conflict(new { message = $"Customer with code '{req.Code}' already exists." });
-
         var customer = new Customer
         {
-            Code = req.Code.Trim(),
+            Code = await codeGen.NextCustomerCodeAsync(),
             Name = req.Name,
             Address = req.Address,
             Email = req.Email,

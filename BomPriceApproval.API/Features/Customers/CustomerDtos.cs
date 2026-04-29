@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 namespace BomPriceApproval.API.Features.Customers;
 
 public record CreateCustomerRequest(
-    [Required, MaxLength(50)] string Code,
+    [MaxLength(50)] string? Code,
     [Required, MaxLength(200)] string Name,
     [MaxLength(500)] string Address,
     [MaxLength(255)] string Email,

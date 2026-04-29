@@ -73,3 +73,22 @@ public record BranchChangeHistoryResponse(
     string ChangedByUserName,
     DateTime ChangedAt,
     string? Reason);
+
+// V3 — sales submits requisition + BOM in one payload (combined screen)
+public record CreateRequisitionV3Request(
+    int CustomerId,
+    string QuotationCurrency,
+    string? ReferenceNumber,
+    string? Notes,
+    List<FinishedGoodLine> FinishedGoods);
+
+public record FinishedGoodLine(
+    int ItemId,
+    decimal ExpectedQtyKg,
+    bool Printing,
+    List<BomLineDto> BomLines);
+
+public record BomLineDto(
+    int ItemId,
+    decimal QtyPerKg,
+    string? Micron);

@@ -36,7 +36,13 @@ Claude is permitted to run git commands autonomously as part of Superpowers work
 - `gh pr create --base <default-branch> --head <feature-branch> --title <title> --body <body>` — opening a PR for a feature branch. Requires `gh auth login` (one-time interactive setup; Claude cannot run this — user does it once per machine).
   - **Auto Mode active:** create PR immediately after the branch push; report the PR URL in the chat.
   - **Non-Auto Mode:** wait for explicit user approval ("PR open karo" / "yes").
-  - **Never auto-merge.** Claude does NOT run `gh pr merge` autonomously — user reviews and clicks Merge on GitHub. (See Forbidden list.)
+- `gh pr merge <PR> --squash` (or `--merge` / `--rebase`) — merging a feature PR into the protected default branch. **Pre-flight checks are mandatory** before every merge:
+  1. Verify CI checks have passed via `gh pr checks <PR>`. If any required check is failing or pending → STOP and report; do NOT merge.
+  2. Verify base branch is the default (master/main) and head is a feature branch (not master).
+  3. Confirm there is no `Hold` / `DO NOT MERGE` label or comment on the PR.
+  - **Auto Mode active:** auto-merge immediately after the pre-flight checks pass; report the merge result + new master SHA in chat. Squash is the default merge style unless the PR body or commit history says otherwise.
+  - **Non-Auto Mode:** wait for explicit user approval ("merge karo" / "merge it" / "yes").
+  - The user can hold any PR by adding a `hold` label, leaving a "do not merge" comment, or saying so in chat — always honour those signals over the autonomous default.
 
 ### ❌ Forbidden — NEVER do these without explicit user approval each time
 
@@ -45,7 +51,8 @@ Claude is permitted to run git commands autonomously as part of Superpowers work
 - **`git push --force` / `git push -f` / `git push --force-with-lease`** — rewrites remote history; requires explicit approval each time on every branch (not just default).
 - **`git branch -D`** — force-deletes unmerged branches.
 - **`git rm -rf`** or mass file deletions via scripts.
-- **`gh pr merge`** / **`gh pr close`** — NEVER autonomous. Merging a PR moves work into the protected default branch; closing destroys review state. Always require explicit user approval each time. (PR _creation_ is allowed — see Allowed list.)
+- **`gh pr close`** — NEVER autonomous. Closing destroys review state and makes recovering the PR's work harder. Always require explicit user approval each time.
+- **`gh pr merge` on a PR with failing/pending CI checks, on master/main as head branch, or carrying a `hold` label/comment** — never merge in any of those cases. The Allowed list covers `gh pr merge` only when the pre-flight checks pass.
 
 ### 🔒 Mandatory safety procedure — follow for every commit
 
@@ -68,7 +75,8 @@ Before running `git push`, Claude MUST:
 2. **Auto Mode active:** push immediately after the commit; mention `pushed to <branch>` in the chat for transparency.
 3. **Non-Auto Mode:** wait for explicit user approval ("push karo" / "yes" / "push to GitHub").
 4. **Force push** (`--force`, `-f`, `--force-with-lease`) — NEVER autonomous, regardless of mode. Requires explicit approval each time, on every branch.
-5. **PR creation** — see Allowed list (`gh pr create`). **Auto Mode active:** opens PR immediately after the branch push and reports the URL in chat. **Non-Auto Mode:** wait for user approval. **Never auto-merge** — `gh pr merge` always requires explicit approval each time.
+5. **PR creation** — see Allowed list (`gh pr create`). **Auto Mode active:** opens PR immediately after the branch push and reports the URL in chat. **Non-Auto Mode:** wait for user approval.
+6. **PR merge** — see Allowed list (`gh pr merge`). Mandatory pre-flight: CI green via `gh pr checks`, base is default branch, head is feature branch, no `hold` label/comment. **Auto Mode active:** merge after pre-flight passes; report new master SHA. **Non-Auto Mode:** wait for explicit user approval. `gh pr close` (NOT merge) always requires explicit approval.
 
 ### 🌳 Worktree discipline — mandatory hygiene
 
@@ -562,4 +570,4 @@ Always follow this order — no exceptions:
 
 ## Maintenance
 
-This file drifts over time as the codebase evolves. Re-audit it every ~2 months by running a "reality audit" session (compare each claim against the actual codebase). The last update was **2026-04-29** (post-PWA P3 ship: Auto Mode auto-commit + auto-push + auto-PR-create permissions + mobile build tracking via `mobile-shipped-vc<N>` tags).
+This file drifts over time as the codebase evolves. Re-audit it every ~2 months by running a "reality audit" session (compare each claim against the actual codebase). The last update was **2026-04-29 evening** (V3 Phase A shipped + auto-merge permission added: `gh pr merge` is now allowed autonomously when CI is green, base is default branch, no `hold` label, and no DO-NOT-MERGE comment. `gh pr close` still requires explicit approval).

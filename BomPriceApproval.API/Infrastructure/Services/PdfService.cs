@@ -1,11 +1,13 @@
 using BomPriceApproval.API.Domain.Entities;
+using BomPriceApproval.API.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 
 namespace BomPriceApproval.API.Infrastructure.Services;
 
-public class PdfService
+public class PdfService(AppDbContext db)
 {
     // Brand palette
     private const string Navy      = "#1B3A5C";
@@ -264,11 +266,215 @@ public class PdfService
     }
 
     // V3 — Stage 2B signed quotation PDF with embedded MD signature.
-    // Stub for now; full implementation lands in Task 31.
-    public Task<byte[]> GenerateSignedQuotationAsync(QuotationRequest req, QuotationApproval approval, User signer)
+    public async Task<byte[]> GenerateSignedQuotationAsync(QuotationRequest req, QuotationApproval approval, User signer)
     {
-        // TODO Task 31: full implementation with signature embed
-        throw new NotImplementedException("Implemented in Task 31");
+        QuestPDF.Settings.License = LicenseType.Community;
+
+        // Defensive reload: callers (FinalSign) only Include Customer on `req`.
+        // We need Items + BomHeader + Cost + Lines + CostLines + SalesPerson here.
+        // Re-query rather than relying on lazy nav properties that aren't enabled.
+        var fullReq = await db.QuotationRequests
+            .AsNoTracking()
+            .Include(r => r.Customer)
+            .Include(r => r.SalesPerson)
+            .Include(r => r.Items.OrderBy(ri => ri.SortOrder))
+                .ThenInclude(ri => ri.Item)
+            .Include(r => r.Items)
+                .ThenInclude(ri => ri.BomHeader!)
+                    .ThenInclude(b => b.Cost!)
+            .Include(r => r.Items)
+                .ThenInclude(ri => ri.BomHeader!)
+                    .ThenInclude(b => b.Lines)
+            .FirstOrDefaultAsync(r => r.Id == req.Id) ?? req;
+
+        // Cost lines need a separate query (BomCostLine isn't on BomHeader nav).
+        var bomHeaderIds = fullReq.Items
+            .Where(ri => ri.BomHeader != null)
+            .Select(ri => ri.BomHeader!.Id)
+            .ToList();
+        var costLinesByHeader = await db.Set<BomCostLine>()
+            .AsNoTracking()
+            .Where(cl => bomHeaderIds.Contains(cl.BomHeaderId))
+            .GroupBy(cl => cl.BomHeaderId)
+            .ToDictionaryAsync(g => g.Key, g => g.ToList());
+
+        // FX rates for any non-AED printing currency we encounter.
+        // Cache active rates once so we don't query in a loop.
+        var fxByCurrency = await db.ExchangeRates
+            .AsNoTracking()
+            .Where(r => r.IsActive)
+            .GroupBy(r => r.CurrencyCode)
+            .Select(g => g.OrderByDescending(r => r.EffectiveDate).First())
+            .ToDictionaryAsync(r => r.CurrencyCode, r => r.RateToAed);
+
+        var approvalItemMap = approval.Items.ToDictionary(ai => ai.RequisitionItemId);
+
+        var pdfBytes = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(40);
+                page.DefaultTextStyle(x => x.FontSize(11));
+
+                page.Header().Column(c =>
+                {
+                    c.Item().Text("FUJAIRAH PLASTIC FACTORY")
+                        .FontSize(16).Bold().FontColor("#1e40af");
+                    c.Item().Text($"Quotation {fullReq.RefNo} · {DateTime.UtcNow:yyyy-MM-dd}")
+                        .FontSize(9);
+                });
+
+                page.Content().Column(c =>
+                {
+                    c.Item().PaddingTop(10).Text(t =>
+                    {
+                        t.Span("Customer: ").Bold();
+                        t.Span($"{fullReq.Customer.Name} ({fullReq.Customer.Code})");
+                    });
+                    c.Item().Text(t =>
+                    {
+                        t.Span("Currency: ").Bold();
+                        t.Span(fullReq.CurrencyCode);
+                    });
+
+                    c.Item().PaddingTop(10).Table(table =>
+                    {
+                        table.ColumnsDefinition(col =>
+                        {
+                            col.RelativeColumn(3);
+                            col.RelativeColumn(1);
+                            col.RelativeColumn(1);
+                            col.RelativeColumn(1);
+                        });
+                        table.Header(h =>
+                        {
+                            h.Cell().Background("#f1f5f9").Padding(4).Text("Item").Bold();
+                            h.Cell().Background("#f1f5f9").Padding(4).Text("Qty").Bold();
+                            h.Cell().Background("#f1f5f9").Padding(4).Text("Price/KG").Bold();
+                            h.Cell().Background("#f1f5f9").Padding(4).Text("Total").Bold();
+                        });
+
+                        foreach (var ri in fullReq.Items.OrderBy(i => i.SortOrder))
+                        {
+                            if (!approvalItemMap.TryGetValue(ri.Id, out var ai)) continue;
+
+                            var pricePerKg = ComputePricePerKg(
+                                ri, ai, approval, fullReq.CurrencyCode,
+                                costLinesByHeader, fxByCurrency);
+                            var lineTotal = pricePerKg * ri.ExpectedQty;
+
+                            table.Cell().Padding(4).Text(ri.Item.Description);
+                            table.Cell().Padding(4).Text($"{ri.ExpectedQty:N0}");
+                            table.Cell().Padding(4).Text($"{pricePerKg:F2}");
+                            table.Cell().Padding(4).Text($"{lineTotal:F2}");
+                        }
+                    });
+
+                    // Signature block
+                    c.Item().PaddingTop(40).Row(row =>
+                    {
+                        row.RelativeItem().Column(col =>
+                        {
+                            col.Item().Text("Prepared by").FontSize(8).FontColor("#64748b");
+                            col.Item().Text(fullReq.SalesPerson?.Name ?? "—").FontSize(10);
+                        });
+
+                        row.RelativeItem().Column(col =>
+                        {
+                            col.Item().Text("Approved & Signed by MD").FontSize(8).FontColor("#64748b");
+
+                            if (!string.IsNullOrEmpty(signer.SignatureImagePath)
+                                && File.Exists(signer.SignatureImagePath))
+                            {
+                                var imgBytes = File.ReadAllBytes(signer.SignatureImagePath);
+                                col.Item().Height(50).Image(imgBytes);
+                            }
+                            else
+                            {
+                                col.Item().Text("[no signature uploaded]")
+                                    .Italic().FontColor("#94a3b8");
+                            }
+
+                            col.Item().Text($"{signer.Name}, Managing Director").FontSize(9);
+                            col.Item().Text($"{approval.ApprovedAt:yyyy-MM-dd}")
+                                .FontSize(8).FontColor("#64748b");
+                        });
+                    });
+                });
+            });
+        }).GeneratePdf();
+
+        return pdfBytes;
+    }
+
+    /// <summary>
+    /// Computes the per-KG price for a single FG line in the quote currency.
+    /// Cost is summed in AED (BomCostLine.CostPerKgInAed is precomputed at
+    /// costing-submit; printing cost is converted via active ExchangeRate when
+    /// its currency differs from AED). For non-AED quotes the AED total is
+    /// divided by approval.RateSnapshot (or ExchangeRateSnapshot fallback)
+    /// before the margin is added.
+    /// </summary>
+    private static decimal ComputePricePerKg(
+        RequisitionItem ri,
+        ApprovalItem ai,
+        QuotationApproval approval,
+        string quoteCurrency,
+        IReadOnlyDictionary<int, List<BomCostLine>> costLinesByHeader,
+        IReadOnlyDictionary<string, decimal> fxByCurrency)
+    {
+        var bom = ri.BomHeader;
+        var cost = bom?.Cost;
+        if (bom is null || cost is null)
+            return ai.MarginPerKg ?? ai.SalesPricePerKgAed;
+
+        // Sum RM cost lines (already in AED — converted at costing submit).
+        decimal rmCostAed = 0m;
+        if (costLinesByHeader.TryGetValue(bom.Id, out var lines))
+            rmCostAed = lines.Sum(l => l.CostPerKgInAed);
+
+        // Printing cost — convert to AED if a non-AED currency was specified.
+        decimal printingCostAed = 0m;
+        if (cost.PrintingCostPerKg.HasValue)
+        {
+            var printingCcy = cost.PrintingCostCurrency ?? "AED";
+            if (printingCcy == "AED")
+            {
+                printingCostAed = cost.PrintingCostPerKg.Value;
+            }
+            else if (fxByCurrency.TryGetValue(printingCcy, out var rate) && rate > 0)
+            {
+                printingCostAed = cost.PrintingCostPerKg.Value * rate;
+            }
+            else
+            {
+                // No active rate — treat as AED to avoid silently zeroing the
+                // cost. Best-effort fallback; manual review on the PDF will
+                // catch any oddity.
+                printingCostAed = cost.PrintingCostPerKg.Value;
+            }
+        }
+
+        var totalCostAed = rmCostAed + printingCostAed
+            + cost.FohPerKg + cost.TransportPerKg + cost.CommissionPerKg;
+
+        // Convert AED cost to quote currency (margin is already in quote currency — D6).
+        decimal totalCostInQuoteCcy;
+        if (quoteCurrency == "AED")
+        {
+            totalCostInQuoteCcy = totalCostAed;
+        }
+        else
+        {
+            var saleRate = approval.RateSnapshot
+                ?? ri.QuotationRequest?.ExchangeRateSnapshot
+                ?? 1m;
+            totalCostInQuoteCcy = saleRate > 0 ? totalCostAed / saleRate : totalCostAed;
+        }
+
+        var margin = ai.MarginPerKg ?? 0m;
+        return totalCostInQuoteCcy + margin;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

@@ -15,6 +15,10 @@ import ItemListPage from "@/features/items/ItemListPage";
 import BomEntryPage from "@/features/bom/BomEntryPage";
 import CostingEntryPage from "@/features/costing/CostingEntryPage";
 import MdReviewPage from "@/features/approvals/MdReviewPage";
+import { CustomerConfirmPage } from "@/features/requisitions/CustomerConfirmPage";
+import { MdMarginPage } from "@/features/approvals/MdMarginPage";
+import { MdFinalSignPage } from "@/features/approvals/MdFinalSignPage";
+import { ProfileSignaturePage } from "@/features/profile/ProfileSignaturePage";
 import NotificationsPage from "@/features/notifications/NotificationsPage";
 import ExchangeRatesPage from "@/features/exchange-rates/ExchangeRatesPage";
 import UsersPage from "@/features/users/UsersPage";
@@ -185,6 +189,38 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute allow={["ManagingDirector"]}>
             <MdReviewPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "requisitions/:id/customer-confirm",
+        element: (
+          <ProtectedRoute allow={["Admin", "SalesPerson"]}>
+            <CustomerConfirmPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "approvals/:id/margin",
+        element: (
+          <ProtectedRoute allow={["ManagingDirector"]}>
+            <MdMarginPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "approvals/:id/final",
+        element: (
+          <ProtectedRoute allow={["ManagingDirector"]}>
+            <MdFinalSignPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "profile/signature",
+        element: (
+          <ProtectedRoute allow={["ManagingDirector"]}>
+            <ProfileSignaturePage />
           </ProtectedRoute>
         ),
       },

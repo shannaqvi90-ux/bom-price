@@ -7,7 +7,8 @@ public record CreateItemRequest(
     [Required, MaxLength(50)] string Code,
     [Required, MaxLength(500)] string Description,
     [Required] ItemType Type,
-    [Range(0, 999999999)] decimal? LastPurchasePrice);
+    [Range(0, 999999999)] decimal? LastPurchasePrice,
+    int? BranchId = null);
 
 public record UpdateItemRequest(
     [Required, MaxLength(50)] string Code,

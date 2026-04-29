@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -5,6 +6,8 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
+import { BranchPicker } from "@/components/BranchPicker";
+import { useAuthStore } from "@/store/authStore";
 import { useCreateItem } from "./itemsApi";
 
 const schema = z.object({
@@ -26,6 +29,14 @@ interface Props {
 
 export function AddItemModal({ open, onClose }: Props) {
   const create = useCreateItem();
+  // Admin has BranchId=null in the JWT, so the API can't infer a target
+  // branch — admin must pick one in the modal. Other roles inherit their
+  // branch from the JWT and skip the picker.
+  const role = useAuthStore((s) => s.user?.role);
+  const userBranchId = useAuthStore((s) => s.user?.branchId ?? null);
+  const isAdmin = role === "Admin";
+  const [pickedBranchId, setPickedBranchId] = useState<number | null>(userBranchId);
+  const [branchError, setBranchError] = useState<string | null>(null);
   const {
     register,
     handleSubmit,
@@ -37,19 +48,45 @@ export function AddItemModal({ open, onClose }: Props) {
   });
 
   const onSubmit = handleSubmit(async (values) => {
-    await create.mutateAsync(values);
+    if (isAdmin && pickedBranchId === null) {
+      setBranchError("Branch is required.");
+      return;
+    }
+    setBranchError(null);
+    await create.mutateAsync({
+      ...values,
+      branchId: isAdmin ? pickedBranchId : undefined,
+    });
     reset();
+    setPickedBranchId(userBranchId);
     onClose();
   });
 
   function handleClose() {
     reset();
+    setPickedBranchId(userBranchId);
+    setBranchError(null);
     onClose();
   }
 
   return (
     <Dialog open={open} onClose={handleClose} title="Add Item">
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
+        {isAdmin && (
+          <div className="space-y-1">
+            <Label htmlFor="item-branch">Branch</Label>
+            <BranchPicker
+              id="item-branch"
+              value={pickedBranchId}
+              onChange={(v) => {
+                setPickedBranchId(v);
+                if (v !== null) setBranchError(null);
+              }}
+            />
+            {branchError && <p className="text-xs text-destructive">{branchError}</p>}
+          </div>
+        )}
+
         <div className="space-y-1">
           <Label htmlFor="item-code">Code</Label>
           <Input id="item-code" {...register("code")} />

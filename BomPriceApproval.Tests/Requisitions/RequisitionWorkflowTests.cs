@@ -88,7 +88,7 @@ public class RequisitionWorkflowTests(WebApplicationFactory<Program> factory)
     }
 
     [Fact]
-    public async Task GetById_ApprovedRequisition_IncludesItemPrices()
+    public async Task Approvals_PersistedToDb_AfterApprove()
     {
         int reqId;
 

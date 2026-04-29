@@ -147,7 +147,11 @@ public class RequisitionsController(
     [HttpGet("{id}")]
     public async Task<IActionResult> Get(int id)
     {
+        // AsSplitQuery: 5-level Includes (Items × BomHeader × {Cost, Lines × {Process, RawMaterial}})
+        // Cartesian-explode the joined row count at scale (10 FG × 10 lines = 100 rows shipping
+        // every parent column on each row). Hottest V3 endpoint — every detail page hits it.
         var q = await db.QuotationRequests
+            .AsSplitQuery()
             .Include(r => r.Customer)
             .Include(r => r.Branch).Include(r => r.SalesPerson)
             .Include(r => r.Items).ThenInclude(ri => ri.Item)

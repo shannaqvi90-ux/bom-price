@@ -19,4 +19,10 @@ public class QuotationRequest
     public Customer Customer { get; set; } = null!;
     public ICollection<RequisitionItem> Items { get; set; } = [];
     public ICollection<QuotationApproval> Approvals { get; set; } = [];
+
+    // V3 — cancellation tracking (sales/admin cancel + cutover migration)
+    public DateTime? CancelledAt { get; set; }
+    public int? CancelledByUserId { get; set; }
+    public string? CancelReason { get; set; }
+    public User? CancelledBy { get; set; }
 }

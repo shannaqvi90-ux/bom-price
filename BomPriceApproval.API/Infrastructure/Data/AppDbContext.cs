@@ -73,6 +73,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithOne(ri => ri.QuotationRequest)
             .HasForeignKey(ri => ri.QuotationRequestId);
 
+        mb.Entity<QuotationRequest>(e =>
+        {
+            e.HasOne(q => q.CancelledBy)
+                .WithMany()
+                .HasForeignKey(q => q.CancelledByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.Property(q => q.CancelReason).HasMaxLength(500);
+        });
+
         // BomHeader → RequisitionItem (1:1)
         mb.Entity<BomHeader>()
             .HasOne(b => b.RequisitionItem)

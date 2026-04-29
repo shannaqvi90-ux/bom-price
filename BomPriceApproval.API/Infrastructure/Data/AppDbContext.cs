@@ -137,6 +137,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany()
             .HasForeignKey(l => l.RawMaterialItemId);
 
+        mb.Entity<BomLine>()
+            .HasOne(b => b.LastModifiedBy)
+            .WithMany()
+            .HasForeignKey(b => b.LastModifiedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // ─── Validation constraints ──────────────────────────────────────────
         mb.Entity<RequisitionItem>()
             .HasIndex(ri => new { ri.QuotationRequestId, ri.ItemId })

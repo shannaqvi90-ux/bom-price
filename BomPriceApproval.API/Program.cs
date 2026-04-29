@@ -164,6 +164,19 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
 
+    // Serialize the seed block across concurrent process startups (e.g., parallel
+    // WebApplicationFactory<Program> instances in xUnit). Without this, multiple
+    // processes all hit the "if (!db.Users.Any(...))" checks against an empty
+    // Users table simultaneously, all proceed to insert, and second-and-later
+    // commits fail with IX_Users_Email duplicate-key violations.
+    //
+    // pg_advisory_xact_lock is connection-scoped to the current transaction, so
+    // it auto-releases on Commit/Rollback regardless of EF Core's connection
+    // pooling. In production (single startup) the lock is acquired instantly
+    // and adds no observable latency.
+    using var seedTx = await db.Database.BeginTransactionAsync();
+    await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7314)");
+
     // Admin user (branch-less)
     if (!db.Users.Any(u => u.Email == "admin@test.com"))
     {
@@ -317,6 +330,17 @@ using (var scope = app.Services.CreateScope())
         });
         await db.SaveChangesAsync();
     }
+
+    // Seed a default Process so BOM creation flows have data on a fresh DB.
+    // Production users add their own via /api/processes; this is just enough
+    // for tests + smoke runs to construct a BOM without manual setup.
+    if (!db.Processes.Any())
+    {
+        db.Processes.Add(new Process { Name = "Extrusion", DisplayOrder = 1, IsActive = true });
+        await db.SaveChangesAsync();
+    }
+
+    await seedTx.CommitAsync();
 }
 
 if (app.Environment.IsDevelopment())

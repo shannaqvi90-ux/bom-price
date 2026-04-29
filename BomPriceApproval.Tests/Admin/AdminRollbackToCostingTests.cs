@@ -13,7 +13,13 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace BomPriceApproval.Tests.Admin;
 
-public class AdminUnlockCostingTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+/// <summary>
+/// V3 admin "Rollback to Costing" — replaces the legacy V2.3 UnlockCosting action.
+/// Allowed only from MdPricing → Costing. For deeper rollbacks the admin uses the
+/// generic /rollback-status endpoint.
+/// </summary>
+public class AdminRollbackToCostingTests(WebApplicationFactory<Program> factory)
+    : IClassFixture<WebApplicationFactory<Program>>
 {
     private readonly HttpClient _client = factory.CreateClient();
 
@@ -23,7 +29,10 @@ public class AdminUnlockCostingTests(WebApplicationFactory<Program> factory) : I
         return (await resp.Content.ReadFromJsonAsync<LoginResponse>())!.AccessToken;
     }
 
-    /// <summary>Seeds a minimal throwaway requisition with the given status and returns its Id.</summary>
+    /// <summary>
+    /// Seeds a minimal direct-DB requisition with the given V3 status. Used for
+    /// status-guard tests where we don't care about the workflow data underneath.
+    /// </summary>
     private async Task<int> SeedRequisitionAsync(RequisitionStatus status)
     {
         using var scope = factory.Services.CreateScope();
@@ -66,13 +75,13 @@ public class AdminUnlockCostingTests(WebApplicationFactory<Program> factory) : I
     }
 
     // ──────────────────────────────────────────────────────────────
-    // Test 1: MdReview flips to CostingInProgress
+    // Test 1: MdPricing flips to Costing
     // ──────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task UnlockCosting_FromMdReview_FlipsToCostingInProgress()
+    public async Task RollbackToCosting_FromMdPricing_FlipsToCosting()
     {
-        var reqId = await SeedRequisitionAsync(RequisitionStatus.MdReview);
+        var reqId = await SeedRequisitionAsync(RequisitionStatus.MdPricing);
 
         try
         {
@@ -80,18 +89,17 @@ public class AdminUnlockCostingTests(WebApplicationFactory<Program> factory) : I
                 "Bearer", await TokenAsync("admin@test.com", "Admin@1234"));
 
             var resp = await _client.PostAsJsonAsync(
-                $"/api/admin/requisitions/{reqId}/unlock-costing",
-                new { Reason = "unlock costing test from MdReview" });
+                $"/api/admin/requisitions/{reqId}/rollback-to-costing",
+                new { Reason = "rollback to costing test from MdPricing" });
 
             resp.StatusCode.Should().Be(HttpStatusCode.OK,
-                "MdReview is the only allowed status for unlock-costing");
+                "MdPricing is the only allowed status for rollback-to-costing");
 
-            // Behavioral: verify DB was updated
             using var verifyScope = factory.Services.CreateScope();
             var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
             var req = await verifyDb.QuotationRequests.FindAsync(reqId);
-            req!.Status.Should().Be(RequisitionStatus.CostingInProgress,
-                "the status should have been flipped to CostingInProgress in the DB");
+            req!.Status.Should().Be(RequisitionStatus.Costing,
+                "the status should have been flipped to Costing in the DB");
         }
         finally
         {
@@ -107,17 +115,18 @@ public class AdminUnlockCostingTests(WebApplicationFactory<Program> factory) : I
     }
 
     // ──────────────────────────────────────────────────────────────
-    // Test 2: Blocked statuses return 400
+    // Test 2: Blocked V3 statuses return 400
     // ──────────────────────────────────────────────────────────────
 
     [Theory]
-    [InlineData(RequisitionStatus.Approved)]
+    [InlineData(RequisitionStatus.Costing)]
+    [InlineData(RequisitionStatus.CustomerConfirm)]
+    [InlineData(RequisitionStatus.MdFinalSign)]
+    [InlineData(RequisitionStatus.Signed)]
     [InlineData(RequisitionStatus.Rejected)]
-    [InlineData(RequisitionStatus.CostingPending)]
-    [InlineData(RequisitionStatus.CostingInProgress)]
-    [InlineData(RequisitionStatus.BomInProgress)]
-    [InlineData(RequisitionStatus.BomPending)]
-    public async Task UnlockCosting_FromBlockedStatus_Returns400(RequisitionStatus blockedStatus)
+    [InlineData(RequisitionStatus.Cancelled)]
+    [InlineData(RequisitionStatus.Draft)]
+    public async Task RollbackToCosting_FromBlockedStatus_Returns400(RequisitionStatus blockedStatus)
     {
         var reqId = await SeedRequisitionAsync(blockedStatus);
 
@@ -127,11 +136,11 @@ public class AdminUnlockCostingTests(WebApplicationFactory<Program> factory) : I
                 "Bearer", await TokenAsync("admin@test.com", "Admin@1234"));
 
             var resp = await _client.PostAsJsonAsync(
-                $"/api/admin/requisitions/{reqId}/unlock-costing",
-                new { Reason = "unlock costing from blocked status test" });
+                $"/api/admin/requisitions/{reqId}/rollback-to-costing",
+                new { Reason = "rollback to costing from blocked status test" });
 
             resp.StatusCode.Should().Be(HttpStatusCode.BadRequest,
-                $"status {blockedStatus} should be blocked from costing unlock");
+                $"status {blockedStatus} should be blocked from rollback-to-costing");
         }
         finally
         {
@@ -140,43 +149,16 @@ public class AdminUnlockCostingTests(WebApplicationFactory<Program> factory) : I
     }
 
     // ──────────────────────────────────────────────────────────────
-    // Test 3: Draft returns 400
+    // Test 3: Existing BOM/cost data is preserved after rollback
     // ──────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task UnlockCosting_FromDraft_Returns400()
-    {
-        var reqId = await SeedRequisitionAsync(RequisitionStatus.Draft);
-
-        try
-        {
-            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-                "Bearer", await TokenAsync("admin@test.com", "Admin@1234"));
-
-            var resp = await _client.PostAsJsonAsync(
-                $"/api/admin/requisitions/{reqId}/unlock-costing",
-                new { Reason = "unlock costing from draft status test" });
-
-            resp.StatusCode.Should().Be(HttpStatusCode.BadRequest,
-                "Draft status should be blocked from costing unlock");
-        }
-        finally
-        {
-            await CleanupAsync(reqId);
-        }
-    }
-
-    // ──────────────────────────────────────────────────────────────
-    // Test 4: Existing costing data is preserved after unlock
-    // ──────────────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task UnlockCosting_PreservesExistingCostingData()
+    public async Task RollbackToCosting_PreservesExistingCostingData()
     {
         int reqId = 0;
         int reqItemId = 0;
         int bomHeaderId = 0;
-        int costingDraftId = 0;
+        int costId = 0;
 
         using (var scope = factory.Services.CreateScope())
         {
@@ -192,7 +174,7 @@ public class AdminUnlockCostingTests(WebApplicationFactory<Program> factory) : I
                 SalesPersonId = sp.Id,
                 CustomerId = customer.Id,
                 CurrencyCode = "AED",
-                Status = RequisitionStatus.MdReview,
+                Status = RequisitionStatus.MdPricing,
             };
             db.QuotationRequests.Add(req);
             await db.SaveChangesAsync();
@@ -209,29 +191,28 @@ public class AdminUnlockCostingTests(WebApplicationFactory<Program> factory) : I
             await db.SaveChangesAsync();
             reqItemId = reqItem.Id;
 
-            var bomCreator = await db.Users.FirstAsync(u => u.Role == UserRole.BomCreator);
+            var accountant = await db.Users.FirstAsync(u => u.Role == UserRole.Accountant && u.IsActive);
             var bom = new BomHeader
             {
                 RequisitionItemId = reqItemId,
-                CreatedByUserId = bomCreator.Id,
+                CreatedByUserId = sp.Id,
                 TotalCostPerKg = 15.50m,
             };
             db.BomHeaders.Add(bom);
             await db.SaveChangesAsync();
             bomHeaderId = bom.Id;
 
-            var costingDraft = new CostingDraft
+            var cost = new BomCost
             {
                 BomHeaderId = bomHeaderId,
-                LinesJson = "[]",
-                LandedCostType = LandedCostType.Percentage,
-                LandedCostValue = 5.0m,
-                FohAmount = 100.0m,
-                UpdatedAt = DateTime.UtcNow,
+                RawMaterialCostTotal = 12m,
+                FohAmount = 1m,
+                TotalCostPerKg = 15.50m,
+                SubmittedByUserId = accountant.Id,
             };
-            db.CostingDrafts.Add(costingDraft);
+            db.BomCosts.Add(cost);
             await db.SaveChangesAsync();
-            costingDraftId = costingDraft.Id;
+            costId = cost.Id;
         }
 
         try
@@ -240,16 +221,17 @@ public class AdminUnlockCostingTests(WebApplicationFactory<Program> factory) : I
                 "Bearer", await TokenAsync("admin@test.com", "Admin@1234"));
 
             var resp = await _client.PostAsJsonAsync(
-                $"/api/admin/requisitions/{reqId}/unlock-costing",
-                new { Reason = "unlock costing preservation test" });
+                $"/api/admin/requisitions/{reqId}/rollback-to-costing",
+                new { Reason = "rollback to costing preservation test" });
 
             resp.StatusCode.Should().Be(HttpStatusCode.OK);
 
-            // Behavioral: CostingDraft should still be in DB
             using var verifyScope = factory.Services.CreateScope();
             var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var draftStillExists = await verifyDb.CostingDrafts.AnyAsync(d => d.Id == costingDraftId);
-            draftStillExists.Should().BeTrue("CostingDraft data must not be deleted by the unlock operation");
+            var costStillExists = await verifyDb.BomCosts.AnyAsync(c => c.Id == costId);
+            costStillExists.Should().BeTrue("BomCost data must not be deleted by the rollback operation");
+            var bomStillExists = await verifyDb.BomHeaders.AnyAsync(b => b.Id == bomHeaderId);
+            bomStillExists.Should().BeTrue("BomHeader data must not be deleted by the rollback operation");
         }
         finally
         {
@@ -260,8 +242,8 @@ public class AdminUnlockCostingTests(WebApplicationFactory<Program> factory) : I
                 .Where(a => a.EntityType == "Requisition" && a.EntityId == reqId).ToListAsync();
             if (auditRows.Count > 0) cleanupDb.AdminAuditLogs.RemoveRange(auditRows);
 
-            var draftToDelete = await cleanupDb.CostingDrafts.FindAsync(costingDraftId);
-            if (draftToDelete is not null) cleanupDb.CostingDrafts.Remove(draftToDelete);
+            var costToDelete = await cleanupDb.BomCosts.FindAsync(costId);
+            if (costToDelete is not null) cleanupDb.BomCosts.Remove(costToDelete);
 
             var bomToDelete = await cleanupDb.BomHeaders.FindAsync(bomHeaderId);
             if (bomToDelete is not null) cleanupDb.BomHeaders.Remove(bomToDelete);
@@ -277,14 +259,14 @@ public class AdminUnlockCostingTests(WebApplicationFactory<Program> factory) : I
     }
 
     // ──────────────────────────────────────────────────────────────
-    // Test 5: Writes audit log with correct Before/After JSON
+    // Test 4: Writes audit log with correct ActionType + Before/After JSON
     // ──────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task UnlockCosting_WritesAuditLog()
+    public async Task RollbackToCosting_WritesAuditLog()
     {
-        var reqId = await SeedRequisitionAsync(RequisitionStatus.MdReview);
-        var uniqueReason = $"unlock-costing-audit-{Guid.NewGuid():N}";
+        var reqId = await SeedRequisitionAsync(RequisitionStatus.MdPricing);
+        var uniqueReason = $"rollback-to-costing-audit-{Guid.NewGuid():N}";
         int? auditId = null;
 
         try
@@ -293,12 +275,11 @@ public class AdminUnlockCostingTests(WebApplicationFactory<Program> factory) : I
                 "Bearer", await TokenAsync("admin@test.com", "Admin@1234"));
 
             var resp = await _client.PostAsJsonAsync(
-                $"/api/admin/requisitions/{reqId}/unlock-costing",
+                $"/api/admin/requisitions/{reqId}/rollback-to-costing",
                 new { Reason = uniqueReason });
 
             resp.StatusCode.Should().Be(HttpStatusCode.OK);
 
-            // Behavioral: verify audit row written
             using var verifyScope = factory.Services.CreateScope();
             var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
             var auditRow = await verifyDb.AdminAuditLogs.FirstOrDefaultAsync(a =>
@@ -306,19 +287,17 @@ public class AdminUnlockCostingTests(WebApplicationFactory<Program> factory) : I
                 a.EntityId == reqId &&
                 a.Reason == uniqueReason);
 
-            auditRow.Should().NotBeNull("an audit row must be written for the costing unlock");
-            auditRow!.ActionType.Should().Be(AdminActionType.UnlockCosting);
+            auditRow.Should().NotBeNull("an audit row must be written for the rollback");
+            auditRow!.ActionType.Should().Be(AdminActionType.RollbackToCosting);
 
-            // BeforeJson should contain Status="MdReview"
             using var beforeDoc = JsonDocument.Parse(auditRow.BeforeJson);
             var beforeStatus = beforeDoc.RootElement.GetProperty("Status").GetString();
-            beforeStatus.Should().Be("MdReview", "BeforeJson must capture original MdReview status as string");
+            beforeStatus.Should().Be("MdPricing", "BeforeJson must capture original MdPricing status as string");
 
-            // AfterJson should contain Status="CostingInProgress"
             auditRow.AfterJson.Should().NotBeNull();
             using var afterDoc = JsonDocument.Parse(auditRow.AfterJson!);
             var afterStatus = afterDoc.RootElement.GetProperty("Status").GetString();
-            afterStatus.Should().Be("CostingInProgress", "AfterJson must capture target CostingInProgress status as string");
+            afterStatus.Should().Be("Costing", "AfterJson must capture target Costing status as string");
 
             auditId = auditRow.Id;
         }
@@ -329,13 +308,13 @@ public class AdminUnlockCostingTests(WebApplicationFactory<Program> factory) : I
     }
 
     // ──────────────────────────────────────────────────────────────
-    // Test 6: Missing reason returns 400
+    // Test 5: Missing reason returns 400
     // ──────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task UnlockCosting_MissingReason_Returns400()
+    public async Task RollbackToCosting_MissingReason_Returns400()
     {
-        var reqId = await SeedRequisitionAsync(RequisitionStatus.MdReview);
+        var reqId = await SeedRequisitionAsync(RequisitionStatus.MdPricing);
 
         try
         {
@@ -343,7 +322,7 @@ public class AdminUnlockCostingTests(WebApplicationFactory<Program> factory) : I
                 "Bearer", await TokenAsync("admin@test.com", "Admin@1234"));
 
             var resp = await _client.PostAsJsonAsync(
-                $"/api/admin/requisitions/{reqId}/unlock-costing",
+                $"/api/admin/requisitions/{reqId}/rollback-to-costing",
                 new { Reason = "" });
 
             resp.StatusCode.Should().Be(HttpStatusCode.BadRequest, "empty reason should be rejected");
@@ -355,22 +334,21 @@ public class AdminUnlockCostingTests(WebApplicationFactory<Program> factory) : I
     }
 
     // ──────────────────────────────────────────────────────────────
-    // Test 7: Null body returns 400 (seeded req — not hardcoded ID 1)
+    // Test 6: Null body returns 400
     // ──────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task UnlockCosting_NullBody_Returns400()
+    public async Task RollbackToCosting_NullBody_Returns400()
     {
-        var reqId = await SeedRequisitionAsync(RequisitionStatus.MdReview);
+        var reqId = await SeedRequisitionAsync(RequisitionStatus.MdPricing);
 
         try
         {
             _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
                 "Bearer", await TokenAsync("admin@test.com", "Admin@1234"));
 
-            // POST with no body — should hit the null-body guard (not a 404 from missing req)
             var request = new HttpRequestMessage(HttpMethod.Post,
-                $"/api/admin/requisitions/{reqId}/unlock-costing");
+                $"/api/admin/requisitions/{reqId}/rollback-to-costing");
             var resp = await _client.SendAsync(request);
 
             resp.StatusCode.Should().Be(HttpStatusCode.BadRequest,
@@ -383,34 +361,34 @@ public class AdminUnlockCostingTests(WebApplicationFactory<Program> factory) : I
     }
 
     // ──────────────────────────────────────────────────────────────
-    // Test 8: Non-admin returns 403
+    // Test 7: Non-admin returns 403
     // ──────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task UnlockCosting_AsNonAdmin_Returns403()
+    public async Task RollbackToCosting_AsNonAdmin_Returns403()
     {
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer", await TokenAsync("ali@test.com", "Test@1234"));
 
         var resp = await _client.PostAsJsonAsync(
-            "/api/admin/requisitions/1/unlock-costing",
-            new { Reason = "unauthorized costing unlock attempt" });
+            "/api/admin/requisitions/1/rollback-to-costing",
+            new { Reason = "unauthorized rollback attempt" });
 
         resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     // ──────────────────────────────────────────────────────────────
-    // Test 9: Unknown req ID returns 404
+    // Test 8: Unknown req ID returns 404
     // ──────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task UnlockCosting_UnknownReqId_Returns404()
+    public async Task RollbackToCosting_UnknownReqId_Returns404()
     {
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer", await TokenAsync("admin@test.com", "Admin@1234"));
 
         var resp = await _client.PostAsJsonAsync(
-            "/api/admin/requisitions/9999999/unlock-costing",
+            "/api/admin/requisitions/9999999/rollback-to-costing",
             new { Reason = "looking for nonexistent requisition here" });
 
         resp.StatusCode.Should().Be(HttpStatusCode.NotFound);

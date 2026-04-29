@@ -2,7 +2,9 @@ namespace BomPriceApproval.API.Features.Admin;
 
 public record OverridePricesRequest(
     string Reason,
-    IReadOnlyList<OverridePricesItem> Items);
+    string ConfirmationToken,
+    IReadOnlyList<OverridePricesItem> Items,
+    string? Notes = null);
 
 public record OverridePricesItem(
     int RequisitionItemId,

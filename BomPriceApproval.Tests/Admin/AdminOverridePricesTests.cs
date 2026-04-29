@@ -173,10 +173,12 @@ public class AdminOverridePricesTests(WebApplicationFactory<Program> factory)
     }
 
     private static object MakeBody(int reqItemId, decimal aed = 12m, decimal? foreign = null,
-        decimal margin = 20m, decimal mat = 75m, decimal other = 5m, string reason = "smoke override test")
+        decimal margin = 20m, decimal mat = 75m, decimal other = 5m, string reason = "smoke override test",
+        string confirmationToken = "OVERRIDE")
         => new
         {
             Reason = reason,
+            ConfirmationToken = confirmationToken,
             Items = new[]
             {
                 new
@@ -505,6 +507,120 @@ public class AdminOverridePricesTests(WebApplicationFactory<Program> factory)
         {
             await CleanupAsync(reqId);
             await RestoreSeededUsdRateAsync();
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // V3 Task 37: ConfirmationToken + Signed-status support
+    // ──────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Override_MissingConfirmationToken_Returns400()
+    {
+        var (reqId, riId, _, _) = await SeedApprovedReqAsync();
+        try
+        {
+            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Bearer", await TokenAsync("admin@test.com", "Admin@1234"));
+            var resp = await _client.PostAsJsonAsync(
+                $"/api/admin/requisitions/{reqId}/override-prices",
+                MakeBody(riId, confirmationToken: ""));
+            resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        }
+        finally { await CleanupAsync(reqId); }
+    }
+
+    [Fact]
+    public async Task Override_WrongConfirmationToken_Returns400()
+    {
+        var (reqId, riId, _, _) = await SeedApprovedReqAsync();
+        try
+        {
+            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Bearer", await TokenAsync("admin@test.com", "Admin@1234"));
+            // case-mismatch should also be rejected
+            var resp = await _client.PostAsJsonAsync(
+                $"/api/admin/requisitions/{reqId}/override-prices",
+                MakeBody(riId, confirmationToken: "override"));
+            resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        }
+        finally { await CleanupAsync(reqId); }
+    }
+
+    [Fact]
+    public async Task OverridePrices_OnSignedV3Req_CreatesSupersession()
+    {
+        // Walk to Signed via the V3 helper (Draft → Costing → MdPricing → CustomerConfirm → MdFinalSign → Signed).
+        var reqId = await V3WorkflowTestHelpers.WalkToSignedAsync(factory);
+
+        try
+        {
+            using (var verifyScope = factory.Services.CreateScope())
+            {
+                var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var seeded = await verifyDb.QuotationRequests.FindAsync(reqId);
+                seeded!.Status.Should().Be(RequisitionStatus.Signed, "WalkToSignedAsync should land on Signed");
+            }
+
+            // Look up the FG RequisitionItem to override (V3 walk created exactly one).
+            int reqItemId;
+            int oldApprovalId;
+            using (var s = factory.Services.CreateScope())
+            {
+                var db = s.ServiceProvider.GetRequiredService<AppDbContext>();
+                reqItemId = await db.RequisitionItems
+                    .Where(r => r.QuotationRequestId == reqId)
+                    .Select(r => r.Id)
+                    .FirstAsync();
+                oldApprovalId = await db.QuotationApprovals
+                    .Where(a => a.QuotationRequestId == reqId && !a.IsSuperseded && a.IsApproved)
+                    .Select(a => a.Id)
+                    .FirstAsync();
+            }
+
+            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Bearer", await TokenAsync("admin@test.com", "Admin@1234"));
+
+            // V3 reqs use foreign currency (USD) — supply a foreign price.
+            var resp = await _client.PostAsJsonAsync(
+                $"/api/admin/requisitions/{reqId}/override-prices",
+                MakeBody(reqItemId, aed: 50m, foreign: 50m / 3.6725m,
+                    margin: 20m, mat: 75m, other: 5m,
+                    reason: "V3 admin override of signed quotation"));
+
+            resp.StatusCode.Should().Be(HttpStatusCode.OK, await resp.Content.ReadAsStringAsync());
+
+            using var verifyScope2 = factory.Services.CreateScope();
+            var db2 = verifyScope2.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            // Old approval superseded
+            var oldApproval = await db2.QuotationApprovals.FindAsync(oldApprovalId);
+            oldApproval!.IsSuperseded.Should().BeTrue();
+            oldApproval.SupersededAt.Should().NotBeNull();
+
+            // New approval created with override values
+            var newApproval = await db2.QuotationApprovals
+                .Include(a => a.Items)
+                .Where(a => a.QuotationRequestId == reqId && !a.IsSuperseded)
+                .FirstAsync();
+            newApproval.IsApproved.Should().BeTrue();
+            newApproval.Notes.Should().StartWith("[Override]");
+            newApproval.Items.First().SalesPricePerKgAed.Should().Be(50m);
+
+            // Status stays Signed (V3 — terminal status not reset by override)
+            var req = await db2.QuotationRequests.FindAsync(reqId);
+            req!.Status.Should().Be(RequisitionStatus.Signed);
+
+            // Audit row written
+            var auditRow = await db2.AdminAuditLogs
+                .FirstOrDefaultAsync(a => a.EntityType == "Requisition"
+                                          && a.EntityId == reqId
+                                          && a.ActionType == AdminActionType.OverridePrices);
+            auditRow.Should().NotBeNull();
+        }
+        finally
+        {
+            await CleanupAsync(reqId);
         }
     }
 }

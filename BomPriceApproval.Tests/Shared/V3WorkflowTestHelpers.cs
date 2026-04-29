@@ -328,6 +328,22 @@ public static class V3WorkflowTestHelpers
         return reqId;
     }
 
+    /// <summary>
+    /// Walks to Signed: WalkToMdFinalSignAsync + MD final-sign with the literal "SIGN" token.
+    /// Returns the req id at Signed status. PDF dispatch is best-effort inside the controller
+    /// — failure is logged + swallowed, so this completes whether or not PDF generation succeeds.
+    /// </summary>
+    public static async Task<int> WalkToSignedAsync(WebApplicationFactory<Program> factory)
+    {
+        var reqId = await WalkToMdFinalSignAsync(factory);
+
+        var md = await CreateMdClientAsync(factory);
+        var sign = await md.PostAsJsonAsync($"/api/approvals/{reqId}/final-sign",
+            new { confirmationToken = "SIGN", notes = "Signed by helper" });
+        sign.EnsureSuccessStatusCode();
+        return reqId;
+    }
+
     // ─── Inspection ─────────────────────────────────────────────────────────
 
     /// <summary>

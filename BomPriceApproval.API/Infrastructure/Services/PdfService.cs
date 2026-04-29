@@ -263,6 +263,14 @@ public class PdfService
         }).GeneratePdf();
     }
 
+    // V3 — Stage 2B signed quotation PDF with embedded MD signature.
+    // Stub for now; full implementation lands in Task 31.
+    public Task<byte[]> GenerateSignedQuotationAsync(QuotationRequest req, QuotationApproval approval, User signer)
+    {
+        // TODO Task 31: full implementation with signature embed
+        throw new NotImplementedException("Implemented in Task 31");
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private static void SectionHeader(ColumnDescriptor col, string title, bool accent = false)

@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Domain.Enums;
+using BomPriceApproval.API.Domain.Workflow;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Services;
 using BomPriceApproval.API.Infrastructure.Validation;
@@ -289,5 +290,357 @@ public class ApprovalsController(
 
         var pdf = pdfSvc.GenerateQuotation(req, currentApproval);
         return File(pdf, "application/pdf", $"{req.RefNo}-Quotation.pdf");
+    }
+
+    // ─── V3 split approval endpoints ─────────────────────────────────────────
+    // Stage 1: SetMargin (MdPricing → CustomerConfirm)
+    // Stage 2A: AcceptCustomer (CustomerConfirm → MdFinalSign)
+    //           RejectCustomer (CustomerConfirm → MdPricing — re-margin loop)
+    // Stage 2B: FinalSign (MdFinalSign → Signed)
+
+    [HttpPost("{requisitionId}/set-margin")]
+    [Authorize(Roles = "ManagingDirector,Admin")]
+    public async Task<IActionResult> SetMargin(int requisitionId, [FromBody] SetMarginRequest body)
+    {
+        if (body is null || body.Items is null || body.Items.Count == 0)
+            return Validation.Detail("Items are required.")
+                .Field("Items", "At least one margin entry is required.").Return();
+
+        var req = await db.QuotationRequests
+            .Include(r => r.Items)
+            .FirstOrDefaultAsync(r => r.Id == requisitionId);
+        if (req is null) return NotFound();
+
+        if (!RequisitionStateMachine.CanTransition(req.Status, RequisitionStatus.CustomerConfirm))
+            return Validation.Detail($"Cannot set margin from {req.Status}.")
+                .Field("Status", $"Cannot set margin from {req.Status}.").Return();
+
+        // D17 — every FG must have exactly one margin entry; no extras.
+        var fgIds = req.Items.Select(ri => ri.Id).ToHashSet();
+        var bodyIds = body.Items.Select(i => i.RequisitionItemId).ToHashSet();
+        if (!fgIds.SetEquals(bodyIds))
+            return Validation.Detail("Margin must be supplied for every FG, no extras.")
+                .Field("Items", "Margin entries must match FG set exactly.").Return();
+
+        if (body.Items.Count != bodyIds.Count)
+            return Validation.Detail("Duplicate items in margin payload.")
+                .Field("Items", "Duplicate RequisitionItemId.").Return();
+
+        for (int i = 0; i < body.Items.Count; i++)
+        {
+            if (body.Items[i].MarginPerKg < 0)
+                return Validation.Detail($"Margin must be >= 0 (item {body.Items[i].RequisitionItemId}).")
+                    .Field($"Items[{i}].MarginPerKg", "Must be >= 0.").Return();
+        }
+
+        // D21 — sale-side FX snapshot at margin entry. AED requisitions skip this.
+        decimal? saleRateSnapshot = null;
+        if (req.CurrencyCode != "AED")
+        {
+            var rate = await db.ExchangeRates
+                .Where(er => er.IsActive && er.CurrencyCode == req.CurrencyCode)
+                .OrderByDescending(er => er.EffectiveDate)
+                .Select(er => (decimal?)er.RateToAed)
+                .FirstOrDefaultAsync();
+            if (rate is null)
+                return Validation.Detail($"No active FX rate for {req.CurrencyCode}.")
+                    .Field("CurrencyCode", "No active exchange rate.").Return();
+            saleRateSnapshot = rate;
+        }
+        // Cost-side mirror — per-line foreign FX handled at PDF generation (Task 31).
+        var costRateSnapshot = saleRateSnapshot;
+
+        // Re-margin loop: supersede any prior non-superseded InitialPricing approvals.
+        var priorApprovals = await db.QuotationApprovals
+            .Where(qa => qa.QuotationRequestId == req.Id
+                      && qa.Stage == ApprovalStage.InitialPricing
+                      && !qa.IsSuperseded)
+            .ToListAsync();
+        var nowUtc = DateTime.UtcNow;
+        foreach (var prior in priorApprovals)
+        {
+            prior.IsSuperseded = true;
+            prior.SupersededAt = nowUtc;
+        }
+
+        var approval = new QuotationApproval
+        {
+            QuotationRequestId = req.Id,
+            ApprovedByUserId = CurrentUserId,
+            ApprovedAt = nowUtc,
+            Notes = body.Notes,
+            IsApproved = false,
+            Stage = ApprovalStage.InitialPricing,
+            RateSnapshot = saleRateSnapshot,
+            CostFxSnapshot = costRateSnapshot,
+        };
+        foreach (var item in body.Items)
+        {
+            approval.Items.Add(new ApprovalItem
+            {
+                RequisitionItemId = item.RequisitionItemId,
+                MarginPerKg = item.MarginPerKg,
+            });
+        }
+        db.QuotationApprovals.Add(approval);
+
+        req.Status = RequisitionStatus.CustomerConfirm;
+        req.UpdatedAt = nowUtc;
+        await db.SaveChangesAsync();
+
+        logger.LogInformation("[Audit] V3 margin set {RequisitionId} {RefNo} ApprovedByUserId={ApprovedByUserId} ItemCount={ItemCount}",
+            req.Id, req.RefNo, CurrentUserId, approval.Items.Count);
+
+        try
+        {
+            await notificationSvc.SendAsync(req.SalesPersonId,
+                $"{req.RefNo} priced — confirm with customer", req.Id, "QuotationRequest");
+
+            var accountantIds = await db.UserBranches
+                .Where(ub => ub.BranchId == req.BranchId
+                          && ub.User.Role == UserRole.Accountant
+                          && ub.User.IsActive)
+                .Select(ub => ub.UserId)
+                .ToListAsync();
+            await notificationSvc.SendToUsersAsync(
+                accountantIds,
+                $"{req.RefNo} pricing complete",
+                req.Id,
+                "QuotationRequest");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Notification dispatch failed after successful set-margin for {Entity} {Id}",
+                "QuotationRequest", req.Id);
+        }
+
+        return Ok(new { id = req.Id, status = req.Status.ToString(), approvalId = approval.Id });
+    }
+
+    [HttpPost("{requisitionId}/accept-customer")]
+    [Authorize(Roles = "SalesPerson,Admin")]
+    public async Task<IActionResult> AcceptCustomer(int requisitionId, [FromBody] AcceptCustomerRequest body)
+    {
+        var req = await db.QuotationRequests.FirstOrDefaultAsync(r => r.Id == requisitionId);
+        if (req is null) return NotFound();
+
+        if (CurrentRole == "SalesPerson" && req.SalesPersonId != CurrentUserId)
+            return Forbid();
+
+        if (!RequisitionStateMachine.CanTransition(req.Status, RequisitionStatus.MdFinalSign))
+            return Validation.Detail($"Cannot accept-customer from {req.Status}.")
+                .Field("Status", $"Cannot accept-customer from {req.Status}.").Return();
+
+        var nowUtc = DateTime.UtcNow;
+        req.Status = RequisitionStatus.MdFinalSign;
+        req.UpdatedAt = nowUtc;
+        if (body is not null && !string.IsNullOrWhiteSpace(body.CustomerFeedback))
+            req.Notes = (req.Notes ?? "") +
+                $"\n[CustomerAccepted {nowUtc:yyyy-MM-dd}] {body.CustomerFeedback}";
+
+        await db.SaveChangesAsync();
+
+        logger.LogInformation("[Audit] V3 customer accepted {RequisitionId} {RefNo} ByUserId={UserId}",
+            req.Id, req.RefNo, CurrentUserId);
+
+        try
+        {
+            var mdIds = await db.Users
+                .Where(u => u.Role == UserRole.ManagingDirector && u.IsActive)
+                .Select(u => u.Id)
+                .ToListAsync();
+            var accountantIds = await db.UserBranches
+                .Where(ub => ub.BranchId == req.BranchId
+                          && ub.User.Role == UserRole.Accountant
+                          && ub.User.IsActive)
+                .Select(ub => ub.UserId)
+                .ToListAsync();
+
+            await notificationSvc.SendToUsersAsync(mdIds,
+                $"{req.RefNo} customer accepted — apply final sign",
+                req.Id, "QuotationRequest");
+            await notificationSvc.SendToUsersAsync(accountantIds,
+                $"{req.RefNo} customer accepted",
+                req.Id, "QuotationRequest");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Notification dispatch failed after successful accept-customer for {Entity} {Id}",
+                "QuotationRequest", req.Id);
+        }
+
+        return Ok(new { id = req.Id, status = req.Status.ToString() });
+    }
+
+    [HttpPost("{requisitionId}/reject-customer")]
+    [Authorize(Roles = "SalesPerson,Admin")]
+    public async Task<IActionResult> RejectCustomer(int requisitionId, [FromBody] RejectCustomerRequest body)
+    {
+        if (body is null || string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Trim().Length < 5)
+            return Validation.Detail("Reason >= 5 chars required.")
+                .Field("Reason", "At least 5 characters required.").Return();
+
+        var req = await db.QuotationRequests.FirstOrDefaultAsync(r => r.Id == requisitionId);
+        if (req is null) return NotFound();
+
+        if (CurrentRole == "SalesPerson" && req.SalesPersonId != CurrentUserId)
+            return Forbid();
+
+        if (!RequisitionStateMachine.CanTransition(req.Status, RequisitionStatus.MdPricing))
+            return Validation.Detail($"Cannot reject-customer from {req.Status}.")
+                .Field("Status", $"Cannot reject-customer from {req.Status}.").Return();
+
+        var nowUtc = DateTime.UtcNow;
+        // Supersede the active InitialPricing approval — MD must re-margin.
+        var current = await db.QuotationApprovals
+            .Where(qa => qa.QuotationRequestId == req.Id
+                      && qa.Stage == ApprovalStage.InitialPricing
+                      && !qa.IsSuperseded)
+            .FirstOrDefaultAsync();
+        if (current is not null)
+        {
+            current.IsSuperseded = true;
+            current.SupersededAt = nowUtc;
+        }
+
+        req.Status = RequisitionStatus.MdPricing;
+        req.Notes = (req.Notes ?? "") +
+            $"\n[CustomerRejected {nowUtc:yyyy-MM-dd}] {body.Reason.Trim()}";
+        req.UpdatedAt = nowUtc;
+
+        await db.SaveChangesAsync();
+
+        logger.LogInformation("[Audit] V3 customer rejected {RequisitionId} {RefNo} ByUserId={UserId}",
+            req.Id, req.RefNo, CurrentUserId);
+
+        try
+        {
+            var mdIds = await db.Users
+                .Where(u => u.Role == UserRole.ManagingDirector && u.IsActive)
+                .Select(u => u.Id)
+                .ToListAsync();
+            var accountantIds = await db.UserBranches
+                .Where(ub => ub.BranchId == req.BranchId
+                          && ub.User.Role == UserRole.Accountant
+                          && ub.User.IsActive)
+                .Select(ub => ub.UserId)
+                .ToListAsync();
+
+            await notificationSvc.SendToUsersAsync(mdIds,
+                $"{req.RefNo} customer rejected — re-price needed",
+                req.Id, "QuotationRequest");
+            await notificationSvc.SendToUsersAsync(accountantIds,
+                $"{req.RefNo} customer rejected",
+                req.Id, "QuotationRequest");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Notification dispatch failed after successful reject-customer for {Entity} {Id}",
+                "QuotationRequest", req.Id);
+        }
+
+        return Ok(new { id = req.Id, status = req.Status.ToString() });
+    }
+
+    [HttpPost("{requisitionId}/final-sign")]
+    [Authorize(Roles = "ManagingDirector,Admin")]
+    public async Task<IActionResult> FinalSign(int requisitionId, [FromBody] FinalSignRequest body)
+    {
+        // D22 — type-to-confirm token must be exactly "SIGN" (case-sensitive).
+        if (body is null || body.ConfirmationToken != "SIGN")
+            return Validation.Detail("Type-to-confirm token must be 'SIGN'.")
+                .Field("ConfirmationToken", "Must be exactly 'SIGN'.").Return();
+
+        var req = await db.QuotationRequests
+            .Include(r => r.Customer)
+            .FirstOrDefaultAsync(r => r.Id == requisitionId);
+        if (req is null) return NotFound();
+
+        if (!RequisitionStateMachine.CanTransition(req.Status, RequisitionStatus.Signed))
+            return Validation.Detail($"Cannot final-sign from {req.Status}.")
+                .Field("Status", $"Cannot final-sign from {req.Status}.").Return();
+
+        var current = await db.QuotationApprovals
+            .Include(qa => qa.Items)
+            .Where(qa => qa.QuotationRequestId == req.Id
+                      && qa.Stage == ApprovalStage.InitialPricing
+                      && !qa.IsSuperseded)
+            .OrderByDescending(qa => qa.ApprovedAt)
+            .FirstOrDefaultAsync();
+        if (current is null)
+            return Validation.Detail("No initial-pricing approval to sign.")
+                .Field("Approval", "No active InitialPricing approval found.").Return();
+
+        var nowUtc = DateTime.UtcNow;
+        // Promote in place — preserves price + RateSnapshot history on the same row.
+        current.Stage = ApprovalStage.FinalSign;
+        current.IsApproved = true;
+        current.ApprovedByUserId = CurrentUserId;
+        current.ApprovedAt = nowUtc;
+        if (!string.IsNullOrWhiteSpace(body.Notes))
+            current.Notes = (current.Notes ?? "") + $"\n[FinalSign] {body.Notes}";
+
+        req.Status = RequisitionStatus.Signed;
+        req.UpdatedAt = nowUtc;
+        await db.SaveChangesAsync();
+
+        logger.LogInformation("[Audit] V3 final-sign {RequisitionId} {RefNo} ApprovalId={ApprovalId} SignedByUserId={UserId}",
+            req.Id, req.RefNo, current.Id, CurrentUserId);
+
+        // Generate signed PDF (stub — Task 31). PDF generation failure must not
+        // roll back the state change, but can fail loudly since the stub is
+        // intentionally unimplemented.
+        try
+        {
+            var signer = await db.Users.FindAsync(CurrentUserId);
+            if (signer is not null)
+            {
+                _ = await pdfSvc.GenerateSignedQuotationAsync(req, current, signer);
+            }
+        }
+        catch (NotImplementedException)
+        {
+            // Expected during Phase A until Task 31 lands.
+            logger.LogWarning("[FinalSign] GenerateSignedQuotationAsync stubbed — Task 31 pending for {RefNo}", req.RefNo);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Signed-PDF generation failed for {RefNo}", req.RefNo);
+        }
+
+        // D23 — notify SP + branch accountants only; never the customer.
+        try
+        {
+            var accountantIds = await db.UserBranches
+                .Where(ub => ub.BranchId == req.BranchId
+                          && ub.User.Role == UserRole.Accountant
+                          && ub.User.IsActive)
+                .Select(ub => ub.UserId)
+                .ToListAsync();
+
+            await notificationSvc.SendAsync(req.SalesPersonId,
+                $"{req.RefNo} signed — quotation locked",
+                req.Id, "QuotationRequest");
+            await notificationSvc.SendToUsersAsync(accountantIds,
+                $"{req.RefNo} signed",
+                req.Id, "QuotationRequest");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Notification dispatch failed after successful final-sign for {Entity} {Id}",
+                "QuotationRequest", req.Id);
+        }
+
+        return Ok(new
+        {
+            id = req.Id,
+            status = req.Status.ToString(),
+            approvalId = current.Id,
+            pdfDownloadUrl = $"/api/approvals/{req.Id}/pdf"
+        });
     }
 }

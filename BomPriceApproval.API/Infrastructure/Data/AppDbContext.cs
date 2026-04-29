@@ -170,10 +170,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 "ck_bom_lines_qty_per_kg_positive",
                 "\"QtyPerKg\" > 0"));
 
-        mb.Entity<ApprovalItem>()
-            .ToTable(t => t.HasCheckConstraint(
-                "ck_approval_items_sales_price_positive",
-                "\"SalesPricePerKgAed\" > 0"));
+        // V3: legacy "ck_approval_items_sales_price_positive" check constraint
+        // dropped — V3 SetMargin creates ApprovalItem with only MarginPerKg
+        // populated; SalesPricePerKgAed is computed at PDF render time (Task 31).
 
         // Decimal precision
         mb.Entity<RequisitionItem>().Property(ri => ri.ExpectedQty).HasPrecision(18, 4);
@@ -192,6 +191,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<ApprovalItem>().Property(a => a.ProfitMarginPct).HasPrecision(18, 4);
         mb.Entity<ApprovalItem>().Property(a => a.MaterialCostPct).HasPrecision(18, 4);
         mb.Entity<ApprovalItem>().Property(a => a.OtherCostPct).HasPrecision(18, 4);
+        mb.Entity<ApprovalItem>().Property(a => a.MarginPerKg).HasPrecision(18, 4);
         mb.Entity<ExchangeRate>().Property(e => e.RateToAed).HasPrecision(18, 6);
         mb.Entity<QuotationRequest>().Property(q => q.ExchangeRateSnapshot).HasPrecision(18, 6);
         mb.Entity<QuotationApproval>().Property(a => a.RateSnapshot).HasPrecision(18, 6);

@@ -52,3 +52,16 @@ public record CostingItemResponse(
     CostingDraftResponse? Draft);
 
 public record CostingReviewResponse(int RequisitionId, List<CostingItemResponse> Items);
+
+// V3 — editable BOM via PUT /api/costing/{requisitionId}/bom
+// New-line creation is rejected with 400 in Phase A — V3 cost-entity reshape
+// (ProcessId nullability + new BomCost/BomCostLine fields) lands in a later phase.
+public record BomLineUpdate(
+    int? Id,
+    int ItemId,
+    decimal QtyPerKg,
+    string? Micron,
+    bool Delete = false);
+
+public record UpdateBomRequest(int FinishedGoodId, List<BomLineUpdate> Lines);
+

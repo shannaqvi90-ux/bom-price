@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Domain.Enums;
+using BomPriceApproval.API.Domain.Workflow;
 using BomPriceApproval.API.Infrastructure.Data;
 using BomPriceApproval.API.Infrastructure.Services;
 using BomPriceApproval.API.Infrastructure.Validation;
@@ -13,7 +14,7 @@ namespace BomPriceApproval.API.Features.Costing;
 
 [ApiController]
 [Route("api/costing")]
-[Authorize(Roles = "Accountant")]
+[Authorize(Roles = "Accountant,Admin")]
 public class CostingController(
     AppDbContext db,
     NotificationService notificationService,
@@ -22,10 +23,17 @@ public class CostingController(
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private int? CurrentBranchId => int.TryParse(User.FindFirstValue("branchId"), out var b) && b > 0 ? b : null;
 
+    // V3 — full BOM tree + cost data per FG. New-shape JSON consumed by V3 web UI (Phase B).
+    // Some V3 cost fields (printingCost*, fohPerKg, transportPerKg, commissionPerKg,
+    // wastagePercent on cost line, purchaseValuePerKg/Currency) are not yet on the
+    // V2.3 entity model — emitted as null/best-effort source until the V3 cost-entity
+    // reshape migration. See Phase A plan §Task 23 deferral note.
     [HttpGet("{requisitionId}")]
     public async Task<IActionResult> Get(int requisitionId)
     {
         var req = await db.QuotationRequests
+            .Include(q => q.Customer)
+            .Include(q => q.SalesPerson)
             .Include(q => q.Items).ThenInclude(ri => ri.Item)
             .Include(q => q.Items).ThenInclude(ri => ri.BomHeader).ThenInclude(b => b!.Cost)
             .Include(q => q.Items).ThenInclude(ri => ri.BomHeader)
@@ -37,64 +45,194 @@ public class CostingController(
         if (req is null) return NotFound();
         if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
 
-        var allRawMaterialIds = req.Items
-            .Where(ri => ri.BomHeader is not null)
-            .SelectMany(ri => ri.BomHeader!.Lines.Select(l => l.RawMaterialItemId))
-            .Distinct().ToList();
-        var lastCosts = allRawMaterialIds.Count > 0
-            ? await db.ItemLastCosts.Where(c => allRawMaterialIds.Contains(c.ItemId)).ToDictionaryAsync(c => c.ItemId)
-            : new Dictionary<int, ItemLastCost>();
-
         var bomHeaderIds = req.Items
             .Where(ri => ri.BomHeader is not null)
             .Select(ri => ri.BomHeader!.Id).ToList();
-        var drafts = bomHeaderIds.Count > 0
-            ? await db.CostingDrafts.Where(d => bomHeaderIds.Contains(d.BomHeaderId)).ToDictionaryAsync(d => d.BomHeaderId)
-            : new Dictionary<int, CostingDraft>();
 
-        var items = req.Items.OrderBy(ri => ri.SortOrder).Select(ri =>
+        // Load V2.3 BomCostLine rows keyed by BomLineId so we can join wastagePercent
+        // (which lives on BomLine) with purchaseValuePerKg/purchaseCurrency (on BomCostLine).
+        var costLinesByBomLineId = bomHeaderIds.Count > 0
+            ? await db.BomCostLines
+                .Where(bcl => bomHeaderIds.Contains(bcl.BomHeaderId))
+                .ToDictionaryAsync(bcl => bcl.BomLineId)
+            : new Dictionary<int, BomCostLine>();
+
+        var finishedGoods = req.Items.OrderBy(ri => ri.SortOrder).Select(ri =>
         {
             var bom = ri.BomHeader;
-            if (bom is null)
-                return new CostingItemResponse(ri.Id, ri.ItemId, ri.Item.Description,
-                    ri.ExpectedQty, null, "NotStarted", null, [], null);
+            var cost = bom?.Cost;
 
-            var c = bom.Cost;
-            var costStatus = c is not null ? "Submitted"
-                           : ri.CostingStartedAt is not null ? "InProgress"
-                           : "NotStarted";
-
-            CostingSummary? costSummary = c is not null
-                ? new CostingSummary(c.Id, c.RawMaterialCostTotal, c.LandedCostType.ToString(),
-                    c.LandedCostValue, c.FohAmount, c.TotalCostPerKg, c.SubmittedAt)
-                : null;
-
-            // V2.2: BOM lines render in canonical Process.DisplayOrder, matching BomController.Get.
-            var bomLines = bom.Lines
+            object? bomLines = bom is null ? null : bom.Lines
                 .OrderBy(l => l.Process.DisplayOrder)
                 .ThenBy(l => l.Id)
-                .Select(l =>
+                .Select(l => new
                 {
-                    LastCostInfo? lc = lastCosts.TryGetValue(l.RawMaterialItemId, out var v)
-                        ? new LastCostInfo(v.CostPerKg, v.CurrencyCode, v.UpdatedAt)
-                        : null;
-                    return new CostingBomLineResponse(l.Id, l.ProcessId, l.Process.Name,
-                        l.RawMaterialItemId, l.RawMaterial.Description,
-                        l.QtyPerKg, l.WastagePct, lc);
-                }).ToList();
+                    l.Id,
+                    l.QtyPerKg,
+                    l.Micron,
+                    Item = new { l.RawMaterial.Id, l.RawMaterial.Code, l.RawMaterial.Description },
+                    l.LastModifiedByUserId,
+                    l.LastModifiedAt
+                });
 
-            CostingDraftResponse? draftResp = null;
-            if (drafts.TryGetValue(bom.Id, out var draftRow))
+            object? costs = cost is null ? null : new
             {
-                var draftLines = JsonSerializer.Deserialize<List<CostingDraftLineInput>>(draftRow.LinesJson) ?? [];
-                draftResp = new CostingDraftResponse(draftLines, draftRow.LandedCostType, draftRow.LandedCostValue, draftRow.FohAmount);
-            }
+                // V3 cost fields not yet on entity — emitted as null until reshape lands.
+                PrintingCostPerKg = (decimal?)null,
+                PrintingCostCurrency = (string?)null,
+                FohPerKg = (decimal?)null,
+                TransportPerKg = (decimal?)null,
+                CommissionPerKg = (decimal?)null,
+                Lines = bom!.Lines.Select(l => new
+                {
+                    BomLineId = l.Id,
+                    WastagePercent = l.WastagePct,
+                    PurchaseValuePerKg = costLinesByBomLineId.TryGetValue(l.Id, out var bcl)
+                        ? (decimal?)bcl.CostPerKg : null,
+                    PurchaseCurrency = costLinesByBomLineId.TryGetValue(l.Id, out var bcl2)
+                        ? bcl2.CurrencyCode : null
+                })
+            };
 
-            return new CostingItemResponse(ri.Id, ri.ItemId, ri.Item.Description,
-                ri.ExpectedQty, bom.Id, costStatus, costSummary, bomLines, draftResp);
+            return new
+            {
+                ri.Id,
+                ri.ExpectedQty,
+                ri.HasPrinting,
+                Item = new { ri.Item.Id, ri.Item.Code, ri.Item.Description },
+                BomLines = bomLines,
+                Costs = costs
+            };
         }).ToList();
 
-        return Ok(new CostingReviewResponse(req.Id, items));
+        return Ok(new
+        {
+            req.Id,
+            req.RefNo,
+            Status = req.Status.ToString(),
+            req.CurrencyCode,
+            req.Notes,
+            Customer = new { req.Customer.Id, req.Customer.Name, req.Customer.Code },
+            SalesPerson = new { req.SalesPerson.Id, req.SalesPerson.Name },
+            FinishedGoods = finishedGoods
+        });
+    }
+
+    // V3 — editable BOM endpoint. Accountant can adjust QtyPerKg / Micron / ItemId
+    // (mapped to RawMaterialItemId on entity) on existing BOM lines while in Costing.
+    // New-line creation is rejected with 400 in Phase A — V3 cost-entity reshape needs to
+    // land first to specify ProcessId / WastagePct defaults for fresh lines.
+    [HttpPut("{requisitionId}/bom")]
+    public async Task<IActionResult> UpdateBom(int requisitionId, [FromBody] UpdateBomRequest body)
+    {
+        var req = await db.QuotationRequests
+            .Include(r => r.Items).ThenInclude(ri => ri.BomHeader).ThenInclude(bh => bh!.Lines)
+            .FirstOrDefaultAsync(r => r.Id == requisitionId);
+        if (req is null) return NotFound();
+        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
+
+        if (req.Status != RequisitionStatus.Costing)
+            return BadRequest(new { error = $"BOM editable only in Costing status (current: {req.Status})" });
+
+        var fg = req.Items.FirstOrDefault(ri => ri.Id == body.FinishedGoodId);
+        if (fg is null)
+            return BadRequest(new { error = "FG not found in this requisition" });
+
+        var bom = fg.BomHeader;
+        if (bom is null)
+            return BadRequest(new { error = "FG has no BOM yet" });
+
+        var now = DateTime.UtcNow;
+        var mutated = false;
+
+        foreach (var line in body.Lines)
+        {
+            if (line.Id is null && !line.Delete)
+            {
+                // Phase A gap — see DTO comment + Task 23/24 deferral notes.
+                return BadRequest(new
+                {
+                    error = "Creating new BOM lines via this endpoint is not yet supported (Phase A gap)"
+                });
+            }
+
+            var existing = bom.Lines.FirstOrDefault(bl => bl.Id == line.Id);
+            if (existing is null) continue;
+
+            if (line.Delete)
+            {
+                db.BomLines.Remove(existing);
+                mutated = true;
+                continue;
+            }
+
+            if (existing.QtyPerKg != line.QtyPerKg
+                || existing.Micron != line.Micron
+                || existing.RawMaterialItemId != line.ItemId)
+            {
+                existing.QtyPerKg = line.QtyPerKg;
+                existing.Micron = line.Micron;
+                existing.RawMaterialItemId = line.ItemId;
+                existing.LastModifiedByUserId = CurrentUserId;
+                existing.LastModifiedAt = now;
+                mutated = true;
+            }
+        }
+
+        if (mutated)
+        {
+            req.UpdatedAt = now;
+            await db.SaveChangesAsync();
+        }
+
+        return Ok(new { ok = true, finishedGoodId = body.FinishedGoodId });
+    }
+
+    // V3 — single overall Submit (Costing -> MdPricing). Replaces V2.3 per-item SubmitItem
+    // promotion to MdReview. CostFxSnapshot capture is deferred to ApprovalsController.SetMargin
+    // (Phase A Task 28) — single-approval-row creation point.
+    [HttpPost("{requisitionId}/submit")]
+    public async Task<IActionResult> Submit(int requisitionId)
+    {
+        var req = await db.QuotationRequests
+            .Include(r => r.Items).ThenInclude(ri => ri.BomHeader).ThenInclude(bh => bh!.Cost)
+            .FirstOrDefaultAsync(r => r.Id == requisitionId);
+        if (req is null) return NotFound();
+        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
+
+        if (!RequisitionStateMachine.CanTransition(req.Status, RequisitionStatus.MdPricing))
+            return BadRequest(new { error = $"Cannot submit costing from {req.Status}" });
+
+        if (req.Items.Count == 0
+            || req.Items.Any(ri => ri.BomHeader is null || ri.BomHeader.Cost is null))
+        {
+            return BadRequest(new { error = "All FGs must have cost data before submit" });
+        }
+
+        req.Status = RequisitionStatus.MdPricing;
+        req.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        try
+        {
+            var mdIds = await db.Users
+                .Where(u => u.Role == UserRole.ManagingDirector && u.IsActive)
+                .Select(u => u.Id)
+                .ToListAsync();
+            await notificationService.SendToUsersAsync(
+                mdIds,
+                $"{req.RefNo} awaiting your margin",
+                req.Id,
+                "QuotationRequest");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Notification dispatch failed after successful costing submit for {Entity} {Id}",
+                "QuotationRequest", req.Id);
+        }
+
+        return Ok(new { id = req.Id, status = req.Status.ToString() });
     }
 
     [HttpPost("{requisitionId}/items/{requisitionItemId}/start")]

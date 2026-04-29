@@ -7,7 +7,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import DashboardRouter from "@/features/dashboard/DashboardRouter";
 import RequisitionListPage from "@/features/requisitions/RequisitionListPage";
-import NewRequisitionPage from "@/features/requisitions/NewRequisitionPage";
+import { NewRequisitionPage } from "@/features/requisitions/NewRequisitionPage";
 import RequisitionDetailPage from "@/features/requisitions/RequisitionDetailPage";
 import EditRequisitionPage from "@/features/requisitions/EditRequisitionPage";
 import CustomerListPage from "@/features/customers/CustomerListPage";

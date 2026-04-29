@@ -13,14 +13,22 @@ interface Props {
 
 const STATUS_OPTIONS: Array<RequisitionStatus | ""> = [
   "",
+  // V3 statuses (current workflow):
   "Draft",
+  "Costing",
+  "MdPricing",
+  "CustomerConfirm",
+  "MdFinalSign",
+  "Signed",
+  "Cancelled",
+  "Rejected",
+  // Legacy V2.3 statuses (retained for filtering historical reqs):
   "BomPending",
   "BomInProgress",
   "CostingPending",
   "CostingInProgress",
   "MdReview",
   "Approved",
-  "Rejected",
 ];
 
 export function RequisitionFilters({ value, onChange }: Props) {

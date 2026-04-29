@@ -15,6 +15,9 @@ const ACTION_TYPE_LABELS: Record<AdminActionType, string> = {
   ResetPassword: "Reset Password",
   OverridePrices: "Override Prices",
   HardDeleteCustomer: "Delete Customer",
+  // V3:
+  RollbackToCosting: "Rollback to Costing",
+  V3CutoverMigration: "V3 Cutover Migration",
 };
 
 const ACTION_TYPES: AdminActionType[] = [
@@ -26,6 +29,9 @@ const ACTION_TYPES: AdminActionType[] = [
   "ResetPassword",
   "OverridePrices",
   "HardDeleteCustomer",
+  // V3:
+  "RollbackToCosting",
+  "V3CutoverMigration",
 ];
 
 const ENTITY_TYPES: AuditEntityType[] = ["Requisition", "User", "Customer"];

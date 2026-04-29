@@ -15,7 +15,7 @@ const apiDetailPattern = /\/api\/(requisitions|customers|items|bom|costing|appro
 registerRoute(
   ({ url }) => apiListPattern.test(url.pathname),
   new NetworkFirst({
-    cacheName: "bom-api-list-cache",
+    cacheName: "bom-api-list-cache-v3",
     networkTimeoutSeconds: 5,
     plugins: [
       new CacheableResponsePlugin({ statuses: [200] }),
@@ -27,7 +27,7 @@ registerRoute(
 registerRoute(
   ({ url }) => apiDetailPattern.test(url.pathname),
   new NetworkFirst({
-    cacheName: "bom-api-detail-cache",
+    cacheName: "bom-api-detail-cache-v3",
     networkTimeoutSeconds: 5,
     plugins: [
       new CacheableResponsePlugin({ statuses: [200] }),

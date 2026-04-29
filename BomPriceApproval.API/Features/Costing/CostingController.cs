@@ -142,6 +142,37 @@ public class CostingController(
         if (bom is null)
             return BadRequest(new { error = "FG has no BOM yet" });
 
+        // Validate target ItemIds for update operations: must exist, be active, RawMaterial type,
+        // and belong to the requisition's branch. New-line creation is gated below (Phase A gap),
+        // so only updates need validation here.
+        var updateItemIds = body.Lines
+            .Where(l => l.Id is not null && !l.Delete)
+            .Select(l => l.ItemId)
+            .Distinct()
+            .ToList();
+        if (updateItemIds.Count > 0)
+        {
+            var validIds = await db.Items
+                .Where(i => updateItemIds.Contains(i.Id)
+                         && i.IsActive
+                         && i.Type == ItemType.RawMaterial
+                         && i.BranchId == req.BranchId)
+                .Select(i => i.Id)
+                .ToListAsync();
+            var invalidIds = updateItemIds.Except(validIds).ToHashSet();
+            if (invalidIds.Count > 0)
+            {
+                var builder = Validation.Detail("One or more BOM line ItemIds are invalid (must be active raw materials in this requisition's branch).");
+                for (int i = 0; i < body.Lines.Count; i++)
+                {
+                    var l = body.Lines[i];
+                    if (l.Id is not null && !l.Delete && invalidIds.Contains(l.ItemId))
+                        builder.Field($"Lines[{i}].ItemId", "Invalid, inactive, wrong type, or wrong branch.");
+                }
+                return builder.Return();
+            }
+        }
+
         var now = DateTime.UtcNow;
         var mutated = false;
 

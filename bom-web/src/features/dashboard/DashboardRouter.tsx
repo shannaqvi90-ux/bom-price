@@ -1,6 +1,5 @@
 import { useAuthStore } from "@/store/authStore";
 import SalesDashboard from "./SalesDashboard";
-import BomDashboard from "./BomDashboard";
 import AccountantDashboard from "./AccountantDashboard";
 import MdDashboard from "./MdDashboard";
 import AdminDashboard from "./AdminDashboard";
@@ -11,8 +10,6 @@ export default function DashboardRouter() {
   switch (role) {
     case "SalesPerson":
       return <SalesDashboard />;
-    case "BomCreator":
-      return <BomDashboard />;
     case "Accountant":
       return <AccountantDashboard />;
     case "ManagingDirector":
@@ -20,6 +17,7 @@ export default function DashboardRouter() {
     case "Admin":
       return <AdminDashboard />;
     default:
+      // BomCreator role deprecated in V3.
       return null;
   }
 }

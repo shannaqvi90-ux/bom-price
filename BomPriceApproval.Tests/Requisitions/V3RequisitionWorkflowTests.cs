@@ -39,6 +39,8 @@ public class V3RequisitionWorkflowTests(WebApplicationFactory<Program> factory)
     /// </summary>
     private async Task<(int CustomerId, int FgItemId, int RmItemId, int ProcessId)> SeedV3MinimumAsync()
     {
+        // Must match Al Ain seed in AppDbContext.HasData / Program.cs (Branches Id=1 Fujairah, Id=2 Al Ain).
+        // Load-bearing for V3: items must live in Al Ain or V3 Create rejects them as cross-branch FG/RM.
         const int alainBranchId = 2;
         var suffix = Guid.NewGuid().ToString("N")[..8];
 
@@ -82,7 +84,7 @@ public class V3RequisitionWorkflowTests(WebApplicationFactory<Program> factory)
         var process = await db.Processes.FirstOrDefaultAsync(p => p.IsActive);
         if (process is null)
         {
-            process = new Process { Name = "Extrusion", DisplayOrder = 1, IsActive = true };
+            process = new Process { Name = $"Extrusion-{suffix}", DisplayOrder = 1, IsActive = true };
             db.Processes.Add(process);
         }
 
@@ -92,7 +94,8 @@ public class V3RequisitionWorkflowTests(WebApplicationFactory<Program> factory)
     }
 
     /// <summary>
-    /// Builds the V3 inline-BOM payload and POSTs it as ali (SalesPerson, Al Ain branch).
+    /// Builds the V3 inline-BOM payload and POSTs it as ali (SalesPerson, Fujairah branch).
+    /// Note: V3 controller pins all reqs to Al Ain regardless of caller's BranchId.
     /// Returns the parsed status code, requisition id, and the body string so callers
     /// can do their own assertions without re-reading the (already-consumed) stream.
     /// </summary>

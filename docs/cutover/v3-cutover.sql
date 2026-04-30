@@ -57,7 +57,50 @@ END $$;
 \echo '0. Pre-flight checks PASSED.'
 
 -- ============================================================================
--- (sections 1-4 added in subsequent tasks)
+-- 1. CANCEL IN-FLIGHT V2.3 REQUISITIONS (statuses 1-5)
+-- ============================================================================
+-- Statuses cancelled: BomPending=1, BomInProgress=2, CostingPending=3,
+-- CostingInProgress=4, MdReview=5.
+-- Statuses preserved: Draft=0 (V3 has same semantic), Approved=6 (terminal),
+-- Rejected=7 (V3 reuses for MD-rejected-from-MdPricing).
+-- ============================================================================
+
+-- 1a. Audit rows captured BEFORE update (BeforeJson reflects original state)
+INSERT INTO "AdminAuditLog"
+  ("AdminUserId", "ActionType", "EntityType", "EntityId", "Reason", "BeforeJson", "CreatedAt")
+SELECT
+  :adminId,
+  'V3CutoverMigration',
+  'Requisition',
+  q."Id",
+  '[V3 cutover ' || :'cutoverDateLabel' || '] Workflow simplified — original V2.3 status preserved in BeforeJson',
+  json_build_object(
+    'id', q."Id",
+    'refNo', q."RefNo",
+    'status', q."Status",
+    'customerId', q."CustomerId",
+    'salesPersonId', q."SalesPersonId",
+    'updatedAt', q."UpdatedAt"
+  )::text,
+  NOW()
+FROM "QuotationRequests" q
+WHERE q."Status" IN (1, 2, 3, 4, 5);
+
+\echo '1a. Audit rows for in-flight reqs:' :ROW_COUNT
+
+-- 1b. Cancel via direct UPDATE
+UPDATE "QuotationRequests"
+   SET "Status" = 13,  -- V3 Cancelled
+       "CancelReason" = '[V3 cutover ' || :'cutoverDateLabel' || '] Workflow simplified — please re-create in V3 if still needed',
+       "CancelledAt" = NOW(),
+       "CancelledByUserId" = :adminId,
+       "UpdatedAt" = NOW()
+ WHERE "Status" IN (1, 2, 3, 4, 5);
+
+\echo '1b. Cancelled in-flight V2.3 reqs:' :ROW_COUNT
+
+-- ============================================================================
+-- (sections 2-4 added in subsequent tasks)
 -- ============================================================================
 
 -- ============================================================================

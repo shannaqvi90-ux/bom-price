@@ -2,7 +2,7 @@ import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from "r
 import { Skeleton } from "./Skeleton";
 import { ErrorBanner } from "./ErrorBanner";
 import { stripTags } from "@/utils/text";
-import { useBomReview } from "@/api/bom";
+// import { useBomReview } from "@/api/bom"; // TODO V3-mobile-D-3: BOM view pending MD phase
 
 interface Props {
   visible: boolean;
@@ -20,10 +20,10 @@ export function BomDetailSheet({
   itemDescription,
 }: Props) {
   const { height } = useWindowDimensions();
-  const q = useBomReview(requisitionId, visible);
-
-  const bomItem = q.data?.items.find((it) => it.requisitionItemId === requisitionItemId);
-  const lines = bomItem?.lines ?? [];
+  // const q = useBomReview(requisitionId, visible); // TODO V3-mobile-D-3
+  const q = { isPending: false, isError: false, error: null, data: null, refetch: () => {} } as any; // placeholder
+  const bomItem = undefined; // q.data?.items.find((it) => it.requisitionItemId === requisitionItemId);
+  const lines = (bomItem as any)?.lines ?? [];
 
   return (
     <Modal

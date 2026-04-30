@@ -3,7 +3,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useRequisitionDetail } from "@/api/requisitions";
-import { useBomReview } from "@/api/bom";
+// import { useBomReview } from "@/api/bom"; // TODO V3-mobile-D-3: BOM view pending MD phase
 import { useMdReview } from "@/api/approvals";
 import { useAuth } from "@/auth/AuthContext";
 import { LoadingView } from "@/components/LoadingView";
@@ -24,7 +24,8 @@ export default function MdItemDrillDown() {
   const itemId = Number(params.itemId);
 
   const detailQ = useRequisitionDetail(reqId);
-  const bomQ = useBomReview(reqId);
+  // const bomQ = useBomReview(reqId); // TODO V3-mobile-D-3
+  const bomQ = { isPending: false, error: null, data: null, refetch: () => {} } as any; // placeholder for deleted bom.ts
   const reviewQ = useMdReview(reqId);
 
   const onLogout = async () => {
@@ -123,30 +124,20 @@ export default function MdItemDrillDown() {
 
         <CostBreakdownCard cost={reviewItem?.cost ?? null} />
 
-        {bomItem && bomItem.lines.length > 0 ? (
-          linesByProcess.map((g) => (
-            <BomProcessGroup
-              key={g.processName}
-              processName={g.processName}
-              lines={g.lines}
-            />
-          ))
-        ) : (
-          <View
-            style={{
-              backgroundColor: "#ffffff",
-              borderWidth: 1,
-              borderColor: "#e2e8f0",
-              borderRadius: 14,
-              padding: 14,
-              marginTop: 12,
-            }}
-          >
-            <Text style={{ fontSize: 14, color: "#94a3b8", textAlign: "center" }}>
-              BOM not available for this item
-            </Text>
-          </View>
-        )}
+        <View
+          style={{
+            backgroundColor: "#ffffff",
+            borderWidth: 1,
+            borderColor: "#e2e8f0",
+            borderRadius: 14,
+            padding: 14,
+            marginTop: 12,
+          }}
+        >
+          <Text style={{ fontSize: 14, color: "#94a3b8", textAlign: "center" }}>
+            BOM view temporarily disabled — pending V3 mobile D-3 (MD phase)
+          </Text>
+        </View>
       </ScrollView>
     </View>
   );

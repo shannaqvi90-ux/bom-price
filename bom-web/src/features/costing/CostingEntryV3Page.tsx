@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useV3Requisition } from "@/features/requisitions/requisitionsApi";
@@ -8,6 +8,7 @@ import {
   type V3FgCostInput,
 } from "@/features/costing/costingApi";
 import { V3StatusBadge } from "@/components/v3/V3StatusBadge";
+import type { V3Requisition } from "@/types/api";
 
 const CURRENCIES = ["AED", "USD", "EUR", "GBP", "PKR", "INR", "CNY"];
 
@@ -33,52 +34,37 @@ function parseNum(s: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function initStateFromReq(req: V3Requisition): FgCostState[] {
+  return req.finishedGoods.map((fg) => ({
+    requisitionItemId: fg.id,
+    rawMaterialCosts: (fg.bomLines ?? []).map((bl) => {
+      const existing = fg.costs?.lines?.find((c) => c.bomLineId === bl.id);
+      return {
+        bomLineId: bl.id,
+        costPerKg:
+          existing?.purchaseValuePerKg !== undefined && existing?.purchaseValuePerKg !== null
+            ? String(existing.purchaseValuePerKg)
+            : "",
+        currencyCode: existing?.purchaseCurrency ?? "AED",
+      };
+    }),
+    printingCostPerKg:
+      fg.costs?.printingCostPerKg !== undefined && fg.costs?.printingCostPerKg !== null
+        ? String(fg.costs.printingCostPerKg)
+        : "",
+    printingCostCurrency: fg.costs?.printingCostCurrency ?? "AED",
+    fohPerKg: fg.costs?.fohPerKg !== undefined ? String(fg.costs.fohPerKg) : "",
+    transportPerKg: fg.costs?.transportPerKg !== undefined ? String(fg.costs.transportPerKg) : "",
+    commissionPerKg:
+      fg.costs?.commissionPerKg !== undefined ? String(fg.costs.commissionPerKg) : "",
+  }));
+}
+
 export default function CostingEntryV3Page() {
   const { id } = useParams();
   const navigate = useNavigate();
   const reqId = id ? parseInt(id) : 0;
   const { data: req, isLoading } = useV3Requisition(reqId);
-  const saveCost = useSaveV3CostData();
-  const submitCost = useSubmitV3Costing();
-
-  const [state, setState] = useState<FgCostState[]>([]);
-
-  // Initialize state from existing BomCost values when req loads (idempotent — second
-  // edit shows previously-saved values).
-  useEffect(() => {
-    if (!req) return;
-    setState(
-      req.finishedGoods.map((fg) => ({
-        requisitionItemId: fg.id,
-        rawMaterialCosts: (fg.bomLines ?? []).map((bl) => {
-          const existing = fg.costs?.lines?.find((c) => c.bomLineId === bl.id);
-          return {
-            bomLineId: bl.id,
-            costPerKg:
-              existing?.purchaseValuePerKg !== undefined && existing?.purchaseValuePerKg !== null
-                ? String(existing.purchaseValuePerKg)
-                : "",
-            currencyCode: existing?.purchaseCurrency ?? "AED",
-          };
-        }),
-        printingCostPerKg:
-          fg.costs?.printingCostPerKg !== undefined && fg.costs?.printingCostPerKg !== null
-            ? String(fg.costs.printingCostPerKg)
-            : "",
-        printingCostCurrency: fg.costs?.printingCostCurrency ?? "AED",
-        fohPerKg: fg.costs?.fohPerKg !== undefined ? String(fg.costs.fohPerKg) : "",
-        transportPerKg: fg.costs?.transportPerKg !== undefined ? String(fg.costs.transportPerKg) : "",
-        commissionPerKg:
-          fg.costs?.commissionPerKg !== undefined ? String(fg.costs.commissionPerKg) : "",
-      })),
-    );
-  }, [req]);
-
-  const fgs = req?.finishedGoods ?? [];
-  const fgById = useMemo(
-    () => Object.fromEntries(fgs.map((fg) => [fg.id, fg] as const)),
-    [fgs],
-  );
 
   if (isLoading || !req) return <div className="p-6">Loading…</div>;
 
@@ -98,6 +84,28 @@ export default function CostingEntryV3Page() {
       </div>
     );
   }
+
+  // Inner form remounts (via key={req.id}) when the user navigates between reqs,
+  // so its useState lazy-initializer runs once per req. This avoids the
+  // setState-in-useEffect lint rule by treating the loaded req as a stable prop.
+  return <CostingForm req={req} reqId={reqId} navigate={navigate} key={req.id} />;
+}
+
+interface CostingFormProps {
+  req: V3Requisition;
+  reqId: number;
+  navigate: ReturnType<typeof useNavigate>;
+}
+
+function CostingForm({ req, reqId, navigate }: CostingFormProps) {
+  const saveCost = useSaveV3CostData();
+  const submitCost = useSubmitV3Costing();
+  const [state, setState] = useState<FgCostState[]>(() => initStateFromReq(req));
+
+  const fgById = useMemo(
+    () => Object.fromEntries(req.finishedGoods.map((fg) => [fg.id, fg] as const)),
+    [req.finishedGoods],
+  );
 
   const buildPayload = (): V3FgCostInput[] =>
     state.map((fg) => {

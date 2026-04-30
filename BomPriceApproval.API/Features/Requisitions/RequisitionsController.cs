@@ -225,7 +225,10 @@ public class RequisitionsController(
             q.Notes,
             new V3CustomerSummary(q.Customer.Id, q.Customer.Name, q.Customer.Code),
             new V3SalesPersonSummary(q.SalesPerson.Id, q.SalesPerson.Name),
-            finishedGoods));
+            finishedGoods,
+            q.CancelReason,
+            q.CancelledAt,
+            q.CancelledByUserId));
     }
 
     [HttpPost]

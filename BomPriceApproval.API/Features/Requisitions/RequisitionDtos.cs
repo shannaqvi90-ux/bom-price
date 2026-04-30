@@ -108,7 +108,12 @@ public record V3RequisitionDetail(
     string? Notes,
     V3CustomerSummary Customer,
     V3SalesPersonSummary SalesPerson,
-    List<V3FinishedGoodDto> FinishedGoods);
+    List<V3FinishedGoodDto> FinishedGoods,
+    // V3 cancellation context — populated for Status=Cancelled (V3 cutover or admin C1).
+    // Without these, frontend renders "Cancelled" with no explanation.
+    string? CancelReason,
+    DateTime? CancelledAt,
+    int? CancelledByUserId);
 
 public record V3CustomerSummary(int Id, string Name, string Code);
 

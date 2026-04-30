@@ -100,7 +100,54 @@ UPDATE "QuotationRequests"
 \echo '1b. Cancelled in-flight V2.3 reqs:' :ROW_COUNT
 
 -- ============================================================================
--- (sections 2-4 added in subsequent tasks)
+-- 2. DEACTIVATE BOMCREATOR USERS
+-- ============================================================================
+-- Sets IsActive=false + revokes all refresh tokens.
+-- Live access tokens (≤15 min TTL) continue to work until expiry; this is
+-- acceptable inside the maintenance window. Hard-revocation of access tokens
+-- via JTI tracking is a separate enhancement (out of scope per spec).
+-- ============================================================================
+
+-- 2a. Audit rows
+INSERT INTO "AdminAuditLog"
+  ("AdminUserId", "ActionType", "EntityType", "EntityId", "Reason", "BeforeJson", "CreatedAt")
+SELECT
+  :adminId,
+  'V3CutoverMigration',
+  'User',
+  u."Id",
+  '[V3 cutover ' || :'cutoverDateLabel' || '] BomCreator role deprecated — user deactivated per V3 design Q12',
+  json_build_object(
+    'id', u."Id",
+    'name', u."Name",
+    'email', u."Email",
+    'role', u."Role",
+    'isActive', u."IsActive"
+  )::text,
+  NOW()
+FROM "Users" u
+WHERE u."Role" = 2  -- BomCreator
+  AND u."IsActive" = true;
+
+\echo '2a. Audit rows for BomCreator users:' :ROW_COUNT
+
+-- 2b. Deactivate the users
+UPDATE "Users"
+   SET "IsActive" = false
+ WHERE "Role" = 2 AND "IsActive" = true;
+
+\echo '2b. Deactivated BomCreator users:' :ROW_COUNT
+
+-- 2c. Revoke their refresh tokens
+UPDATE "RefreshTokens"
+   SET "RevokedAt" = NOW()
+ WHERE "RevokedAt" IS NULL
+   AND "UserId" IN (SELECT "Id" FROM "Users" WHERE "Role" = 2 AND "IsActive" = false);
+
+\echo '2c. Revoked BomCreator refresh tokens:' :ROW_COUNT
+
+-- ============================================================================
+-- (sections 3-4 added in subsequent tasks)
 -- ============================================================================
 
 -- ============================================================================

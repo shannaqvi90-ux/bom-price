@@ -15,8 +15,23 @@ namespace BomPriceApproval.API.Features.Items;
 [Authorize]
 public class ItemsController(AppDbContext db, ICodeGeneratorService codeGen) : ControllerBase
 {
+    private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private int? CurrentBranchId => int.TryParse(User.FindFirstValue("branchId"), out var b) && b > 0 ? b : null;
     private string? CurrentRole => User.FindFirstValue(ClaimTypes.Role);
+
+    /// <summary>
+    /// V2.3-A authorization for Update + UpdateStatus (Admin + Accountant only).
+    /// Admin is cross-branch (always allowed). Accountant is scoped via the M:N
+    /// UserBranches table — NOT the JWT branchId claim, since Accountants can be
+    /// assigned to multiple branches and User.BranchId is "ignored" for that role.
+    /// Mirrors the inline helper in CostingController (PR #38).
+    /// </summary>
+    private async Task<bool> AccountantAuthorizedForBranchAsync(int branchId)
+    {
+        if (CurrentRole == "Admin") return true;
+        if (CurrentRole != "Accountant") return false;
+        return await db.UserBranches.AnyAsync(ub => ub.UserId == CurrentUserId && ub.BranchId == branchId);
+    }
 
     [HttpGet]
     public async Task<IActionResult> GetAll(
@@ -37,11 +52,24 @@ public class ItemsController(AppDbContext db, ICodeGeneratorService codeGen) : C
         }
 
         // Branch scoping: an explicit ?branchId= param takes precedence (SP cross-branch picker).
-        // Without it, JWT-bound users fall back to their own branch.
+        // Without it, JWT-bound users fall back to their own branch — except Accountants,
+        // whose visibility is the M:N UserBranches table, NOT the JWT branchId hint (V2.3-A).
         if (branchId.HasValue)
+        {
             query = query.Where(i => i.BranchId == branchId.Value);
+        }
+        else if (CurrentRole == "Accountant")
+        {
+            var allowedBranchIds = await db.UserBranches
+                .Where(ub => ub.UserId == CurrentUserId)
+                .Select(ub => ub.BranchId)
+                .ToListAsync();
+            query = query.Where(i => allowedBranchIds.Contains(i.BranchId));
+        }
         else if (CurrentBranchId.HasValue)
+        {
             query = query.Where(i => i.BranchId == CurrentBranchId);
+        }
 
         if (!includeInactive)
             query = query.Where(i => i.IsActive);
@@ -54,10 +82,24 @@ public class ItemsController(AppDbContext db, ICodeGeneratorService codeGen) : C
     [HttpGet("check-similar")]
     public async Task<IActionResult> CheckSimilar([FromQuery] string description)
     {
-        var branchId = CurrentBranchId;
-        var similar = await db.Items
-            .Where(i => (branchId == null || i.BranchId == branchId) &&
-                        EF.Functions.ILike(i.Description, $"%{description}%"))
+        // V2.3-A: Accountants see across all UserBranches branches. Admin/MD see all (no branch hint).
+        // SP/BomCreator stay bound to their JWT-hint branch.
+        var query = db.Items.Where(i => EF.Functions.ILike(i.Description, $"%{description}%"));
+        if (CurrentRole == "Accountant")
+        {
+            var allowedBranchIds = await db.UserBranches
+                .Where(ub => ub.UserId == CurrentUserId)
+                .Select(ub => ub.BranchId)
+                .ToListAsync();
+            query = query.Where(i => allowedBranchIds.Contains(i.BranchId));
+        }
+        else if (CurrentBranchId.HasValue)
+        {
+            var hint = CurrentBranchId.Value;
+            query = query.Where(i => i.BranchId == hint);
+        }
+
+        var similar = await query
             .Select(i => new SimilarItemResult(i.Id, i.Code, i.Description))
             .Take(5).ToListAsync();
         return Ok(similar);
@@ -115,7 +157,7 @@ public class ItemsController(AppDbContext db, ICodeGeneratorService codeGen) : C
     {
         var item = await db.Items.FindAsync(id);
         if (item is null) return NotFound();
-        if (CurrentBranchId.HasValue && item.BranchId != CurrentBranchId)
+        if (!await AccountantAuthorizedForBranchAsync(item.BranchId))
             return Forbid();
 
         var duplicate = await db.Items.AnyAsync(i => i.Code == req.Code && i.BranchId == item.BranchId && i.Id != id);
@@ -135,7 +177,7 @@ public class ItemsController(AppDbContext db, ICodeGeneratorService codeGen) : C
     {
         var item = await db.Items.FindAsync(id);
         if (item is null) return NotFound();
-        if (CurrentBranchId.HasValue && item.BranchId != CurrentBranchId)
+        if (!await AccountantAuthorizedForBranchAsync(item.BranchId))
             return Forbid();
 
         item.IsActive = req.IsActive;

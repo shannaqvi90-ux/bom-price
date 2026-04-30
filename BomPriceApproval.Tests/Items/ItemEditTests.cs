@@ -75,12 +75,16 @@ public class ItemEditTests(WebApplicationFactory<Program> factory) : IClassFixtu
     }
 
     [Fact]
-    public async Task EditItem_AsAccountant_CrossBranch_Returns403()
+    public async Task EditItem_AsAccountant_NotInUserBranches_Returns403()
     {
-        // Create a SalesPerson at branch 2, create item there
+        // V2.3-A: Accountant authorization is driven by the M:N UserBranches table,
+        // NOT User.BranchId. The seed Sara has UserBranches=[1,2] post-V23a auto-assignment,
+        // so we provision a fresh Accountant explicitly scoped to branch 1 only.
+
         var adminToken = await LoginAsync("admin@test.com", "Admin@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
 
+        // Create a SalesPerson at branch 2, create item there
         var spEmail = $"sp2-{Guid.NewGuid():N}"[..12] + "@test.com";
         await _client.PostAsJsonAsync("/api/users", new
         {
@@ -102,10 +106,33 @@ public class ItemEditTests(WebApplicationFactory<Program> factory) : IClassFixtu
         createResp.StatusCode.Should().Be(HttpStatusCode.Created);
         var b2Item = await createResp.Content.ReadFromJsonAsync<ItemDto>();
 
-        // Sara is branch 1 Accountant — should get 403 on branch 2 item
-        var saraToken = await LoginAsync("sara@test.com", "Test@1234");
-        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", saraToken);
+        // Provision a fresh Accountant scoped to UserBranches=[1] only (branch 2 EXCLUDED).
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var accEmail = $"acc1-{Guid.NewGuid():N}"[..12] + "@test.com";
+        var newAccResp = await _client.PostAsJsonAsync("/api/users", new
+        {
+            Name = "Branch1 Accountant",
+            Email = accEmail,
+            Password = "Test@1234",
+            Role = 3, // UserRole.Accountant
+            BranchId = 1
+        });
+        newAccResp.StatusCode.Should().Be(HttpStatusCode.Created);
 
+        // Login once to capture UserId, then SetBranches as admin.
+        var firstAccLogin = await _client.PostAsJsonAsync("/api/auth/login",
+            new { Email = accEmail, Password = "Test@1234" });
+        var loginBody = await firstAccLogin.Content.ReadFromJsonAsync<LoginResponse>();
+        var newAccUserId = loginBody!.UserId;
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var setBranchesResp = await _client.PutAsJsonAsync(
+            $"/api/users/{newAccUserId}/branches",
+            new { BranchIds = new[] { 1 } });
+        setBranchesResp.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        // This Accountant has UserBranches=[1] — must get 403 on branch 2 item.
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", loginBody.AccessToken);
         var resp = await _client.PutAsJsonAsync($"/api/items/{b2Item!.Id}", new
         {
             Code = b2Item.Code,

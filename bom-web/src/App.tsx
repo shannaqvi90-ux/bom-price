@@ -11,7 +11,7 @@ import { NewRequisitionPage } from "@/features/requisitions/NewRequisitionPage";
 import RequisitionDetailPage from "@/features/requisitions/RequisitionDetailPage";
 import CustomerListPage from "@/features/customers/CustomerListPage";
 import ItemListPage from "@/features/items/ItemListPage";
-import CostingEntryPage from "@/features/costing/CostingEntryPage";
+import CostingEntryV3Page from "@/features/costing/CostingEntryV3Page";
 import { CustomerConfirmPage } from "@/features/requisitions/CustomerConfirmPage";
 import { MdMarginPage } from "@/features/approvals/MdMarginPage";
 import { MdFinalSignPage } from "@/features/approvals/MdFinalSignPage";
@@ -160,8 +160,8 @@ const router = createBrowserRouter([
       {
         path: "requisitions/:id/costing",
         element: (
-          <ProtectedRoute allow={["Accountant"]}>
-            <CostingEntryPage />
+          <ProtectedRoute allow={["Accountant", "Admin"]}>
+            <CostingEntryV3Page />
           </ProtectedRoute>
         ),
       },

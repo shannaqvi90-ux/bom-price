@@ -90,3 +90,57 @@ export function useSubmitCostingItem() {
     },
   });
 }
+
+// V3 — bulk cost-data upsert. Replaces V2.3 per-FG Start→Draft→SubmitItem cycle
+// (Decision #17 — accountant costs all FGs together in one shot).
+export interface V3RawMaterialCostInput {
+  bomLineId: number;
+  costPerKg: number;
+  currencyCode: string;
+}
+
+export interface V3FgCostInput {
+  requisitionItemId: number;
+  rawMaterialCosts: V3RawMaterialCostInput[];
+  printingCostPerKg: number | null;
+  printingCostCurrency: string | null;
+  fohPerKg: number;
+  transportPerKg: number;
+  commissionPerKg: number;
+}
+
+export interface SaveV3CostDataPayload {
+  finishedGoods: V3FgCostInput[];
+}
+
+export function useSaveV3CostData() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      requisitionId,
+      payload,
+    }: {
+      requisitionId: number;
+      payload: SaveV3CostDataPayload;
+    }) => api.put(`/costing/${requisitionId}/cost-data`, payload),
+    onSuccess: (_d, { requisitionId }) => {
+      qc.invalidateQueries({ queryKey: requisitionKeys.detail(requisitionId) });
+      qc.invalidateQueries({ queryKey: costingKeys.detail(requisitionId) });
+    },
+  });
+}
+
+// V3 — overall submit (Costing -> MdPricing). The existing /api/costing/{id}/submit
+// endpoint takes no body and validates that every FG already has a BomCost row.
+export function useSubmitV3Costing() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requisitionId }: { requisitionId: number }) =>
+      api.post(`/costing/${requisitionId}/submit`),
+    onSuccess: (_d, { requisitionId }) => {
+      qc.invalidateQueries({ queryKey: requisitionKeys.detail(requisitionId) });
+      qc.invalidateQueries({ queryKey: requisitionKeys.list() });
+      qc.invalidateQueries({ queryKey: costingKeys.detail(requisitionId) });
+    },
+  });
+}

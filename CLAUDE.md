@@ -141,12 +141,14 @@ Examples:
 
 ## Project Overview
 
-**BOM & Price Approval** is a quotation workflow system for Fujairah Plastic Factory. Sales staff submit quotation requests; BOM creators build Bills of Materials; accountants enter costing data; the Managing Director approves and dispatches PDF quotations via email.
+**BOM & Price Approval** is a quotation workflow system for Fujairah Plastic Factory. **V3 simplified workflow is LIVE on production since 2026-04-30** — see the V3 section below. Sales staff create requisitions with attached BOM in one step; accountants enter costing data; the Managing Director approves margins, confirms with customer, then digitally signs. V2.3 sections describe the prior workflow whose controllers + tests still live in the codebase for legacy data reads.
 
 The repository contains:
-- **ASP.NET Core 8 backend** (`BomPriceApproval.API/`)
-- **React 19 + Vite web frontend** (`bom-web/`)
-- **React Native (Expo) mobile app** (`bom-mobile/`) — V1 shipped 2026-04-27 via EAS preview-channel APK; deploy runbook at `bom-mobile/docs/DEPLOY.md`.
+- **ASP.NET Core 8 backend** (`BomPriceApproval.API/`) — production at `https://bom-fpf-api.fly.dev` (Fly Singapore region).
+- **React 19 + Vite web frontend** (`bom-web/`) — production at `https://bom-fpf.pages.dev` (Cloudflare Pages, auto-deploys from `master`). Installable PWA.
+- **React Native (Expo) mobile app** (`bom-mobile/`) — V1 shipped 2026-04-27 via EAS preview-channel APK (`mobile-shipped-vc1` on V2.3 backend behavior; V3 mobile rebuild deferred). Deploy runbook at `bom-mobile/docs/DEPLOY.md`.
+
+> **Production status:** No live external users yet. Only Shan testing. Cutovers, breaking changes, and downtime can happen anytime — no broadcast emails or maintenance-window rituals needed until real team onboarded.
 
 ---
 
@@ -256,8 +258,8 @@ Every data-access query must scope results to the user's `BranchId` extracted fr
 `User.BranchId` semantics now depend on role:
 
 - **SalesPerson**: "default pre-fill hint" for the new-requisition branch picker. SP picks the branch per-req (UI dropdown). Backend accepts `BranchId` in `POST /api/requisitions` payload, with a 1-release transition fallback to `User.BranchId` when payload omits it (logged warning).
-- **BomCreator**: binding constraint (single branch — unchanged).
-- **Accountant**: ignored — source of truth is `UserBranches` table (M:N join). One Accountant can be assigned to multiple branches via admin `PUT /api/users/{id}/branches`.
+- **BomCreator**: ~~binding constraint (single branch — unchanged).~~ **DEPRECATED post-V3 cutover (2026-04-30)** — BomCreator role dropped per V3 design decision #3 (sales now combines requisition + BOM in one step). Existing BomCreator user(s) deactivated at cutover. `BomController.StartItem/SaveLines/Submit` are 100% dead code — left in place because deletion would break `BomTests/BomSaveLinesTests` test suite.
+- **Accountant**: ignored — source of truth is `UserBranches` table (M:N join). One Accountant can be assigned to multiple branches via admin `PUT /api/users/{id}/branches`. **V23a auto-seed migration assigns every active Accountant to every active branch** — fresh accountants need explicit `PUT /api/users/{id}/branches` to scope them down.
 - **ManagingDirector / Admin**: cross-branch (unchanged).
 
 Branch authorization is centralized in `BranchAuthorization.UserAuthorizedForBranch(user, branchId, db)`.
@@ -335,17 +337,61 @@ Phase 2 adds the two deferred operations + finishes structural cleanup of the ad
 
 A `QuotationRequest` contains multiple `RequisitionItem` entries (each with an `Item` + `ExpectedQty`). BOM and costing are tracked per-item via `BomHeader.RequisitionItemId`. Approval uses `ApprovalItem` (per-item price/margin on `QuotationApproval`).
 
-### Requisition Workflow State Machine
+### V3 Workflow (CURRENT — post-2026-04-30 cutover)
+
+V3 simplified the workflow per 15 design decisions captured in `docs/superpowers/specs/2026-04-29-new-workflow-v3-mockup.html`:
+
+- **Roles:** SalesPerson + Accountant + ManagingDirector + Admin. **BomCreator dropped** — sales now combines requisition + BOM lines in one step.
+- **Branch:** Alain only (`BranchId=2`). Fujairah was deactivated at cutover; non-Alain reqs cancelled (Status=Cancelled), non-Alain items deactivated.
+- **Approval:** 2-stage MD approval — margin → customer-confirm → final-sign (lock).
+
+**State machine** (`RequisitionStatus` enum — V2.3 values 1-5 are legacy, kept for int-slot stability but not produced by V3):
+
+```
+Draft(0) → Costing(8) → MdPricing(9) → CustomerConfirm(10) → MdFinalSign(11) → Signed(12)
+                  ↘ Rejected(7) at MdPricing
+                  ↘ Cancelled(13) at any non-terminal status (admin C1)
+```
+
+| Status | Role action |
+|---|---|
+| **Draft** | SP creates req with multi-FG and immediately attaches BOM lines per FG. Submits → Costing. |
+| **Costing** | Accountant enters cost data per FG via `PUT /api/costing/{id}/cost-data` (bulk-upsert). Submits → MdPricing. |
+| **MdPricing** | MD sets margin per FG. Approve → CustomerConfirm. Reject → Rejected (terminal). |
+| **CustomerConfirm** | SP confirms customer sign-off. Confirms → MdFinalSign. |
+| **MdFinalSign** | MD signs (digital signature hash). Approves → Signed (terminal — all prices locked). |
+| **Signed** | Terminal. Email + PDF dispatched to SP/customer. |
+| **Cancelled** | Terminal. Set by admin C1 hard-delete or V3 cutover migration (Status=13 with `[V3 cutover 2026-04-30] ...` reason). |
+
+**V3 endpoints:**
+
+- `GET /api/requisitions/{id}` — V3 nested shape: `finishedGoods[].bomLines/costs`, `customer`, `salesPerson`, plus `cancelReason` / `cancelledAt` / `cancelledByUserId` when Status=Cancelled (PR #36).
+- `PUT /api/costing/{id}/cost-data` — bulk-upsert `BomCost` + `BomCostLine` rows for all FGs (PR #39). Accountant flow.
+- `/requisitions/:id/costing` (web) — V3 `CostingEntryV3Page`: read-only BOM table per FG, editable per-line cost+currency, per-FG FOH/Transport/Commission inputs (PR #40).
+- Auto-codes: req `RefNo` is the existing PG computed column (`REQ-NNNN`); customer `Code` auto-generated post-create.
+
+**V3 cutover artifacts (2026-04-30):**
+
+- Cutover SQL: `docs/cutover/2026-04-30-v3-cutover.sql` (operational record).
+- Tag: `v3-cutover-2026-04-30` → commit `186ae79`.
+- Stats: 6 in-flight V2.3 reqs cancelled, 1 BomCreator deactivated, 3 non-Alain items deactivated, 7 refresh tokens revoked, 10 audit rows.
+- Runbook (post-fix order): apply migrations FIRST → cutover SQL → merge frontend PR → Fly deploy. See `docs/cutover/README.md` (corrected via PR #37).
+
+V2.3 sections below remain for historical context — V2.3 controllers + tests still drive `Approved` legacy data reads but no longer produce new reqs.
+
+### V2.3 Workflow State Machine (LEGACY — pre-2026-04-30 cutover)
 
 ```
 BomPending → BomInProgress → CostingPending → CostingInProgress → MdReview → Approved | Rejected
 ```
 
-Status transitions are role-gated:
+Status transitions were role-gated:
 - **SalesPerson** creates (→ BomPending), can add/remove items
-- **BomCreator** starts/saves/submits BOM per item (BomPending → BomInProgress → CostingPending)
+- **BomCreator** (DEPRECATED post-V3) starts/saves/submits BOM per item (BomPending → BomInProgress → CostingPending)
 - **Accountant** starts/drafts/submits costing per item (CostingPending → CostingInProgress → MdReview)
 - **ManagingDirector** approves/rejects with per-item prices (MdReview → Approved | Rejected)
+
+V2.3-era `Approved` reqs persist on production untouched and remain readable through `GET /api/requisitions/{id}` (legacy shape via fallback).
 
 ### Authentication
 
@@ -379,7 +425,11 @@ Status transitions are role-gated:
 
 PostgreSQL via EF Core 8 (Npgsql). All financial columns use `HasPrecision(18, 4)` or `(18, 6)`. The `RefNo` column on `QuotationRequest` is a PostgreSQL computed column that formats as `REQ-0001`.
 
-`appsettings.json` and `appsettings.Development.json` ship with **empty** `ConnectionStrings:DefaultConnection` — the actual connection string lives in `dotnet user-secrets` (UserSecretsId `bom-price-approval-secrets`). Convention: `Host=localhost;Port=5433;Database=bom_price_approval;Username=postgres;Password=…`. PG password was last rotated 2026-04-27 (history pre-rotation password is now a dead value).
+**Local dev:** `Host=localhost;Port=5433;Database=bom_price_approval;Username=postgres`. Password lives in `dotnet user-secrets` (UserSecretsId `bom-price-approval-secrets`); last rotated 2026-04-27. `appsettings.json` + `appsettings.Development.json` ship with empty connection string.
+
+**Production:** Neon (Postgres-as-a-service, `ap-southeast-1` region). Pooled connection. Connection string is a Fly secret (`ConnectionStrings__DefaultConnection`) on the `bom-fpf-api` app. Last rotated 2026-04-30 evening (verified via rolling restart + `/health` 200 + login DB-roundtrip 401-not-500).
+
+**Rotating Neon password (runbook):** Neon dashboard → Roles → Reset password → copy new pooled URI → convert to Npgsql key=value form → `flyctl secrets set "ConnectionStrings__DefaultConnection=Host=...;Port=5432;Database=neondb;Username=...;Password=...;SSL Mode=Require;Trust Server Certificate=true" -a bom-fpf-api` → auto-rolling-restart → verify `/health` + a login attempt returns 401 (not 500). Run from terminal — never paste the new password into chat.
 
 ### Logging
 
@@ -459,7 +509,33 @@ dotnet ef database update --project BomPriceApproval.API
 | React web (`bom-web`) | 5300 |
 | React Native / Expo Metro (`bom-mobile`) | 8081 |
 
-CORS allowlist in `Program.cs` permits origins `http://localhost:5300` (web) and `http://localhost:8081` (mobile dev).
+CORS allowlist in `Program.cs` permits origins `http://localhost:5300` (web), `http://localhost:8081` (mobile dev), and the production Cloudflare Pages domain.
+
+---
+
+## Production / Deployment
+
+| Component | Where | Auto-deploy from |
+|---|---|---|
+| API (`BomPriceApproval.API`) | Fly.io app `bom-fpf-api`, Singapore region | Manual (`flyctl deploy --remote-only --config fly.toml`) |
+| Web (`bom-web`) | Cloudflare Pages project `bom-fpf` → `https://bom-fpf.pages.dev` | Auto on `master` push |
+| DB | Neon Postgres, `ap-southeast-1` | — |
+| Mobile (`bom-mobile`) | EAS preview channel → APK direct download | Manual via `eas-cli` |
+| SMTP | `shan@fujairahplastic.com` (M365) | — |
+
+**Fly secrets** (set via `flyctl secrets set KEY=value -a bom-fpf-api`):
+
+- `ConnectionStrings__DefaultConnection` — Neon pooled URI, Npgsql key=value format
+- `Jwt__Key` — 32+ char signing key
+- `Email__Username` / `Email__Password` / `Email__FromAddress` — M365 SMTP
+- `CorsAllowedOrigins` — production frontend origin
+- `WebPush__VapidPublicKey` / `WebPush__VapidPrivateKey` — PWA web-push VAPID keypair
+
+**Health checks:** `GET https://bom-fpf-api.fly.dev/health` returns `{"status":"ok"}`. Fly health check on port 8080 must pass (4-second startup window typical).
+
+**Migrations on prod:** `dotnet ef database update --project BomPriceApproval.API --connection "$NEON_PROD_URI"`. Always run migrations BEFORE merging schema-dependent PRs (V3 cutover taught this — runbook fix in PR #37).
+
+**Production user policy:** No live external users yet. Only Shan testing. Cutovers, breaking changes, and downtime can happen anytime — no broadcast email or maintenance-window rituals needed until a real team is onboarded. See `memory/project_production_status.md`.
 
 ---
 
@@ -570,4 +646,11 @@ Always follow this order — no exceptions:
 
 ## Maintenance
 
-This file drifts over time as the codebase evolves. Re-audit it every ~2 months by running a "reality audit" session (compare each claim against the actual codebase). The last update was **2026-04-29 evening** (V3 Phase A shipped + auto-merge permission added: `gh pr merge` is now allowed autonomously when CI is green, base is default branch, no `hold` label, and no DO-NOT-MERGE comment. `gh pr close` still requires explicit approval).
+This file drifts over time as the codebase evolves. Re-audit it every ~2 months by running a "reality audit" session (compare each claim against the actual codebase). The last update was **2026-04-30 evening** — surgical refresh after V3 cutover completed earlier the same day:
+
+- Added V3 Workflow section (CURRENT) with state machine, role assignments, endpoints, cutover artifacts. V2.3 workflow demoted to LEGACY.
+- Annotated BomCreator role as deprecated post-V3 (deactivated, dead code in `BomController` left in place to keep test suite stable).
+- Added Production / Deployment section (Fly + Cloudflare Pages + Neon + EAS) — production has been live since 2026-04-28 but CLAUDE.md hadn't acknowledged it.
+- Database section split between local dev (PG on 5433) and production (Neon `ap-southeast-1`). Neon password rotation runbook added.
+- Project Overview header now leads with V3 + production-live state.
+- Prior update (2026-04-29 evening): V3 Phase A shipped + auto-merge permission added (`gh pr merge` autonomous when CI green, base is default, no `hold` label/comment; `gh pr close` still requires explicit approval).

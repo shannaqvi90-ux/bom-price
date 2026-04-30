@@ -1,0 +1,51 @@
+Timing is on.
+=== V3 CUTOVER MIGRATION ===
+adminId: 1
+alainBranchId: 2
+dryRun: false
+cutoverDateLabel: 2026-04-30
+
+BEGIN
+Time: 83.453 ms
+Time: 84.302 ms
+Time: 84.221 ms
+0. Pre-flight checks PASSED.
+INSERT 0 6
+Time: 85.518 ms
+1a. Audit rows for in-flight reqs: 6
+UPDATE 6
+Time: 87.993 ms
+1b. Cancelled in-flight V2.3 reqs: 6
+INSERT 0 1
+Time: 84.850 ms
+2a. Audit rows for BomCreator users: 1
+UPDATE 1
+Time: 84.848 ms
+2b. Deactivated BomCreator users: 1
+UPDATE 7
+Time: 91.104 ms
+2c. Revoked BomCreator refresh tokens: 7
+INSERT 0 0
+Time: 85.945 ms
+3a. Audit rows for non-Alain customers: 0
+UPDATE 0
+Time: 84.902 ms
+3b. Soft-deleted non-Alain customers: 0
+INSERT 0 3
+Time: 84.790 ms
+4a. Audit rows for non-Alain items: 3
+UPDATE 3
+Time: 84.579 ms
+4b. Deactivated non-Alain items: 3
+
+=== POST-FLIGHT COUNTS ===
+ still_inflight_v2_reqs | cutover_cancelled_reqs | still_active_bomcreator_users | still_visible_nonalain_customers | still_active_nonalain_items | new_audit_rows 
+------------------------+------------------------+-------------------------------+----------------------------------+-----------------------------+----------------
+                      0 |                      6 |                             0 |                                0 |                           0 |             10
+(1 row)
+
+Time: 87.780 ms
+
+*** PROD RUN — COMMITTING ***
+COMMIT
+Time: 84.863 ms

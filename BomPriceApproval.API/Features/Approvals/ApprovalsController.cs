@@ -280,9 +280,13 @@ public class ApprovalsController(
 
         if (req is null) return NotFound();
 
-        // SalesPerson can only download PDFs for their own requisitions.
-        // Accountant, MD, Admin have null BranchId and see all branches.
+        // SalesPerson: own-req only.
+        // Accountant: V23a — scoped via UserBranches M:N (not the stale "see all branches" rule).
+        // MD + Admin: cross-branch.
         if (CurrentRole == "SalesPerson" && req.SalesPersonId != CurrentUserId)
+            return Forbid();
+        if (CurrentRole == "Accountant" &&
+            !await db.UserBranches.AnyAsync(ub => ub.UserId == CurrentUserId && ub.BranchId == req.BranchId))
             return Forbid();
 
         var currentApproval = req.Approvals.FirstOrDefault(a => !a.IsSuperseded);

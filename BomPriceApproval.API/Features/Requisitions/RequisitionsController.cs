@@ -122,15 +122,21 @@ public class RequisitionsController(
             var visibleSpIds = SalesAuthorization.VisibleSalesPersonIds(me, db);
             query = query.Where(q => visibleSpIds.Contains(q.SalesPersonId));
         }
-        else
+        else if (CurrentRole == "Accountant")
         {
-            query = CurrentRole switch
-            {
-                "BomCreator" => query.Where(q => q.BranchId == CurrentBranchId),
-                _ when CurrentBranchId.HasValue => query.Where(q => q.BranchId == CurrentBranchId),
-                _ => query
-            };
+            // V23a: Accountants are scoped via UserBranches M:N, NOT JWT branchId.
+            // Mirrors GetAll's branch-scoping logic.
+            var assignedBranchIds = await db.UserBranches
+                .Where(ub => ub.UserId == CurrentUserId)
+                .Select(ub => ub.BranchId)
+                .ToListAsync();
+            query = query.Where(q => assignedBranchIds.Contains(q.BranchId));
         }
+        else if (CurrentRole == "BomCreator" && CurrentBranchId.HasValue)
+        {
+            query = query.Where(q => q.BranchId == CurrentBranchId);
+        }
+        // MD + Admin: no scoping
 
         if (!string.IsNullOrWhiteSpace(status) &&
             Enum.TryParse<RequisitionStatus>(status, ignoreCase: true, out var parsedStatus))
@@ -879,7 +885,9 @@ public class RequisitionsController(
         return CurrentRole switch
         {
             "BomCreator" => q.BranchId == CurrentBranchId,
-            "Accountant" => true,
+            // V23a: Accountants scoped via UserBranches M:N, not unconditional. Sync lookup
+            // to keep CanAccess synchronous (matches the existing SalesPerson branch above).
+            "Accountant" => db.UserBranches.Any(ub => ub.UserId == CurrentUserId && ub.BranchId == q.BranchId),
             "ManagingDirector" => true,
             "Admin" => true,
             _ => false

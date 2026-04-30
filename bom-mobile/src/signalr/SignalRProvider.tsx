@@ -6,7 +6,6 @@ import { useAuth } from "@/auth/AuthContext";
 import { getAccess } from "@/auth/secureStore";
 import { requisitionKeys } from "@/api/requisitions";
 import { notificationKeys } from "@/api/notifications";
-import { approvalKeys } from "@/api/approvals";
 import type { Notification } from "@/types/api";
 
 const baseURL =
@@ -51,7 +50,6 @@ export function SignalRProvider({ children }: { children: ReactNode }) {
         if (n.referenceType === "QuotationRequest") {
           qc.invalidateQueries({ queryKey: requisitionKeys.list() });
           qc.invalidateQueries({ queryKey: requisitionKeys.detail(n.referenceId) });
-          qc.invalidateQueries({ queryKey: approvalKeys.review(n.referenceId) });
         }
       });
 

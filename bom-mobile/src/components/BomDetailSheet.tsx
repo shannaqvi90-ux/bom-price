@@ -119,7 +119,7 @@ export function BomDetailSheet({
               No BOM lines recorded
             </Text>
           ) : (
-            lines.map((line) => (
+            lines.map((line: any) => (
               <View
                 key={line.id}
                 style={{

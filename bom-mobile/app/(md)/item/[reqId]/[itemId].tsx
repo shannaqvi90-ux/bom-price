@@ -54,11 +54,11 @@ export default function MdItemDrillDown() {
   const isLoading = detailQ.isPending || bomQ.isPending || reviewQ.isPending;
   const firstError = detailQ.error ?? bomQ.error ?? reviewQ.error;
 
-  const reqItem = detailQ.data?.items.find((i) => i.id === itemId) ?? null;
-  const bomItem = bomQ.data?.items.find((i) => i.requisitionItemId === itemId) ?? null;
-  const reviewItem = reviewQ.data?.items.find((i) => i.requisitionItemId === itemId) ?? null;
+  const reqItem = detailQ.data?.items.find((i: any) => i.id === itemId) ?? null;
+  const bomItem = bomQ.data?.items.find((i: any) => i.requisitionItemId === itemId) ?? null;
+  const reviewItem = reviewQ.data?.items.find((i: any) => i.requisitionItemId === itemId) ?? null;
   const approvalPrice =
-    detailQ.data?.approval?.items?.find((a) => a.requisitionItemId === itemId)?.pricePerKg ?? null;
+    detailQ.data?.approval?.items?.find((a: any) => a.requisitionItemId === itemId)?.pricePerKg ?? null;
 
   const linesByProcess = useMemo(() => {
     if (!bomItem) return [] as { processName: string; lines: BomLine[] }[];

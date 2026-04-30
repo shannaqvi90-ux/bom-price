@@ -21,7 +21,21 @@ public class CostingController(
     ILogger<CostingController> logger) : ControllerBase
 {
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-    private int? CurrentBranchId => int.TryParse(User.FindFirstValue("branchId"), out var b) && b > 0 ? b : null;
+
+    /// <summary>
+    /// V2.3-A authorization for Accountant + Admin. Admin is cross-branch (always allowed).
+    /// Accountant is scoped via the M:N UserBranches table — NOT the JWT branchId claim,
+    /// since Accountants can be assigned to multiple branches and the User.BranchId column
+    /// is documented as "ignored" for that role. The previous CurrentBranchId-based check
+    /// blocked accountants from any req in a branch other than their User.BranchId hint.
+    /// </summary>
+    private async Task<bool> AccountantAuthorizedForBranchAsync(int branchId)
+    {
+        var role = User.FindFirstValue(ClaimTypes.Role);
+        if (role == "Admin") return true;
+        if (role != "Accountant") return false;
+        return await db.UserBranches.AnyAsync(ub => ub.UserId == CurrentUserId && ub.BranchId == branchId);
+    }
 
     // V3 — full BOM tree + cost data per FG. New-shape JSON consumed by V3 web UI (Phase B).
     // wastagePercent + purchaseValuePerKg/Currency on cost lines are still derived from
@@ -42,7 +56,7 @@ public class CostingController(
             .FirstOrDefaultAsync(q => q.Id == requisitionId);
 
         if (req is null) return NotFound();
-        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
+        if (!await AccountantAuthorizedForBranchAsync(req.BranchId)) return Forbid();
 
         var bomHeaderIds = req.Items
             .Where(ri => ri.BomHeader is not null)
@@ -127,7 +141,7 @@ public class CostingController(
             .Include(r => r.Items).ThenInclude(ri => ri.BomHeader).ThenInclude(bh => bh!.Lines)
             .FirstOrDefaultAsync(r => r.Id == requisitionId);
         if (req is null) return NotFound();
-        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
+        if (!await AccountantAuthorizedForBranchAsync(req.BranchId)) return Forbid();
 
         if (req.Status != RequisitionStatus.Costing)
             return BadRequest(new { error = $"BOM editable only in Costing status (current: {req.Status})" });
@@ -227,7 +241,7 @@ public class CostingController(
             .Include(r => r.Items).ThenInclude(ri => ri.BomHeader).ThenInclude(bh => bh!.Cost)
             .FirstOrDefaultAsync(r => r.Id == requisitionId);
         if (req is null) return NotFound();
-        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
+        if (!await AccountantAuthorizedForBranchAsync(req.BranchId)) return Forbid();
 
         if (!RequisitionStateMachine.CanTransition(req.Status, RequisitionStatus.MdPricing))
             return BadRequest(new { error = $"Cannot submit costing from {req.Status}" });
@@ -269,7 +283,7 @@ public class CostingController(
     {
         var req = await db.QuotationRequests.FindAsync(requisitionId);
         if (req is null) return NotFound();
-        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
+        if (!await AccountantAuthorizedForBranchAsync(req.BranchId)) return Forbid();
         if (req.Status != RequisitionStatus.CostingPending && req.Status != RequisitionStatus.CostingInProgress)
             return Validation
                 .Detail("Requisition is not in CostingPending or CostingInProgress status")
@@ -298,7 +312,7 @@ public class CostingController(
     {
         var req = await db.QuotationRequests.FindAsync(requisitionId);
         if (req is null) return NotFound();
-        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
+        if (!await AccountantAuthorizedForBranchAsync(req.BranchId)) return Forbid();
         if (req.Status != RequisitionStatus.CostingInProgress)
             return Validation
                 .Detail("Draft can only be saved when status is CostingInProgress")
@@ -335,7 +349,7 @@ public class CostingController(
             .FromSqlInterpolated($"SELECT * FROM \"QuotationRequests\" WHERE \"Id\" = {requisitionId} FOR UPDATE")
             .FirstOrDefaultAsync();
         if (req is null) return NotFound();
-        if (CurrentBranchId.HasValue && req.BranchId != CurrentBranchId) return Forbid();
+        if (!await AccountantAuthorizedForBranchAsync(req.BranchId)) return Forbid();
         if (req.Status != RequisitionStatus.CostingInProgress)
             return Validation
                 .Detail("Costing can only be submitted when status is CostingInProgress")

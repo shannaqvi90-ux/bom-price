@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FPF Quotations · New Workflow Mockup (V3) · MD Review</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          fpf: {
+            50:  '#eff4ff',
+            100: '#dbe6ff',
+            200: '#bcd0ff',
+            500: '#3b6df0',
+            600: '#2e5be0',
+            700: '#1e40af',
+            800: '#1a3795',
+            900: '#162d76',
+          }
+        },
+        fontFamily: {
+          sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+        }
+      }
+    }
+  };
+</script>
+<style>
+  body { font-family: 'Inter', system-ui, sans-serif; }
+  .screen-card  { box-shadow: 0 4px 24px rgba(30, 64, 175, 0.08), 0 1px 3px rgba(0,0,0,0.04); }
+  .step-arrow::after { content: '→'; margin: 0 .5rem; color: #94a3b8; font-weight: 600; }
+  .step-arrow:last-child::after { content: ''; }
+  .strike-row { text-decoration: line-through; color: #94a3b8; }
+  .badge-new { background: #fef3c7; color: #92400e; }
+  .badge-removed { background: #fee2e2; color: #991b1b; }
+  .badge-changed { background: #dbeafe; color: #1e40af; }
+  .badge-locked { background: #d1fae5; color: #065f46; }
+  details > summary { cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] summary .chev { transform: rotate(90deg); }
+  .chev { display: inline-block; transition: transform .15s; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 999px; display: inline-block; margin-right: 6px; }
+  /* Print-friendly */
+  @media print {
+    .no-print { display: none !important; }
+    .screen-card { break-inside: avoid; box-shadow: none; border: 1px solid #cbd5e1; }
+    body { background: white; }
+  }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased">
+
+<!-- ==================== TOP NAV ==================== -->
+<header class="bg-fpf-700 text-white">
+  <div class="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
+    <div>
+      <div class="text-xs uppercase tracking-widest text-fpf-200">FPF Quotations · MD Review Mockup</div>
+      <h1 class="text-2xl font-bold mt-1">New Workflow (V3) — Simplified</h1>
+    </div>
+    <div class="text-right">
+      <div class="text-xs text-fpf-200">Branch scope</div>
+      <div class="font-semibold">Alain only · all others paused</div>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-8 space-y-12">
+
+  <!-- ==================== INTRO ==================== -->
+  <section class="bg-white rounded-2xl p-7 screen-card">
+    <h2 class="text-lg font-bold text-slate-900">What changes — at a glance</h2>
+    <p class="text-sm text-slate-600 mt-1">MD requested a simpler, fewer-steps process. This mockup shows the proposed new workflow for review before any code changes.</p>
+    <div class="grid md:grid-cols-3 gap-4 mt-5">
+      <div class="border border-slate-200 rounded-xl p-4 bg-slate-50">
+        <div class="text-xs font-semibold uppercase tracking-wide text-red-700">Removed</div>
+        <ul class="text-sm mt-2 space-y-1 text-slate-700">
+          <li>• <b>BOM Creator</b> role &amp; screens</li>
+          <li>• Separate "BOM Pending → In Progress" step</li>
+          <li>• Multi-branch req creation (only Alain for now)</li>
+        </ul>
+      </div>
+      <div class="border border-slate-200 rounded-xl p-4 bg-slate-50">
+        <div class="text-xs font-semibold uppercase tracking-wide text-amber-700">New / Changed</div>
+        <ul class="text-sm mt-2 space-y-1 text-slate-700">
+          <li>• Sales builds BOM recipe directly (Item · Qty · Micron)</li>
+          <li>• Per-FG-item <b>Printing checkbox</b></li>
+          <li>• Accountant can <b>edit BOM</b> if needed</li>
+          <li>• <b>Two-stage MD approval</b> (price → customer confirm → final sign)</li>
+        </ul>
+      </div>
+      <div class="border border-slate-200 rounded-xl p-4 bg-slate-50">
+        <div class="text-xs font-semibold uppercase tracking-wide text-fpf-700">Auto-generated</div>
+        <ul class="text-sm mt-2 space-y-1 text-slate-700">
+          <li>• <b>Customer Code</b> on customer create</li>
+          <li>• <b>Item Code</b> on item create</li>
+          <li>• Email + in-app notification at <b>every</b> stage</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== OLD vs NEW STATE MACHINE ==================== -->
+  <section class="bg-white rounded-2xl p-7 screen-card">
+    <h2 class="text-lg font-bold text-slate-900">Workflow — Before vs After</h2>
+
+    <div class="mt-5">
+      <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Current (V2.3)</div>
+      <div class="flex flex-wrap items-center gap-y-2 text-sm">
+        <span class="step-arrow strike-row px-3 py-1.5 rounded-md bg-slate-100">BOM Pending</span>
+        <span class="step-arrow strike-row px-3 py-1.5 rounded-md bg-slate-100">BOM In Progress</span>
+        <span class="step-arrow px-3 py-1.5 rounded-md bg-slate-100">Costing Pending</span>
+        <span class="step-arrow px-3 py-1.5 rounded-md bg-slate-100">Costing In Progress</span>
+        <span class="step-arrow px-3 py-1.5 rounded-md bg-slate-100">MD Review</span>
+        <span class="px-3 py-1.5 rounded-md bg-slate-100">Approved</span>
+      </div>
+      <div class="text-xs text-slate-500 mt-1">3 roles touch the req · 5 status transitions before approval</div>
+    </div>
+
+    <div class="mt-7">
+      <div class="text-xs font-semibold uppercase tracking-wide text-fpf-700 mb-2">Proposed (V3)</div>
+      <div class="flex flex-wrap items-center gap-y-2 text-sm">
+        <span class="step-arrow px-3 py-1.5 rounded-md bg-fpf-50 border border-fpf-200 text-fpf-800 font-medium">Sales Submit</span>
+        <span class="step-arrow px-3 py-1.5 rounded-md bg-fpf-50 border border-fpf-200 text-fpf-800 font-medium">Costing</span>
+        <span class="step-arrow px-3 py-1.5 rounded-md bg-fpf-50 border border-fpf-200 text-fpf-800 font-medium">MD Pricing</span>
+        <span class="step-arrow px-3 py-1.5 rounded-md bg-amber-50 border border-amber-300 text-amber-900 font-medium">Customer Confirm <span class="badge-new text-[10px] px-1.5 py-0.5 rounded ml-1">NEW</span></span>
+        <span class="step-arrow px-3 py-1.5 rounded-md bg-amber-50 border border-amber-300 text-amber-900 font-medium">MD Final Sign <span class="badge-new text-[10px] px-1.5 py-0.5 rounded ml-1">NEW</span></span>
+        <span class="px-3 py-1.5 rounded-md bg-emerald-50 border border-emerald-300 text-emerald-800 font-medium">Signed &amp; Locked 🔒</span>
+      </div>
+      <div class="text-xs text-slate-500 mt-1">2 roles + MD twice · One screen for sales (req + BOM together) · PDF locked after MD final sign</div>
+    </div>
+
+    <div class="mt-6 grid grid-cols-3 gap-3 text-xs">
+      <div class="flex items-center"><span class="legend-dot bg-fpf-700"></span>Sales action</div>
+      <div class="flex items-center"><span class="legend-dot bg-amber-500"></span>NEW step (customer confirm + final sign)</div>
+      <div class="flex items-center"><span class="legend-dot bg-emerald-600"></span>Frozen / signed PDF</div>
+    </div>
+  </section>
+
+  <!-- ==================== SCREEN 1: SALES NEW REQUISITION ==================== -->
+  <section class="bg-white rounded-2xl p-7 screen-card" id="screen-sales">
+    <div class="flex items-center justify-between mb-1">
+      <h2 class="text-lg font-bold text-slate-900">Screen 1 · Sales Person — New Requisition</h2>
+      <span class="text-xs px-2.5 py-1 rounded-full bg-fpf-100 text-fpf-800 font-medium">All on one page</span>
+    </div>
+    <p class="text-sm text-slate-600 mb-5">Customer + finished goods + BOM recipe + printing + notes — single screen, then submit.</p>
+
+    <!-- Mock browser frame -->
+    <div class="border border-slate-200 rounded-xl overflow-hidden">
+      <div class="bg-slate-100 px-4 py-2 flex items-center gap-2 text-xs text-slate-500">
+        <span class="w-2.5 h-2.5 rounded-full bg-red-400"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+        <span class="ml-3 font-mono">fpf-quotations.app/requisitions/new</span>
+      </div>
+
+      <div class="p-6 bg-slate-50">
+        <div class="bg-white rounded-lg border border-slate-200 p-6">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
+            <div>
+              <h3 class="font-semibold text-slate-900">New Requisition</h3>
+              <p class="text-xs text-slate-500">Branch · Alain (locked)</p>
+            </div>
+            <span class="text-xs px-2 py-1 rounded bg-slate-100">REQ-XXXX (auto)</span>
+          </div>
+
+          <!-- Customer + Currency -->
+          <div class="grid md:grid-cols-3 gap-4">
+            <div>
+              <label class="text-xs font-medium text-slate-700">Customer</label>
+              <div class="mt-1 px-3 py-2.5 border border-slate-300 rounded-md bg-white text-sm flex justify-between items-center">
+                <span>Al Ain Trading LLC</span>
+                <span class="text-xs text-slate-500 font-mono">CUST-0142</span>
+              </div>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-700">Quotation Currency</label>
+              <div class="mt-1 px-3 py-2.5 border border-slate-300 rounded-md bg-white text-sm flex justify-between items-center">
+                <span>USD</span>
+                <span class="text-xs text-slate-500">$</span>
+              </div>
+              <p class="text-[11px] text-slate-500 mt-1">Final price the customer will see in this currency</p>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-700">Reference / PO No.</label>
+              <input type="text" placeholder="optional" class="mt-1 w-full px-3 py-2.5 border border-slate-300 rounded-md text-sm">
+            </div>
+          </div>
+
+          <!-- Finished Goods + per-FG BOM -->
+          <div class="mt-7">
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="font-semibold text-slate-900 text-sm">Finished Goods (each item gets its own BOM)</h4>
+              <button class="text-xs px-3 py-1.5 bg-fpf-700 text-white rounded-md font-medium">+ Add Finished Good</button>
+            </div>
+
+            <!-- FG #1 -->
+            <div class="border border-slate-200 rounded-xl p-5 bg-white">
+              <div class="grid md:grid-cols-12 gap-3">
+                <div class="md:col-span-5">
+                  <label class="text-xs font-medium text-slate-700">Finished Good Item</label>
+                  <div class="mt-1 px-3 py-2 border border-slate-300 rounded-md bg-white text-sm flex justify-between">
+                    <span>Laminated Pouch 200g · Print 6-color</span>
+                    <span class="text-xs text-slate-500 font-mono">FG-0087</span>
+                  </div>
+                  <p class="text-[11px] text-slate-500 mt-1">Filtered to this customer's items · <span class="text-fpf-700 font-medium cursor-pointer">+ Create new</span></p>
+                </div>
+                <div class="md:col-span-3">
+                  <label class="text-xs font-medium text-slate-700">Expected Qty (KG)</label>
+                  <input type="text" value="5,000" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-md text-sm">
+                </div>
+                <div class="md:col-span-2 flex items-end">
+                  <label class="flex items-center gap-2 px-3 py-2 border border-fpf-200 bg-fpf-50 rounded-md w-full text-sm">
+                    <input type="checkbox" checked class="accent-fpf-700"><span class="font-medium text-fpf-800">Printing</span>
+                  </label>
+                </div>
+                <div class="md:col-span-2 flex items-end justify-end">
+                  <button class="text-xs text-red-600 hover:underline">Remove FG</button>
+                </div>
+              </div>
+
+              <!-- BOM recipe table -->
+              <div class="mt-5">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">BOM Recipe — per 1 KG of finished good</div>
+                  <div class="text-[11px] text-slate-500">For 5,000 KG order, system scales automatically</div>
+                </div>
+                <div class="px-3 py-2 mb-2 bg-fpf-50 border border-fpf-200 rounded-md text-xs text-fpf-800">
+                  💡 <b>Recipe is per KG.</b> Enter how many KG of each raw material is consumed to produce <b>1 KG</b> of this finished good. The order quantity multiplies it.
+                </div>
+                <div class="overflow-hidden border border-slate-200 rounded-lg">
+                  <table class="w-full text-sm">
+                    <thead class="bg-slate-50 text-xs text-slate-600">
+                      <tr>
+                        <th class="text-left px-3 py-2 font-medium">Raw Material</th>
+                        <th class="text-left px-3 py-2 font-medium">Qty / KG of FG <span class="font-normal text-slate-400">(KG)</span></th>
+                        <th class="text-left px-3 py-2 font-medium">Micron</th>
+                        <th class="text-left px-3 py-2 font-medium text-slate-400 font-normal">Auto-calc for order →</th>
+                        <th class="px-3 py-2 w-10"></th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                      <tr>
+                        <td class="px-3 py-2">BOPP <span class="text-xs text-slate-500 font-mono ml-1">RM-0012</span></td>
+                        <td class="px-3 py-2"><input type="text" value="0.44" class="w-24 px-2 py-1 border border-slate-300 rounded text-sm" /></td>
+                        <td class="px-3 py-2"><input type="text" value="20" class="w-20 px-2 py-1 border border-slate-300 rounded text-sm" /></td>
+                        <td class="px-3 py-2 text-slate-500 text-xs">2,200 KG <span class="text-slate-400">(0.44 × 5,000)</span></td>
+                        <td class="px-3 py-2 text-right"><button class="text-slate-400 hover:text-red-600">×</button></td>
+                      </tr>
+                      <tr>
+                        <td class="px-3 py-2">PET Film <span class="text-xs text-slate-500 font-mono ml-1">RM-0034</span></td>
+                        <td class="px-3 py-2"><input type="text" value="0.36" class="w-24 px-2 py-1 border border-slate-300 rounded text-sm" /></td>
+                        <td class="px-3 py-2"><input type="text" value="12" class="w-20 px-2 py-1 border border-slate-300 rounded text-sm" /></td>
+                        <td class="px-3 py-2 text-slate-500 text-xs">1,800 KG <span class="text-slate-400">(0.36 × 5,000)</span></td>
+                        <td class="px-3 py-2 text-right"><button class="text-slate-400 hover:text-red-600">×</button></td>
+                      </tr>
+                      <tr>
+                        <td class="px-3 py-2">Adhesive <span class="text-xs text-slate-500 font-mono ml-1">RM-0007</span></td>
+                        <td class="px-3 py-2"><input type="text" value="0.07" class="w-24 px-2 py-1 border border-slate-300 rounded text-sm" /></td>
+                        <td class="px-3 py-2"><input type="text" value="—" class="w-20 px-2 py-1 border border-slate-300 rounded text-sm bg-slate-50" /></td>
+                        <td class="px-3 py-2 text-slate-500 text-xs">350 KG <span class="text-slate-400">(0.07 × 5,000)</span></td>
+                        <td class="px-3 py-2 text-right"><button class="text-slate-400 hover:text-red-600">×</button></td>
+                      </tr>
+                    </tbody>
+                    <tfoot class="bg-slate-50 text-xs">
+                      <tr>
+                        <td class="px-3 py-2 text-right text-slate-500" colspan="1">Recipe total / KG</td>
+                        <td class="px-3 py-2 font-semibold text-slate-700">0.87 KG</td>
+                        <td class="px-3 py-2 text-slate-400">+ wastage applied at costing stage</td>
+                        <td class="px-3 py-2 font-medium text-slate-700">4,350 KG total RM</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                  <div class="px-3 py-2 bg-slate-50 border-t border-slate-200 text-xs">
+                    <button class="text-fpf-700 font-medium">+ Add raw material</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- FG #2 (collapsed preview) -->
+            <details class="border border-slate-200 rounded-xl mt-3 bg-white">
+              <summary class="px-5 py-4 flex justify-between items-center">
+                <div class="text-sm">
+                  <span class="chev mr-2 text-slate-400">▸</span>
+                  <b>Finished Good #2</b> — Stand-up Pouch 500g
+                  <span class="ml-3 text-xs text-slate-500">2,000 KG · 2 RMs · No printing</span>
+                </div>
+                <span class="text-xs text-slate-500">click to expand</span>
+              </summary>
+              <div class="px-5 pb-5 text-xs text-slate-500">[BOM recipe table identical to FG #1 layout]</div>
+            </details>
+
+          </div>
+
+          <!-- Notes -->
+          <div class="mt-6">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-medium text-slate-700">Notes / Remarks</label>
+              <span class="text-[10px] text-slate-500">🔒 Internal only — visible to Sales / Accountant / MD · NOT shown on customer-facing PDF</span>
+            </div>
+            <textarea rows="3" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-md text-sm" placeholder="e.g. Customer wants delivery before Eid. Ramadan packaging design."></textarea>
+          </div>
+
+          <!-- Submit row -->
+          <div class="flex items-center justify-end gap-2 mt-7 border-t border-slate-100 pt-5">
+            <button class="px-4 py-2 text-sm border border-slate-300 rounded-md">Save as Draft</button>
+            <button class="px-5 py-2 text-sm bg-fpf-700 text-white rounded-md font-semibold">Submit Requisition →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-4 text-xs text-slate-600 grid md:grid-cols-2 gap-3">
+      <div><span class="badge-removed text-[10px] px-1.5 py-0.5 rounded mr-1">REMOVED</span> Separate "BOM creator" handoff</div>
+      <div><span class="badge-changed text-[10px] px-1.5 py-0.5 rounded mr-1">CHANGED</span> Customer dropdown now shows only that customer's FG items</div>
+      <div><span class="badge-new text-[10px] px-1.5 py-0.5 rounded mr-1">NEW</span> Per-FG printing checkbox + manual micron input</div>
+      <div><span class="badge-new text-[10px] px-1.5 py-0.5 rounded mr-1">NEW</span> BOM is a <b>per-KG recipe</b> — order qty multiplies it automatically</div>
+    </div>
+  </section>
+
+  <!-- ==================== SCREEN 2: ACCOUNTANT ==================== -->
+  <section class="bg-white rounded-2xl p-7 screen-card" id="screen-accountant">
+    <h2 class="text-lg font-bold text-slate-900">Screen 2 · Accountant — Verify &amp; Cost</h2>
+    <p class="text-sm text-slate-600 mb-5">Accountant verifies items + qty, can edit BOM (full control), then enters per-KG costs.</p>
+
+    <div class="border border-slate-200 rounded-xl overflow-hidden">
+      <div class="bg-slate-100 px-4 py-2 text-xs font-mono text-slate-500">fpf-quotations.app/requisitions/REQ-0042/costing</div>
+      <div class="p-6 bg-slate-50 space-y-5">
+
+        <!-- Verify panel -->
+        <div class="bg-white rounded-lg border border-slate-200 p-5">
+          <div class="flex items-center justify-between">
+            <h3 class="font-semibold text-slate-900">REQ-0042 · Al Ain Trading LLC</h3>
+            <span class="px-2.5 py-1 text-xs rounded-full bg-amber-100 text-amber-800 font-medium">Costing in progress</span>
+          </div>
+          <div class="grid md:grid-cols-3 gap-4 mt-4 text-sm">
+            <div><div class="text-xs text-slate-500">Quote Currency</div><div class="font-medium">USD</div></div>
+            <div><div class="text-xs text-slate-500">Salesperson</div><div class="font-medium">Hassan Ali</div></div>
+            <div><div class="text-xs text-slate-500">Sales notes</div><div class="text-slate-700">"Customer wants delivery before Eid…"</div></div>
+          </div>
+          <div class="mt-4 px-3 py-2 bg-fpf-50 border border-fpf-200 rounded-md text-xs text-fpf-800">
+            ✏️ <b>BOM editable</b> — Accountant can adjust qty / micron / add or remove RM if sales recipe is wrong, before applying costs.
+          </div>
+        </div>
+
+        <!-- Per-FG cost block -->
+        <div class="bg-white rounded-lg border border-slate-200 p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-slate-900">FG #1 · Laminated Pouch 200g</h3>
+            <span class="text-xs px-2 py-0.5 rounded bg-fpf-100 text-fpf-800">Printing: ON</span>
+          </div>
+
+          <!-- BOM (editable) -->
+          <div class="mb-4">
+            <div class="flex items-center justify-between mb-1">
+              <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">BOM (editable) — per 1 KG of finished good</div>
+              <div class="text-[11px] text-slate-500">Order: 5,000 KG · system scales recipe</div>
+            </div>
+            <table class="w-full text-sm border border-slate-200 rounded">
+              <thead class="bg-slate-50 text-xs text-slate-600">
+                <tr>
+                  <th class="text-left px-3 py-2 font-medium">RM</th>
+                  <th class="text-left px-3 py-2 font-medium">Qty / KG <span class="font-normal text-slate-400">(KG)</span></th>
+                  <th class="text-left px-3 py-2 font-medium">Micron</th>
+                  <th class="text-left px-3 py-2 font-medium">Wastage %</th>
+                  <th class="text-left px-3 py-2 font-medium">RM Purchase / KG</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <tr>
+                  <td class="px-3 py-2">BOPP</td>
+                  <td class="px-3 py-2"><input type="text" value="0.44" class="w-20 px-2 py-1 border border-slate-300 rounded text-sm"></td>
+                  <td class="px-3 py-2"><input type="text" value="20" class="w-16 px-2 py-1 border border-slate-300 rounded text-sm"></td>
+                  <td class="px-3 py-2"><input type="text" value="3.5" class="w-16 px-2 py-1 border border-slate-300 rounded text-sm"></td>
+                  <td class="px-3 py-2 flex items-center gap-1">
+                    <input type="text" value="2.85" class="w-20 px-2 py-1 border border-slate-300 rounded text-sm">
+                    <select class="px-1.5 py-1 border border-slate-300 rounded text-xs">
+                      <option>USD</option><option>AED</option><option>EUR</option>
+                    </select>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2">PET Film</td>
+                  <td class="px-3 py-2"><input type="text" value="0.36" class="w-20 px-2 py-1 border border-slate-300 rounded text-sm"></td>
+                  <td class="px-3 py-2"><input type="text" value="12" class="w-16 px-2 py-1 border border-slate-300 rounded text-sm"></td>
+                  <td class="px-3 py-2"><input type="text" value="2.0" class="w-16 px-2 py-1 border border-slate-300 rounded text-sm"></td>
+                  <td class="px-3 py-2 flex items-center gap-1">
+                    <input type="text" value="1.95" class="w-20 px-2 py-1 border border-slate-300 rounded text-sm">
+                    <select class="px-1.5 py-1 border border-slate-300 rounded text-xs">
+                      <option>USD</option><option>AED</option><option>EUR</option>
+                    </select>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2">Adhesive</td>
+                  <td class="px-3 py-2"><input type="text" value="0.07" class="w-20 px-2 py-1 border border-slate-300 rounded text-sm"></td>
+                  <td class="px-3 py-2"><input type="text" value="—" class="w-16 px-2 py-1 border border-slate-300 rounded text-sm bg-slate-50"></td>
+                  <td class="px-3 py-2"><input type="text" value="1.5" class="w-16 px-2 py-1 border border-slate-300 rounded text-sm"></td>
+                  <td class="px-3 py-2 flex items-center gap-1">
+                    <input type="text" value="3.20" class="w-20 px-2 py-1 border border-slate-300 rounded text-sm">
+                    <select class="px-1.5 py-1 border border-slate-300 rounded text-xs">
+                      <option>USD</option><option>AED</option><option>EUR</option>
+                    </select>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Other per-KG costs -->
+          <div class="grid md:grid-cols-4 gap-3">
+            <div>
+              <label class="text-xs font-medium text-slate-700">Printing / KG</label>
+              <div class="mt-1 flex">
+                <input type="text" value="0.45" class="w-full px-2 py-2 border border-slate-300 rounded-l-md text-sm">
+                <select class="px-2 border-y border-r border-slate-300 rounded-r-md text-xs bg-slate-50">
+                  <option>USD</option><option>AED</option>
+                </select>
+              </div>
+              <p class="text-[11px] text-fpf-700 mt-1">Enabled because sales ticked Printing</p>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-700">FOH / KG</label>
+              <input type="text" value="0.30" class="mt-1 w-full px-2 py-2 border border-slate-300 rounded-md text-sm">
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-700">Transport / KG</label>
+              <input type="text" value="0.10" class="mt-1 w-full px-2 py-2 border border-slate-300 rounded-md text-sm">
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-700">Commission / KG</label>
+              <input type="text" value="0.05" class="mt-1 w-full px-2 py-2 border border-slate-300 rounded-md text-sm">
+            </div>
+          </div>
+
+          <div class="mt-4 px-4 py-3 bg-slate-50 border border-slate-200 rounded-md text-sm flex items-center justify-between">
+            <div><span class="text-xs text-slate-500">Cost / KG (AED, post-wastage)</span> <b class="ml-2 text-slate-900">AED 11.42</b></div>
+            <div><span class="text-xs text-slate-500">Total cost</span> <b class="ml-2 text-slate-900">AED 57,108.00</b></div>
+          </div>
+        </div>
+
+        <!-- FG #2 collapsed -->
+        <details class="bg-white rounded-lg border border-slate-200">
+          <summary class="px-5 py-4 flex justify-between items-center">
+            <div class="text-sm"><span class="chev mr-2 text-slate-400">▸</span><b>FG #2</b> · Stand-up Pouch 500g <span class="ml-3 text-xs text-slate-500">No printing · Cost not yet entered</span></div>
+            <span class="text-xs text-slate-500">expand</span>
+          </summary>
+        </details>
+
+        <!-- Submit row -->
+        <div class="flex items-center justify-end gap-2">
+          <button class="px-4 py-2 text-sm border border-slate-300 rounded-md">Save Draft</button>
+          <button class="px-5 py-2 text-sm bg-fpf-700 text-white rounded-md font-semibold">Submit to MD →</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-4 text-xs text-slate-600 grid md:grid-cols-3 gap-3">
+      <div><span class="badge-changed text-[10px] px-1.5 py-0.5 rounded mr-1">CHANGED</span> BOM table is editable here (was read-only before)</div>
+      <div><span class="badge-new text-[10px] px-1.5 py-0.5 rounded mr-1">NEW</span> Per-RM and printing currency selector (USD / AED / EUR)</div>
+      <div><span class="badge-changed text-[10px] px-1.5 py-0.5 rounded mr-1">CHANGED</span> Printing field auto-enabled from sales checkbox</div>
+    </div>
+  </section>
+
+  <!-- ==================== SCREEN 3: MD INITIAL PRICING ==================== -->
+  <section class="bg-white rounded-2xl p-7 screen-card" id="screen-md-pricing">
+    <h2 class="text-lg font-bold text-slate-900">Screen 3 · MD — Set Margin (Initial Pricing)</h2>
+    <p class="text-sm text-slate-600 mb-5">MD reviews cost, adds margin per item, can inspect BOM, then submits. Sales gets email + notification to confirm price with customer.</p>
+
+    <div class="border border-slate-200 rounded-xl overflow-hidden">
+      <div class="bg-slate-100 px-4 py-2 text-xs font-mono text-slate-500">fpf-quotations.app/approvals/REQ-0042</div>
+      <div class="p-6 bg-slate-50 space-y-4">
+
+        <div class="bg-white rounded-lg border border-slate-200 p-5">
+          <div class="flex items-center justify-between mb-1">
+            <h3 class="font-semibold text-slate-900">REQ-0042 · Al Ain Trading LLC</h3>
+            <span class="px-2.5 py-1 text-xs rounded-full bg-fpf-100 text-fpf-800 font-medium">MD Pricing — Stage 1 of 2</span>
+          </div>
+          <div class="text-xs text-slate-500 mb-4">Quote currency: <b>USD</b> · FX rate AED→USD: <b>3.673</b> <span class="text-slate-400">(from ExchangeRates table)</span> · Total qty 7,000 KG</div>
+
+          <div class="px-3 py-2 mb-4 bg-fpf-50 border border-fpf-200 rounded-md text-xs text-fpf-800">
+            💡 <b>Enter Margin per KG in quote currency (USD).</b> System auto-calculates margin %, sale price, and total profit. Cost breakdown shown for full transparency.
+          </div>
+
+          <!-- ============== FG #1 CARD ============== -->
+          <div class="border border-slate-200 rounded-lg p-5 mb-3">
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h4 class="font-semibold text-slate-900">FG #1 · Laminated Pouch 200g</h4>
+                <div class="text-xs text-slate-500 mt-0.5">5,000 KG · 3 RMs</div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs px-2 py-0.5 rounded bg-fpf-100 text-fpf-800 font-medium">Printing: ON</span>
+                <button class="text-xs px-3 py-1 border border-slate-300 rounded">view BOM</button>
+              </div>
+            </div>
+
+            <!-- Cost breakdown (Q7) -->
+            <div class="text-[10px] uppercase tracking-wide text-slate-500 font-semibold mb-2">Cost breakdown · per KG (AED)</div>
+            <div class="grid grid-cols-6 gap-2 mb-4">
+              <div class="border border-slate-200 rounded-md p-2.5 bg-slate-50">
+                <div class="text-[10px] text-slate-500 uppercase">RM <span class="normal-case text-slate-400">(post-wastage)</span></div>
+                <div class="font-semibold text-slate-800 mt-0.5">9.32</div>
+              </div>
+              <div class="border border-slate-200 rounded-md p-2.5 bg-slate-50">
+                <div class="text-[10px] text-slate-500 uppercase">Printing</div>
+                <div class="font-semibold text-slate-800 mt-0.5">1.65</div>
+              </div>
+              <div class="border border-slate-200 rounded-md p-2.5 bg-slate-50">
+                <div class="text-[10px] text-slate-500 uppercase">FOH</div>
+                <div class="font-semibold text-slate-800 mt-0.5">0.30</div>
+              </div>
+              <div class="border border-slate-200 rounded-md p-2.5 bg-slate-50">
+                <div class="text-[10px] text-slate-500 uppercase">Transport</div>
+                <div class="font-semibold text-slate-800 mt-0.5">0.10</div>
+              </div>
+              <div class="border border-slate-200 rounded-md p-2.5 bg-slate-50">
+                <div class="text-[10px] text-slate-500 uppercase">Commission</div>
+                <div class="font-semibold text-slate-800 mt-0.5">0.05</div>
+              </div>
+              <div class="border border-fpf-300 rounded-md p-2.5 bg-fpf-50">
+                <div class="text-[10px] text-fpf-700 uppercase font-semibold">Total Cost</div>
+                <div class="font-bold text-fpf-900 mt-0.5">11.42</div>
+              </div>
+            </div>
+
+            <!-- Margin + sale price row -->
+            <div class="grid grid-cols-12 gap-3 items-end">
+              <div class="col-span-2">
+                <div class="text-[10px] text-slate-500 uppercase font-semibold">Cost / KG (USD)</div>
+                <div class="font-medium text-slate-700 px-2 py-1.5 bg-slate-100 rounded mt-0.5 text-sm">3.11</div>
+              </div>
+              <div class="col-span-3">
+                <label class="text-[10px] text-fpf-700 uppercase font-semibold">Margin / KG (USD) ✏️</label>
+                <input type="text" value="0.68" class="mt-0.5 w-full px-2 py-1.5 border-2 border-fpf-400 rounded text-sm bg-fpf-50 font-bold text-fpf-900" />
+              </div>
+              <div class="col-span-2">
+                <div class="text-[10px] text-slate-500 uppercase">Margin % (auto)</div>
+                <div class="px-2 py-1.5 bg-slate-100 rounded mt-0.5 text-slate-600 font-medium text-sm">21.9%</div>
+              </div>
+              <div class="col-span-2">
+                <div class="text-[10px] text-slate-500 uppercase">Sale Price / KG</div>
+                <div class="px-2 py-1.5 bg-emerald-50 border border-emerald-200 rounded mt-0.5 text-emerald-900 font-bold text-sm">USD 3.79</div>
+              </div>
+              <div class="col-span-3">
+                <div class="text-[10px] text-slate-500 uppercase">Line Total (USD)</div>
+                <div class="px-2 py-1.5 bg-emerald-50 border border-emerald-200 rounded mt-0.5 text-emerald-900 font-bold text-sm">18,950.00</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============== FG #2 CARD ============== -->
+          <div class="border border-slate-200 rounded-lg p-5 mb-3">
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h4 class="font-semibold text-slate-900">FG #2 · Stand-up Pouch 500g</h4>
+                <div class="text-xs text-slate-500 mt-0.5">2,000 KG · 2 RMs</div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">No printing</span>
+                <button class="text-xs px-3 py-1 border border-slate-300 rounded">view BOM</button>
+              </div>
+            </div>
+
+            <div class="text-[10px] uppercase tracking-wide text-slate-500 font-semibold mb-2">Cost breakdown · per KG (AED)</div>
+            <div class="grid grid-cols-6 gap-2 mb-4">
+              <div class="border border-slate-200 rounded-md p-2.5 bg-slate-50">
+                <div class="text-[10px] text-slate-500 uppercase">RM <span class="normal-case text-slate-400">(post-wastage)</span></div>
+                <div class="font-semibold text-slate-800 mt-0.5">9.20</div>
+              </div>
+              <div class="border border-slate-200 rounded-md p-2.5 bg-slate-100">
+                <div class="text-[10px] text-slate-400 uppercase">Printing</div>
+                <div class="font-semibold text-slate-400 mt-0.5">—</div>
+              </div>
+              <div class="border border-slate-200 rounded-md p-2.5 bg-slate-50">
+                <div class="text-[10px] text-slate-500 uppercase">FOH</div>
+                <div class="font-semibold text-slate-800 mt-0.5">0.30</div>
+              </div>
+              <div class="border border-slate-200 rounded-md p-2.5 bg-slate-50">
+                <div class="text-[10px] text-slate-500 uppercase">Transport</div>
+                <div class="font-semibold text-slate-800 mt-0.5">0.10</div>
+              </div>
+              <div class="border border-slate-200 rounded-md p-2.5 bg-slate-50">
+                <div class="text-[10px] text-slate-500 uppercase">Commission</div>
+                <div class="font-semibold text-slate-800 mt-0.5">0.05</div>
+              </div>
+              <div class="border border-fpf-300 rounded-md p-2.5 bg-fpf-50">
+                <div class="text-[10px] text-fpf-700 uppercase font-semibold">Total Cost</div>
+                <div class="font-bold text-fpf-900 mt-0.5">9.65</div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-12 gap-3 items-end">
+              <div class="col-span-2">
+                <div class="text-[10px] text-slate-500 uppercase font-semibold">Cost / KG (USD)</div>
+                <div class="font-medium text-slate-700 px-2 py-1.5 bg-slate-100 rounded mt-0.5 text-sm">2.63</div>
+              </div>
+              <div class="col-span-3">
+                <label class="text-[10px] text-fpf-700 uppercase font-semibold">Margin / KG (USD) ✏️</label>
+                <input type="text" value="0.52" class="mt-0.5 w-full px-2 py-1.5 border-2 border-fpf-400 rounded text-sm bg-fpf-50 font-bold text-fpf-900" />
+              </div>
+              <div class="col-span-2">
+                <div class="text-[10px] text-slate-500 uppercase">Margin % (auto)</div>
+                <div class="px-2 py-1.5 bg-slate-100 rounded mt-0.5 text-slate-600 font-medium text-sm">19.8%</div>
+              </div>
+              <div class="col-span-2">
+                <div class="text-[10px] text-slate-500 uppercase">Sale Price / KG</div>
+                <div class="px-2 py-1.5 bg-emerald-50 border border-emerald-200 rounded mt-0.5 text-emerald-900 font-bold text-sm">USD 3.15</div>
+              </div>
+              <div class="col-span-3">
+                <div class="text-[10px] text-slate-500 uppercase">Line Total (USD)</div>
+                <div class="px-2 py-1.5 bg-emerald-50 border border-emerald-200 rounded mt-0.5 text-emerald-900 font-bold text-sm">6,300.00</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Summary footer -->
+          <div class="border-t border-slate-200 pt-4 mt-4 grid grid-cols-3 gap-4 text-sm bg-slate-50 -mx-5 -mb-5 px-5 pb-5 rounded-b-lg">
+            <div class="text-center">
+              <div class="text-xs text-slate-500 uppercase tracking-wide">Total Margin (USD)</div>
+              <div class="font-bold text-emerald-700 text-2xl mt-1">4,440.00</div>
+            </div>
+            <div class="text-center">
+              <div class="text-xs text-slate-500 uppercase tracking-wide">Avg Margin %</div>
+              <div class="font-bold text-slate-800 text-2xl mt-1">21.3%</div>
+            </div>
+            <div class="text-center">
+              <div class="text-xs text-slate-500 uppercase tracking-wide">Contract Total (USD)</div>
+              <div class="font-bold text-fpf-700 text-2xl mt-1">25,250.00</div>
+            </div>
+          </div>
+
+          <div class="mt-4 flex items-center justify-end gap-2">
+            <button class="px-4 py-2 text-sm border border-red-300 text-red-700 rounded-md">Reject</button>
+            <button class="px-5 py-2 text-sm bg-fpf-700 text-white rounded-md font-semibold">Submit to Sales for Customer Confirm →</button>
+          </div>
+        </div>
+
+        <div class="text-xs text-slate-600 px-2">
+          📩 On submit: <b>Email + in-app notification</b> sent to salesperson with full price breakdown.
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-4 text-xs text-slate-600 grid md:grid-cols-2 gap-3">
+      <div><span class="badge-changed text-[10px] px-1.5 py-0.5 rounded mr-1">CHANGED</span> MD enters <b>Margin in quote currency (USD / KG)</b> — % auto-calculates as a read-only chip</div>
+      <div><span class="badge-new text-[10px] px-1.5 py-0.5 rounded mr-1">NEW</span> <b>Per-FG cost breakdown grid</b> — RM / Printing / FOH / Transport / Commission shown side-by-side</div>
+      <div><span class="badge-new text-[10px] px-1.5 py-0.5 rounded mr-1">NEW</span> Big summary footer: <b>Total Margin · Avg Margin % · Contract Total</b> at a glance</div>
+      <div><span class="badge-changed text-[10px] px-1.5 py-0.5 rounded mr-1">CHANGED</span> FX rate sourced from existing <code class="bg-slate-100 px-1 rounded">ExchangeRates</code> table</div>
+    </div>
+  </section>
+
+  <!-- ==================== SCREEN 4: SALES CUSTOMER CONFIRM ==================== -->
+  <section class="bg-white rounded-2xl p-7 screen-card border-2 border-amber-200" id="screen-customer-confirm">
+    <div class="flex items-center justify-between mb-1">
+      <h2 class="text-lg font-bold text-slate-900">Screen 4 · Sales Person — Customer Confirmation</h2>
+      <span class="text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-semibold">NEW STEP</span>
+    </div>
+    <p class="text-sm text-slate-600 mb-5">After MD sets margin, sales receives the price, shares with customer, then confirms back. Only then does it return to MD for final sign.</p>
+
+    <div class="border border-slate-200 rounded-xl overflow-hidden">
+      <div class="bg-slate-100 px-4 py-2 text-xs font-mono text-slate-500">fpf-quotations.app/requisitions/REQ-0042/customer-confirm</div>
+      <div class="p-6 bg-slate-50 space-y-4">
+
+        <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm">
+          ⏳ <b>Awaiting your confirmation</b> — share the prices below with the customer. Confirm only after the customer agrees. If they negotiate, request MD to re-price.
+        </div>
+
+        <div class="bg-white rounded-lg border border-slate-200 p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-slate-900">Proposed Prices · REQ-0042</h3>
+            <button class="text-xs px-3 py-1.5 border border-slate-300 rounded-md">📄 Download Draft PDF</button>
+          </div>
+
+          <table class="w-full text-sm">
+            <thead class="bg-slate-50 text-xs text-slate-600">
+              <tr>
+                <th class="text-left px-3 py-2 font-medium">Item</th>
+                <th class="text-left px-3 py-2 font-medium">Qty</th>
+                <th class="text-left px-3 py-2 font-medium">Price / KG (USD)</th>
+                <th class="text-left px-3 py-2 font-medium">Line Total</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr><td class="px-3 py-2">Laminated Pouch 200g</td><td class="px-3 py-2">5,000 KG</td><td class="px-3 py-2">3.79</td><td class="px-3 py-2">18,950.00</td></tr>
+              <tr><td class="px-3 py-2">Stand-up Pouch 500g</td><td class="px-3 py-2">2,000 KG</td><td class="px-3 py-2">3.15</td><td class="px-3 py-2">6,300.00</td></tr>
+            </tbody>
+            <tfoot class="bg-slate-50">
+              <tr><td colspan="3" class="px-3 py-2 text-right text-xs text-slate-500">Total (USD)</td><td class="px-3 py-2 font-bold">25,250.00</td></tr>
+            </tfoot>
+          </table>
+
+          <div class="mt-5 grid md:grid-cols-2 gap-3 items-end">
+            <div>
+              <label class="text-xs font-medium text-slate-700">Customer feedback (optional)</label>
+              <textarea rows="2" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-md text-sm" placeholder="e.g. Customer accepted on call · 2026-04-29"></textarea>
+            </div>
+            <div class="flex flex-col gap-2 md:items-end">
+              <button class="px-4 py-2 text-sm border border-amber-300 text-amber-800 rounded-md">⟲ Request MD to re-price</button>
+              <button class="px-5 py-2 text-sm bg-emerald-600 text-white rounded-md font-semibold">✅ Customer Accepted — Send to MD for Final Sign</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-xs text-slate-600 px-2">
+          📩 On accept: notification + email to MD to apply final signature.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SCREEN 5: MD FINAL SIGN ==================== -->
+  <section class="bg-white rounded-2xl p-7 screen-card border-2 border-emerald-200" id="screen-md-final">
+    <div class="flex items-center justify-between mb-1">
+      <h2 class="text-lg font-bold text-slate-900">Screen 5 · MD — Final Sign &amp; Lock</h2>
+      <span class="text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold">NEW STEP</span>
+    </div>
+    <p class="text-sm text-slate-600 mb-5">Customer accepted → MD applies final signature → PDF generated and locked. <b>No further edits possible</b> by anyone.</p>
+
+    <div class="border border-slate-200 rounded-xl overflow-hidden">
+      <div class="bg-slate-100 px-4 py-2 text-xs font-mono text-slate-500">fpf-quotations.app/approvals/REQ-0042/final</div>
+      <div class="p-6 bg-slate-50 grid md:grid-cols-2 gap-4">
+
+        <!-- Left: PDF preview -->
+        <div class="bg-white rounded-lg border border-slate-200 p-5">
+          <div class="text-xs uppercase tracking-wide text-slate-500 mb-2">Final Quotation PDF — preview</div>
+          <div class="border border-slate-300 rounded-md p-5 bg-white">
+            <div class="text-center text-fpf-800 font-bold">FUJAIRAH PLASTIC FACTORY</div>
+            <div class="text-center text-xs text-slate-500">Quotation · QR-0042 · 2026-04-29</div>
+            <hr class="my-3 border-slate-200">
+            <div class="text-xs text-slate-700 space-y-1">
+              <div><b>Customer:</b> Al Ain Trading LLC (CUST-0142)</div>
+              <div><b>Currency:</b> USD</div>
+            </div>
+            <table class="w-full text-xs mt-3">
+              <thead class="border-b border-slate-200 text-slate-600"><tr><th class="text-left">Item</th><th class="text-right">Qty</th><th class="text-right">Price/KG</th><th class="text-right">Total</th></tr></thead>
+              <tbody>
+                <tr><td>Laminated Pouch 200g</td><td class="text-right">5,000</td><td class="text-right">3.79</td><td class="text-right">18,950.00</td></tr>
+                <tr><td>Stand-up Pouch 500g</td><td class="text-right">2,000</td><td class="text-right">3.15</td><td class="text-right">6,300.00</td></tr>
+              </tbody>
+              <tfoot class="border-t border-slate-200 font-semibold"><tr><td colspan="3" class="text-right py-1">Total USD</td><td class="text-right">25,250.00</td></tr></tfoot>
+            </table>
+            <div class="mt-6 grid grid-cols-2 gap-3 text-xs">
+              <div class="border-t pt-1 border-slate-300 text-slate-500">Prepared by · Hassan Ali</div>
+              <div class="border-t pt-1 border-slate-300">
+                <div class="text-slate-500">Approved &amp; Signed by MD</div>
+                <div class="text-fpf-800 mt-1" style="font-family: 'Brush Script MT', 'Lucida Handwriting', cursive; font-size: 22px; font-weight: 700; line-height: 1;">A. Khan</div>
+                <div class="text-[10px] text-slate-500 mt-1">Ali Khan, Managing Director · 2026-04-29</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: action panel -->
+        <div class="bg-white rounded-lg border border-slate-200 p-5 flex flex-col justify-between">
+          <div>
+            <h3 class="font-semibold text-slate-900">Final Sign-off</h3>
+            <p class="text-sm text-slate-600 mt-1">Customer has accepted these prices. Apply final signature to lock the quotation.</p>
+
+            <ul class="text-sm text-slate-700 mt-4 space-y-2">
+              <li>✅ Cost &amp; margin reviewed</li>
+              <li>✅ Customer accepted (Hassan Ali · 2026-04-29)</li>
+              <li>✅ PDF preview matches</li>
+            </ul>
+
+            <div class="mt-4">
+              <label class="text-xs font-medium text-slate-700">Final remarks (optional)</label>
+              <textarea rows="2" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-md text-sm" placeholder="Any closing note for the file…"></textarea>
+            </div>
+          </div>
+
+          <div class="mt-5 space-y-2">
+            <button class="w-full px-5 py-2.5 text-sm bg-emerald-600 text-white rounded-md font-semibold">🔒 Sign &amp; Lock Quotation</button>
+            <button class="w-full px-5 py-2 text-sm border border-slate-300 rounded-md">⟲ Send back to Sales</button>
+            <p class="text-[11px] text-slate-500 text-center mt-2">After signing, no edits possible. PDF emailed to <b>Sales + Accountant + MD</b> only — NOT to customer. Sales downloads + forwards manually.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-4 text-xs text-slate-600 grid md:grid-cols-3 gap-3">
+      <div><span class="badge-locked text-[10px] px-1.5 py-0.5 rounded mr-1">LOCKED</span> No-edit guarantee after final sign</div>
+      <div><span class="badge-new text-[10px] px-1.5 py-0.5 rounded mr-1">NEW</span> MD signature embedded in PDF</div>
+      <div><span class="badge-changed text-[10px] px-1.5 py-0.5 rounded mr-1">INTERNAL ONLY</span> PDF emailed to Sales / Accountant / MD — <b>never to customer</b>. Sales forwards manually if needed.</div>
+    </div>
+  </section>
+
+  <!-- ==================== NOTIFICATIONS MAP ==================== -->
+  <section class="bg-white rounded-2xl p-7 screen-card">
+    <h2 class="text-lg font-bold text-slate-900">Notifications &amp; Email Map</h2>
+    <p class="text-sm text-slate-600 mb-5">Every transition triggers in-app + email to all 3 roles touching the requisition.</p>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm border border-slate-200 rounded-md">
+        <thead class="bg-slate-50 text-xs text-slate-600">
+          <tr>
+            <th class="text-left px-3 py-2 font-medium">When</th>
+            <th class="text-left px-3 py-2 font-medium">Salesperson</th>
+            <th class="text-left px-3 py-2 font-medium">Accountant</th>
+            <th class="text-left px-3 py-2 font-medium">MD</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          <tr><td class="px-3 py-2">Sales submits requisition</td><td class="px-3 py-2">— (acted)</td><td class="px-3 py-2">📩 New req for costing</td><td class="px-3 py-2">— (silent)</td></tr>
+          <tr><td class="px-3 py-2">Accountant submits costs</td><td class="px-3 py-2">📩 Costing complete</td><td class="px-3 py-2">— (acted)</td><td class="px-3 py-2">📩 Awaiting your margin</td></tr>
+          <tr><td class="px-3 py-2">MD sets margin (Stage 1)</td><td class="px-3 py-2">📩 Confirm with customer</td><td class="px-3 py-2">📩 Pricing done</td><td class="px-3 py-2">— (acted)</td></tr>
+          <tr><td class="px-3 py-2">Sales confirms customer accepted</td><td class="px-3 py-2">— (acted)</td><td class="px-3 py-2">📩 Customer accepted</td><td class="px-3 py-2">📩 Apply final signature</td></tr>
+          <tr><td class="px-3 py-2">MD final sign &amp; lock</td><td class="px-3 py-2">📩 Quotation signed</td><td class="px-3 py-2">📩 Quotation signed</td><td class="px-3 py-2">— (acted)</td></tr>
+          <tr><td class="px-3 py-2">Customer rejects (sales sends back)</td><td class="px-3 py-2">— (acted)</td><td class="px-3 py-2">📩 Re-pricing required</td><td class="px-3 py-2">📩 Re-price requested</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ==================== DECISIONS LOCKED ==================== -->
+  <section class="bg-emerald-50 border border-emerald-200 rounded-2xl p-7">
+    <div class="flex items-center justify-between mb-1">
+      <h2 class="text-lg font-bold text-emerald-900">✅ Decisions Locked In · 2026-04-29</h2>
+      <span class="text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold">15 of 15 answered</span>
+    </div>
+    <p class="text-sm text-emerald-800 mb-5">All product questions answered. These drive the V3 spec + plan.</p>
+
+    <div class="grid md:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+      <!-- Codes & Formats -->
+      <div class="md:col-span-2 text-xs font-bold uppercase tracking-wider text-emerald-900 mt-2">Codes &amp; Formats</div>
+      <div class="bg-white rounded-md p-3 border border-emerald-100">
+        <div class="text-xs text-slate-500">Q1 · Customer Code</div>
+        <div class="font-medium mt-0.5">Auto-generated <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">CUST-0001</code> (zero-padded sequential, branch-agnostic)</div>
+      </div>
+      <div class="bg-white rounded-md p-3 border border-emerald-100">
+        <div class="text-xs text-slate-500">Q2 · Item Code</div>
+        <div class="font-medium mt-0.5"><code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">FG-0001</code> for finished goods · <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">RM-0001</code> for raw materials (separate sequences)</div>
+      </div>
+      <div class="bg-white rounded-md p-3 border border-emerald-100">
+        <div class="text-xs text-slate-500">Q3 · Micron input</div>
+        <div class="font-medium mt-0.5">Free-text — any number allowed (no restriction list)</div>
+      </div>
+      <div class="bg-white rounded-md p-3 border border-emerald-100">
+        <div class="text-xs text-slate-500">Q4 · BOM Recipe total per KG</div>
+        <div class="font-medium mt-0.5">No validation — sales decides (no min/max enforcement)</div>
+      </div>
+
+      <!-- Currency & Pricing -->
+      <div class="md:col-span-2 text-xs font-bold uppercase tracking-wider text-emerald-900 mt-3">Currency &amp; Pricing</div>
+      <div class="bg-white rounded-md p-3 border border-emerald-100">
+        <div class="text-xs text-slate-500">Q5 · FX rate source</div>
+        <div class="font-medium mt-0.5">Existing <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">ExchangeRates</code> table (current V2.3 mechanism)</div>
+      </div>
+      <div class="bg-white rounded-md p-3 border border-emerald-100">
+        <div class="text-xs text-slate-500">Q6 · Margin amount currency</div>
+        <div class="font-medium mt-0.5">Quote currency (USD / EUR) — MD thinks customer-side</div>
+      </div>
+      <div class="bg-white rounded-md p-3 border border-emerald-100">
+        <div class="text-xs text-slate-500">Q7 · MD pricing breakdown</div>
+        <div class="font-medium mt-0.5">Full breakdown: RM / Printing / FOH / Transport / Commission shown side-by-side</div>
+      </div>
+      <div class="bg-white rounded-md p-3 border border-emerald-100">
+        <div class="text-xs text-slate-500">Q8 · Customer-rejects flow</div>
+        <div class="font-medium mt-0.5">"Request MD to re-price" goes back to MD only (re-margin) — does NOT re-route to Accountant</div>
+      </div>
+
+      <!-- Final Approval -->
+      <div class="md:col-span-2 text-xs font-bold uppercase tracking-wider text-emerald-900 mt-3">Final Approval</div>
+      <div class="bg-white rounded-md p-3 border border-emerald-100">
+        <div class="text-xs text-slate-500">Q9 · MD signature</div>
+        <div class="font-medium mt-0.5">Both — image upload (one-time) + text below ("Approved by [Name] on [Date]")</div>
+      </div>
+      <div class="bg-white rounded-md p-3 border border-emerald-100">
+        <div class="text-xs text-slate-500">Q10 · Sales notes visibility</div>
+        <div class="font-medium mt-0.5">Visible to Sales + Accountant + MD (all 3 internal roles) · NOT on customer-facing PDF</div>
+      </div>
+      <div class="bg-white rounded-md p-3 border border-emerald-100 md:col-span-2 bg-amber-50 border-amber-200">
+        <div class="text-xs text-amber-800 font-semibold">⚠️ Customer email policy (added round 2)</div>
+        <div class="font-medium mt-0.5"><b>NO external customer emails ever.</b> All notifications (incl. signed PDF) go only to Sales + Accountant + MD. Sales downloads PDF and forwards to customer manually via own channels.</div>
+      </div>
+
+      <!-- Migration & Scope -->
+      <div class="md:col-span-2 text-xs font-bold uppercase tracking-wider text-emerald-900 mt-3">Migration &amp; Scope</div>
+      <div class="bg-white rounded-md p-3 border border-emerald-100">
+        <div class="text-xs text-slate-500">Q11 · In-flight requisitions</div>
+        <div class="font-medium mt-0.5"><b>Hard cut-over</b> — cancel/freeze old reqs, sales re-create needed ones in V3</div>
+      </div>
+      <div class="bg-white rounded-md p-3 border border-emerald-100">
+        <div class="text-xs text-slate-500">Q12 · BOM Creator user accounts</div>
+        <div class="font-medium mt-0.5">Deactivate (set <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">IsActive=false</code>)</div>
+      </div>
+      <div class="bg-white rounded-md p-3 border border-emerald-100">
+        <div class="text-xs text-slate-500">Q13 · Other 4 branches data</div>
+        <div class="font-medium mt-0.5">Hide entirely — only Alain visible (Dubai/Sharjah/etc customers + items hidden)</div>
+      </div>
+      <div class="bg-white rounded-md p-3 border border-emerald-100">
+        <div class="text-xs text-slate-500">Q14 · Mobile app</div>
+        <div class="font-medium mt-0.5"><b>Phase 1 web-only</b>; mobile V3 deferred to Phase 2 (V2 mobile freezes)</div>
+      </div>
+      <div class="bg-white rounded-md p-3 border border-emerald-100">
+        <div class="text-xs text-slate-500">Q15 · PWA support</div>
+        <div class="font-medium mt-0.5">Continue — web installable PWA stays (iOS/iPadOS staff workflow preserved)</div>
+      </div>
+    </div>
+
+    <div class="mt-6 px-4 py-3 bg-emerald-100 border border-emerald-300 rounded-md text-sm text-emerald-900">
+      <b>✅ Ready for next step:</b> Brainstorm → Spec → Plan → Implementation. State machine: <code class="bg-white px-1.5 py-0.5 rounded text-xs">Pending → Costing → MdPricing → CustomerConfirm → MdFinalSign → Signed/Locked</code>
+    </div>
+  </section>
+
+  <!-- ==================== FOOTER NOTES ==================== -->
+  <section class="text-xs text-slate-500 px-2 pb-8">
+    <p>Mockup version 1.4 · 2026-04-29 · <b>v1.4 (round-2 edge cases):</b> <b>NO external customer emails</b> — all PDFs/notifications stay internal (Sales/Accountant/MD); sales forwards customer copy manually. <span class="text-slate-400">v1.3: 15 decisions locked. v1.2: Margin by amount. v1.1: BOM recipe per 1 KG.</span> Spec written at <code>docs/superpowers/specs/2026-04-29-v3-simplified-workflow-design.md</code>. Implementation begins after final approval.</p>
+    <p class="mt-1">File: <code class="font-mono">docs/mockups/new-workflow-v3-mockup.html</code></p>
+  </section>
+
+</main>
+
+</body>
+</html>

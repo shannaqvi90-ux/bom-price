@@ -65,3 +65,24 @@ public record BomLineUpdate(
 
 public record UpdateBomRequest(int FinishedGoodId, List<BomLineUpdate> Lines);
 
+// V3 — bulk cost-data upsert via PUT /api/costing/{requisitionId}/cost-data
+// Replaces the V2.3 per-FG Start→Draft→SubmitItem cycle with one whole-req save
+// (per V3 Decision #17 "whole-req single state, accountant costs all FGs together").
+// Status guard: Costing only. Caller must provide a CostInput entry per FG of the
+// requisition; partial submissions are rejected.
+public record V3RawMaterialCostInput(
+    int BomLineId,
+    decimal CostPerKg,
+    [Required, RegularExpression("^[A-Z]{3}$", ErrorMessage = "Currency code must be 3 uppercase letters.")] string CurrencyCode);
+
+public record V3FgCostInput(
+    int RequisitionItemId,
+    [Required] List<V3RawMaterialCostInput> RawMaterialCosts,
+    decimal? PrintingCostPerKg,
+    string? PrintingCostCurrency,
+    decimal FohPerKg,
+    decimal TransportPerKg,
+    decimal CommissionPerKg);
+
+public record SaveV3CostDataRequest([Required] List<V3FgCostInput> FinishedGoods);
+

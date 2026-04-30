@@ -231,6 +231,268 @@ public class CostingController(
         return Ok(new { ok = true, finishedGoodId = body.FinishedGoodId });
     }
 
+    // V3 — bulk cost-data upsert. Replaces V2.3 per-FG Start/SaveDraft/SubmitItem cycle
+    // (Decision #17 — whole-req single state, accountant costs all FGs together).
+    //
+    // Idempotent: a second call replaces all BomCost + BomCostLine rows for the requisition.
+    // Status guard: Costing only. Caller must provide a CostInput per FG of the requisition;
+    // partial submissions are rejected (frontend pads in default zeros for FGs the user
+    // hasn't touched yet — accountant sees them as "needs cost" until filled).
+    [HttpPut("{requisitionId}/cost-data")]
+    public async Task<IActionResult> SaveV3CostData(int requisitionId, [FromBody] SaveV3CostDataRequest body)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync();
+
+        // Lock the requisition row to serialize concurrent saves for the same req.
+        var req = await db.QuotationRequests
+            .FromSqlInterpolated($"SELECT * FROM \"QuotationRequests\" WHERE \"Id\" = {requisitionId} FOR UPDATE")
+            .FirstOrDefaultAsync();
+        if (req is null) return NotFound();
+        if (!await AccountantAuthorizedForBranchAsync(req.BranchId)) return Forbid();
+        if (req.Status != RequisitionStatus.Costing)
+            return Validation
+                .Detail($"Cost data can only be saved when status is Costing (current: {req.Status})")
+                .Field("Status", "Must be Costing.")
+                .Return();
+
+        // Load all FGs with their BOMs + lines so we can validate + upsert.
+        var fgs = await db.RequisitionItems
+            .Include(ri => ri.BomHeader).ThenInclude(b => b!.Lines)
+            .Include(ri => ri.BomHeader).ThenInclude(b => b!.Cost)
+            .Where(ri => ri.QuotationRequestId == requisitionId)
+            .ToListAsync();
+
+        // Validate every FG of the req is in the payload exactly once.
+        var fgIds = fgs.Select(f => f.Id).ToHashSet();
+        var payloadIds = body.FinishedGoods.Select(p => p.RequisitionItemId).ToList();
+        var dupes = payloadIds.GroupBy(x => x).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+        if (dupes.Count > 0)
+            return Validation.Detail($"Duplicate FG entries: {string.Join(", ", dupes)}")
+                .Field("FinishedGoods", "Each FG may appear only once.").Return();
+        var unknown = payloadIds.Where(id => !fgIds.Contains(id)).ToList();
+        if (unknown.Count > 0)
+            return Validation.Detail($"Unknown FG(s): {string.Join(", ", unknown)}")
+                .Field("FinishedGoods", "Unknown FG id.").Return();
+        var missing = fgIds.Where(id => !payloadIds.Contains(id)).ToList();
+        if (missing.Count > 0)
+            return Validation.Detail($"Missing FG(s): {string.Join(", ", missing)}")
+                .Field("FinishedGoods", "All FGs must be included.").Return();
+
+        // Validate per-FG: every BOM line costed exactly once, no negatives, printing/currency rules.
+        var validationBuilder = Validation.Detail("V3 cost data validation failed");
+        bool hasErrors = false;
+        for (int i = 0; i < body.FinishedGoods.Count; i++)
+        {
+            var fgInput = body.FinishedGoods[i];
+            var fg = fgs.First(f => f.Id == fgInput.RequisitionItemId);
+            if (fg.BomHeader is null)
+            {
+                validationBuilder.Field($"FinishedGoods[{i}].RequisitionItemId", "FG has no BOM header.");
+                hasErrors = true;
+                continue;
+            }
+
+            var bomLineIds = fg.BomHeader.Lines.Select(l => l.Id).ToHashSet();
+            var inputLineIds = fgInput.RawMaterialCosts.Select(rc => rc.BomLineId).ToList();
+            var dupLines = inputLineIds.GroupBy(x => x).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+            if (dupLines.Count > 0)
+            {
+                validationBuilder.Field($"FinishedGoods[{i}].RawMaterialCosts",
+                    $"Duplicate BOM line entries: {string.Join(", ", dupLines)}");
+                hasErrors = true;
+            }
+            var unknownLines = inputLineIds.Where(id => !bomLineIds.Contains(id)).ToList();
+            if (unknownLines.Count > 0)
+            {
+                validationBuilder.Field($"FinishedGoods[{i}].RawMaterialCosts",
+                    $"Unknown BOM line(s): {string.Join(", ", unknownLines)}");
+                hasErrors = true;
+            }
+            var missingLines = bomLineIds.Where(id => !inputLineIds.Contains(id)).ToList();
+            if (missingLines.Count > 0)
+            {
+                validationBuilder.Field($"FinishedGoods[{i}].RawMaterialCosts",
+                    $"Missing cost for BOM line(s): {string.Join(", ", missingLines)}");
+                hasErrors = true;
+            }
+
+            for (int j = 0; j < fgInput.RawMaterialCosts.Count; j++)
+            {
+                if (fgInput.RawMaterialCosts[j].CostPerKg < 0)
+                {
+                    validationBuilder.Field($"FinishedGoods[{i}].RawMaterialCosts[{j}].CostPerKg", "Cannot be negative.");
+                    hasErrors = true;
+                }
+            }
+
+            if (fg.HasPrinting)
+            {
+                if (fgInput.PrintingCostPerKg is null || fgInput.PrintingCostPerKg < 0)
+                {
+                    validationBuilder.Field($"FinishedGoods[{i}].PrintingCostPerKg",
+                        "FG has printing — cost is required and must be >= 0.");
+                    hasErrors = true;
+                }
+                if (string.IsNullOrWhiteSpace(fgInput.PrintingCostCurrency))
+                {
+                    validationBuilder.Field($"FinishedGoods[{i}].PrintingCostCurrency",
+                        "FG has printing — currency is required.");
+                    hasErrors = true;
+                }
+            }
+            else
+            {
+                if (fgInput.PrintingCostPerKg is not null && fgInput.PrintingCostPerKg != 0)
+                {
+                    validationBuilder.Field($"FinishedGoods[{i}].PrintingCostPerKg",
+                        "FG does not have printing — cost must be omitted or zero.");
+                    hasErrors = true;
+                }
+            }
+
+            if (fgInput.FohPerKg < 0 || fgInput.TransportPerKg < 0 || fgInput.CommissionPerKg < 0)
+            {
+                if (fgInput.FohPerKg < 0)
+                    validationBuilder.Field($"FinishedGoods[{i}].FohPerKg", "Cannot be negative.");
+                if (fgInput.TransportPerKg < 0)
+                    validationBuilder.Field($"FinishedGoods[{i}].TransportPerKg", "Cannot be negative.");
+                if (fgInput.CommissionPerKg < 0)
+                    validationBuilder.Field($"FinishedGoods[{i}].CommissionPerKg", "Cannot be negative.");
+                hasErrors = true;
+            }
+        }
+        if (hasErrors) return validationBuilder.Return();
+
+        // Currency conversion: load active rates for every currency seen in the payload.
+        var quoteCurrency = (req.CurrencyCode ?? "AED").ToUpperInvariant();
+        var allCurrencies = body.FinishedGoods
+            .SelectMany(f => f.RawMaterialCosts.Select(r => (r.CurrencyCode ?? "AED").ToUpperInvariant()))
+            .Concat(body.FinishedGoods
+                .Where(f => !string.IsNullOrWhiteSpace(f.PrintingCostCurrency))
+                .Select(f => f.PrintingCostCurrency!.ToUpperInvariant()))
+            .Append(quoteCurrency)
+            .Distinct().ToList();
+        var rates = (await db.ExchangeRates
+            .Where(e => e.IsActive && allCurrencies.Contains(e.CurrencyCode))
+            .OrderByDescending(e => e.EffectiveDate).ToListAsync())
+            .GroupBy(e => e.CurrencyCode.ToUpperInvariant())
+            .ToDictionary(g => g.Key, g => g.First().RateToAed);
+
+        decimal RateToAed(string code)
+        {
+            if (code == "AED") return 1m;
+            if (!rates.TryGetValue(code, out var r))
+                throw new InvalidOperationException($"No exchange rate found for {code}. Contact admin.");
+            return r;
+        }
+
+        decimal quoteRateToAed;
+        try { quoteRateToAed = RateToAed(quoteCurrency); }
+        catch (InvalidOperationException ex)
+        {
+            return Validation.Detail(ex.Message).Field("CurrencyCode", ex.Message).Return();
+        }
+
+        // Per-FG upsert: replace BomCost + BomCostLine rows.
+        var now = DateTime.UtcNow;
+        var allUpserts = new List<(int ItemId, decimal CostPerKg, string CurrencyCode)>();
+        foreach (var fgInput in body.FinishedGoods)
+        {
+            var fg = fgs.First(f => f.Id == fgInput.RequisitionItemId);
+            var bom = fg.BomHeader!;
+
+            // Compute cost lines + raw material total in quote currency.
+            decimal rawMaterialTotal = 0;
+            var newCostLines = new List<BomCostLine>();
+            foreach (var rc in fgInput.RawMaterialCosts)
+            {
+                var line = bom.Lines.First(l => l.Id == rc.BomLineId);
+                var currency = (rc.CurrencyCode ?? "AED").ToUpperInvariant();
+                decimal entryRate;
+                try { entryRate = RateToAed(currency); }
+                catch (InvalidOperationException ex)
+                {
+                    return Validation.Detail(ex.Message).Field("CurrencyCode", ex.Message).Return();
+                }
+                var costInQuote = rc.CostPerKg * entryRate / quoteRateToAed;
+                rawMaterialTotal += costInQuote * line.QtyPerKg * (1 + line.WastagePct / 100);
+                newCostLines.Add(new BomCostLine
+                {
+                    BomHeaderId = bom.Id,
+                    BomLineId = line.Id,
+                    CostPerKg = rc.CostPerKg,
+                    CurrencyCode = currency,
+                    CostPerKgInQuoteCurrency = costInQuote,
+                    CostPerKgInAed = rc.CostPerKg * entryRate
+                });
+                allUpserts.Add((line.RawMaterialItemId, rc.CostPerKg, currency));
+            }
+
+            // V3 totals: per-KG breakdown sums into TotalCostPerKg in quote currency.
+            decimal totalCost = rawMaterialTotal + fgInput.FohPerKg + fgInput.TransportPerKg + fgInput.CommissionPerKg;
+            if (fgInput.PrintingCostPerKg is decimal printing && printing > 0)
+            {
+                var printCcy = (fgInput.PrintingCostCurrency ?? "AED").ToUpperInvariant();
+                decimal printRate;
+                try { printRate = RateToAed(printCcy); }
+                catch (InvalidOperationException ex)
+                {
+                    return Validation.Detail(ex.Message).Field("PrintingCostCurrency", ex.Message).Return();
+                }
+                totalCost += printing * printRate / quoteRateToAed;
+            }
+
+            // Replace BomCost + BomCostLine rows for this FG (idempotent upsert).
+            if (bom.Cost is not null) db.BomCosts.Remove(bom.Cost);
+            var existingLines = await db.BomCostLines.Where(l => l.BomHeaderId == bom.Id).ToListAsync();
+            if (existingLines.Count > 0) db.BomCostLines.RemoveRange(existingLines);
+            db.BomCostLines.AddRange(newCostLines);
+
+            db.BomCosts.Add(new BomCost
+            {
+                BomHeaderId = bom.Id,
+                RawMaterialCostTotal = rawMaterialTotal,
+                LandedCostType = LandedCostType.FixedValue,
+                LandedCostValue = 0,
+                FohAmount = fgInput.FohPerKg,
+                TotalCostPerKg = totalCost,
+                SubmittedByUserId = CurrentUserId,
+                PrintingCostPerKg = fg.HasPrinting ? fgInput.PrintingCostPerKg : null,
+                PrintingCostCurrency = fg.HasPrinting && fgInput.PrintingCostPerKg is not null && fgInput.PrintingCostPerKg > 0
+                    ? (fgInput.PrintingCostCurrency ?? "AED").ToUpperInvariant()
+                    : null,
+                FohPerKg = fgInput.FohPerKg,
+                TransportPerKg = fgInput.TransportPerKg,
+                CommissionPerKg = fgInput.CommissionPerKg,
+            });
+            bom.TotalCostPerKg = totalCost;
+
+            // Drop any V2.3 draft for this BOM (clean cut-over to V3 path).
+            var draft = await db.CostingDrafts.FirstOrDefaultAsync(d => d.BomHeaderId == bom.Id);
+            if (draft is not null) db.CostingDrafts.Remove(draft);
+        }
+
+        // Upsert ItemLastCost for every distinct RM (last write wins, ordered to avoid deadlock).
+        var grouped = allUpserts.GroupBy(u => u.ItemId).Select(g => g.Last()).OrderBy(u => u.ItemId).ToList();
+        foreach (var u in grouped)
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync($@"
+                INSERT INTO ""ItemLastCosts"" (""ItemId"", ""CostPerKg"", ""CurrencyCode"", ""UpdatedAt"", ""UpdatedByUserId"")
+                VALUES ({u.ItemId}, {u.CostPerKg}, {u.CurrencyCode}, {now}, {CurrentUserId})
+                ON CONFLICT (""ItemId"") DO UPDATE SET
+                    ""CostPerKg"" = EXCLUDED.""CostPerKg"",
+                    ""CurrencyCode"" = EXCLUDED.""CurrencyCode"",
+                    ""UpdatedAt"" = EXCLUDED.""UpdatedAt"",
+                    ""UpdatedByUserId"" = EXCLUDED.""UpdatedByUserId""");
+        }
+
+        req.UpdatedAt = now;
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+
+        return Ok(new { id = req.Id, status = req.Status.ToString(), fgCount = body.FinishedGoods.Count });
+    }
+
     // V3 — single overall Submit (Costing -> MdPricing). Replaces V2.3 per-item SubmitItem
     // promotion to MdReview. CostFxSnapshot capture is deferred to ApprovalsController.SetMargin
     // (Phase A Task 28) — single-approval-row creation point.

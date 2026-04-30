@@ -190,8 +190,45 @@ UPDATE "Customers"
 \echo '3b. Soft-deleted non-Alain customers:' :ROW_COUNT
 
 -- ============================================================================
--- (section 4 added in subsequent task)
+-- 4. DEACTIVATE NON-ALAIN ITEMS
 -- ============================================================================
+-- Sets IsActive=false on every Item whose BranchId != alainBranchId.
+-- GET /items filters by IsActive (when includeInactive flag is absent), so
+-- FE lists will hide them. Historical BOM lines reference the item via FK;
+-- read paths still resolve.
+-- ============================================================================
+
+-- 4a. Audit rows
+INSERT INTO "AdminAuditLog"
+  ("AdminUserId", "ActionType", "EntityType", "EntityId", "Reason", "BeforeJson", "CreatedAt")
+SELECT
+  :adminId,
+  'V3CutoverMigration',
+  'Item',
+  i."Id",
+  '[V3 cutover ' || :'cutoverDateLabel' || '] Item in non-Alain branch deactivated per V3 design Q13',
+  json_build_object(
+    'id', i."Id",
+    'code', i."Code",
+    'description', i."Description",
+    'type', i."Type",
+    'branchId', i."BranchId",
+    'isActive', i."IsActive"
+  )::text,
+  NOW()
+FROM "Items" i
+WHERE i."BranchId" != :alainBranchId
+  AND i."IsActive" = true;
+
+\echo '4a. Audit rows for non-Alain items:' :ROW_COUNT
+
+-- 4b. Deactivate
+UPDATE "Items"
+   SET "IsActive" = false
+ WHERE "BranchId" != :alainBranchId
+   AND "IsActive" = true;
+
+\echo '4b. Deactivated non-Alain items:' :ROW_COUNT
 
 -- ============================================================================
 -- 5. POST-FLIGHT VERIFICATION

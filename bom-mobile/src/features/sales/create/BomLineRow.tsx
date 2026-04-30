@@ -1,10 +1,10 @@
 // bom-mobile/src/features/sales/create/BomLineRow.tsx
 import { View, Text, TextInput, Pressable } from "react-native";
-import type { V3BomLine } from "../../../types/v3";
+import type { V3BomLineDraft } from "../../../types/v3";
 
 interface Props {
-  line: V3BomLine; idx: number;
-  onChange: (line: V3BomLine) => void;
+  line: V3BomLineDraft; idx: number;
+  onChange: (line: V3BomLineDraft) => void;
   onPickRm: () => void;
   onPickProcess: () => void;
   onRemove: () => void;

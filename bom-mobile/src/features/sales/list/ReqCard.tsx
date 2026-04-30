@@ -42,7 +42,7 @@ export function ReqCard({ req, onPress }: Props) {
       </Text>
       <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
         <Text style={{ fontSize: 12, color: "#64748b" }}>
-          {req.fgCount} FG · {new Date(req.createdAt).toLocaleDateString()}
+          {req.itemCount} FG · {new Date(req.createdAt).toLocaleDateString()}
         </Text>
         <Text style={{ fontSize: 12, color: "#64748b" }}>{req.currencyCode}</Text>
       </View>

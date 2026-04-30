@@ -1,26 +1,26 @@
 // bom-mobile/src/features/sales/create/FgEditDrawer.tsx
 import { useState } from "react";
 import { Modal, View, Text, TextInput, Pressable, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
-import type { V3FinishedGood, V3BomLine } from "../../../types/v3";
+import type { V3FinishedGoodDraft, V3BomLineDraft } from "../../../types/v3";
 import { BomLineRow } from "./BomLineRow";
 import { RmPickerSheet } from "../pickers/RmPickerSheet";
 import { ProcessPickerSheet } from "../pickers/ProcessPickerSheet";
 import { theme } from "../../../theme";
 
 interface Props {
-  fg: V3FinishedGood;
+  fg: V3FinishedGoodDraft;
   visible: boolean;
-  onSave: (fg: V3FinishedGood) => void;
+  onSave: (fg: V3FinishedGoodDraft) => void;
   onClose: () => void;
   onRemove: () => void;
 }
 
 export function FgEditDrawer({ fg, visible, onSave, onClose, onRemove }: Props) {
-  const [draft, setDraft] = useState<V3FinishedGood>(fg);
+  const [draft, setDraft] = useState<V3FinishedGoodDraft>(fg);
   const [rmPickerForIdx, setRmPickerForIdx] = useState<number | null>(null);
   const [processPickerForIdx, setProcessPickerForIdx] = useState<number | null>(null);
 
-  const updateLine = (idx: number, line: V3BomLine) => {
+  const updateLine = (idx: number, line: V3BomLineDraft) => {
     const lines = [...draft.bomLines];
     lines[idx] = line;
     setDraft({ ...draft, bomLines: lines });

@@ -1,15 +1,15 @@
 // bom-mobile/src/features/sales/create/FgListMain.tsx
 import { useState } from "react";
 import { View, Text, Pressable } from "react-native";
-import type { V3FinishedGood } from "../../../types/v3";
+import type { V3FinishedGoodDraft } from "../../../types/v3";
 import { FgEditDrawer } from "./FgEditDrawer";
 import { FgPickerSheet } from "../pickers/FgPickerSheet";
 import { FgCreateModal } from "../pickers/FgCreateModal";
 import { theme } from "../../../theme";
 
 interface Props {
-  fgs: V3FinishedGood[];
-  setFgs: (fgs: V3FinishedGood[]) => void;
+  fgs: V3FinishedGoodDraft[];
+  setFgs: (fgs: V3FinishedGoodDraft[]) => void;
 }
 
 export function FgListMain({ fgs, setFgs }: Props) {

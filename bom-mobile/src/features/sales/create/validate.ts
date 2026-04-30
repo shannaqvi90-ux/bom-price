@@ -1,5 +1,5 @@
 // bom-mobile/src/features/sales/create/validate.ts
-import type { V3FinishedGood } from "../../../types/v3";
+import type { V3FinishedGoodDraft } from "../../../types/v3";
 import type { CustomerLite } from "../../../api/customers";
 
 export interface ValidationResult { ok: boolean; errors: string[]; }
@@ -7,7 +7,7 @@ export interface ValidationResult { ok: boolean; errors: string[]; }
 export function validateRequisition(
   customer: CustomerLite | null,
   currency: string,
-  fgs: V3FinishedGood[],
+  fgs: V3FinishedGoodDraft[],
 ): ValidationResult {
   const errors: string[] = [];
   if (!customer) errors.push("Customer is required");

@@ -20,9 +20,6 @@ export function DetailHeader({ req }: { req: V3Requisition }) {
       <Text style={{ marginTop: 10, fontSize: 18, color: "#0f172a", fontWeight: "600" }}>
         {req.customer.name}
       </Text>
-      <Text style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
-        Updated {new Date(req.updatedAt).toLocaleString()}
-      </Text>
     </View>
   );
 }

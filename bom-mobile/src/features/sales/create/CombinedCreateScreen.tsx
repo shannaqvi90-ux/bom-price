@@ -7,7 +7,7 @@ import { FgListMain } from "./FgListMain";
 import { SubmitFooter } from "./SubmitFooter";
 import { validateRequisition } from "./validate";
 import { useCreateRequisition } from "../../../api/requisitions";
-import type { V3FinishedGood } from "../../../types/v3";
+import type { V3FinishedGoodDraft } from "../../../types/v3";
 import type { CustomerLite } from "../../../api/customers";
 
 interface Props { mode: "new" | "edit"; reqId?: number }
@@ -18,7 +18,7 @@ export function CombinedCreateScreen({ mode }: Props) {
   const [currency, setCurrency] = useState("AED");
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
-  const [fgs, setFgs] = useState<V3FinishedGood[]>([]);
+  const [fgs, setFgs] = useState<V3FinishedGoodDraft[]>([]);
   const create = useCreateRequisition();
 
   const validation = useMemo(() =>

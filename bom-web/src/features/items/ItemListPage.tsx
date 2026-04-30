@@ -34,6 +34,11 @@ export default function ItemListPage() {
     [data, showInactive],
   );
 
+  // V3: Item codes are server-generated via CodeGeneratorService.NextItemCodeAsync.
+  // The Code column here is render-only. The legacy AddItemModal still accepts Code input
+  // for V2.3 admin manual-create flow; the V3 NewRequisitionPage uses
+  // CreateFinishedGoodModal / CreateRawMaterialModal (preview-only Code) for the
+  // new-item-while-building-BOM path.
   const columns = useMemo<ColumnDef<Item>[]>(
     () => [
       {

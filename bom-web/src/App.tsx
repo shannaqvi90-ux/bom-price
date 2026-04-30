@@ -7,14 +7,15 @@ import { AppShell } from "@/components/layout/AppShell";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import DashboardRouter from "@/features/dashboard/DashboardRouter";
 import RequisitionListPage from "@/features/requisitions/RequisitionListPage";
-import NewRequisitionPage from "@/features/requisitions/NewRequisitionPage";
+import { NewRequisitionPage } from "@/features/requisitions/NewRequisitionPage";
 import RequisitionDetailPage from "@/features/requisitions/RequisitionDetailPage";
-import EditRequisitionPage from "@/features/requisitions/EditRequisitionPage";
 import CustomerListPage from "@/features/customers/CustomerListPage";
 import ItemListPage from "@/features/items/ItemListPage";
-import BomEntryPage from "@/features/bom/BomEntryPage";
 import CostingEntryPage from "@/features/costing/CostingEntryPage";
-import MdReviewPage from "@/features/approvals/MdReviewPage";
+import { CustomerConfirmPage } from "@/features/requisitions/CustomerConfirmPage";
+import { MdMarginPage } from "@/features/approvals/MdMarginPage";
+import { MdFinalSignPage } from "@/features/approvals/MdFinalSignPage";
+import { ProfileSignaturePage } from "@/features/profile/ProfileSignaturePage";
 import NotificationsPage from "@/features/notifications/NotificationsPage";
 import ExchangeRatesPage from "@/features/exchange-rates/ExchangeRatesPage";
 import UsersPage from "@/features/users/UsersPage";
@@ -157,22 +158,6 @@ const router = createBrowserRouter([
         ),
       },
       {
-        path: "requisitions/:id/edit",
-        element: (
-          <ProtectedRoute allow={["SalesPerson"]}>
-            <EditRequisitionPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: "requisitions/:id/bom",
-        element: (
-          <ProtectedRoute allow={["BomCreator"]}>
-            <BomEntryPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
         path: "requisitions/:id/costing",
         element: (
           <ProtectedRoute allow={["Accountant"]}>
@@ -181,10 +166,34 @@ const router = createBrowserRouter([
         ),
       },
       {
-        path: "requisitions/:id/approval",
+        path: "requisitions/:id/customer-confirm",
+        element: (
+          <ProtectedRoute allow={["Admin", "SalesPerson"]}>
+            <CustomerConfirmPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "approvals/:id/margin",
         element: (
           <ProtectedRoute allow={["ManagingDirector"]}>
-            <MdReviewPage />
+            <MdMarginPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "approvals/:id/final",
+        element: (
+          <ProtectedRoute allow={["ManagingDirector"]}>
+            <MdFinalSignPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "profile/signature",
+        element: (
+          <ProtectedRoute allow={["ManagingDirector"]}>
+            <ProfileSignaturePage />
           </ProtectedRoute>
         ),
       },

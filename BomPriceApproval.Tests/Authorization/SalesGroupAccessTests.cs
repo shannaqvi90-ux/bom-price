@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using BomPriceApproval.API.Domain.Entities;
 using BomPriceApproval.API.Domain.Enums;
 using BomPriceApproval.API.Infrastructure.Data;
@@ -174,8 +175,9 @@ public class SalesGroupAccessTests(WebApplicationFactory<Program> factory) : ICl
 
         // The new req has SalesPersonId = SP A (not SP B)
         var reqId = (await create.Content.ReadFromJsonAsync<CreateResponse>())!.Id;
-        var detail = (await _client.GetFromJsonAsync<ReqDetail>($"/api/requisitions/{reqId}"))!;
-        detail.SalesPersonId.Should().Be(spA_Id);
+        // V3 GET shape exposes salesPerson as a nested { id, name } summary.
+        var detail = (await _client.GetFromJsonAsync<JsonElement>($"/api/requisitions/{reqId}"));
+        detail.GetProperty("salesPerson").GetProperty("id").GetInt32().Should().Be(spA_Id);
     }
 
     [Fact]
@@ -230,7 +232,6 @@ public class SalesGroupAccessTests(WebApplicationFactory<Program> factory) : ICl
     private record GroupShort(int Id, string Name, bool IsActive);
     private record CustShort(int Id, string Code, string Name);
     private record CreateResponse(int Id, string RefNo);
-    private record ReqDetail(int Id, int SalesPersonId);
     private record CountResponse(int Count);
     private record ReqListItem(int Id, string RefNo);
 }

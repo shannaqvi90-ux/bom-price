@@ -4,13 +4,17 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import type { ReactNode } from "react";
-import type { RequisitionDetail } from "@/types/api";
+import type { V3Requisition } from "@/types/api";
 import { useAuthStore } from "@/store/authStore";
 
 vi.mock("@/api/axios", () => ({ api: { get: vi.fn(), post: vi.fn() } }));
 
 vi.mock("@/api/branches", () => ({
   useBranches: () => ({ data: [], isPending: false }),
+}));
+
+vi.mock("@/api/lookups", () => ({
+  useItems: () => ({ data: [], isPending: false }),
 }));
 
 import { api } from "@/api/axios";
@@ -23,86 +27,83 @@ function wrap(ui: ReactNode, path = "/requisitions/1") {
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/requisitions/:id" element={ui} />
+          <Route path="/requisitions/:id/costing" element={<div>Costing Page</div>} />
+          <Route path="/requisitions/:id/customer-confirm" element={<div>Customer Confirm Page</div>} />
+          <Route path="/approvals/:id/margin" element={<div>Margin Page</div>} />
+          <Route path="/approvals/:id/final" element={<div>Final Sign Page</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
   );
 }
 
-const sample: RequisitionDetail = {
-  id: 1,
-  refNo: "REQ-0001",
-  status: "BomPending",
-  customerId: 3,
-  customerName: "ACME",
-  customerEmail: "sales@acme.test",
-  customerPhone: "+971501234567",
-  customerAddress: "Fujairah FZ",
-  currencyCode: "AED",
-  exchangeRateSnapshot: null,
-  branchId: 1,
-  branchName: "Fujairah",
-  salesPersonId: 10,
-  salesPersonName: "Ali",
-  createdAt: "2026-04-14T10:00:00Z",
-  updatedAt: "2026-04-14T11:00:00Z",
-  items: [
-    { id: 1, itemId: 2, itemDescription: "HDPE Pipe 20mm", expectedQty: 100, sortOrder: 1 },
-  ],
-  approval: null,
-};
+function makeReq(overrides: Partial<V3Requisition> = {}): V3Requisition {
+  return {
+    id: 1,
+    refNo: "REQ-0001",
+    status: "Draft",
+    currencyCode: "AED",
+    notes: null,
+    customer: { id: 3, name: "ACME", code: "CUST-0003" },
+    salesPerson: { id: 10, name: "Ali" },
+    finishedGoods: [
+      {
+        id: 50,
+        expectedQty: 5000,
+        hasPrinting: false,
+        item: { id: 87, code: "FG-0087", description: "Test FG" },
+        bomLines: [
+          {
+            id: 100,
+            qtyPerKg: 0.44,
+            micron: "20",
+            item: { id: 12, code: "RM-0012", description: "BOPP" },
+          },
+        ],
+        costs: null,
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function setUser(role: string, userId = 10) {
+  useAuthStore.getState().setSession({
+    accessToken: "at",
+    refreshToken: "rt",
+    role: role as never,
+    userId,
+    name: "Tester",
+    branchId: 1,
+    mustChangePassword: false,
+  });
+}
+
+function mockReqGet(req: V3Requisition) {
+  vi.mocked(api.get).mockImplementation((url: string) => {
+    if (url.includes("customer-history")) return Promise.resolve({ data: [] });
+    if (url.includes("branch-history")) return Promise.resolve({ data: [] });
+    return Promise.resolve({ data: req });
+  });
+}
 
 describe("RequisitionDetailPage", () => {
   beforeEach(() => {
     vi.mocked(api.get).mockReset();
-    useAuthStore.getState().setSession({
-      accessToken: "at",
-      refreshToken: "rt",
-      role: "BomCreator",
-      userId: 11,
-      name: "Bob",
-      branchId: 1,
-      mustChangePassword: false,
-    });
+    setUser("SalesPerson", 10);
   });
 
   afterEach(() => {
     useAuthStore.getState().logout();
   });
 
-  it("renders the header, timeline, and summary cards", async () => {
-    vi.mocked(api.get).mockResolvedValueOnce({ data: sample });
+  it("renders the V3 header with status badge and customer name", async () => {
+    mockReqGet(makeReq());
     render(wrap(<RequisitionDetailPage />));
     await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
     expect(screen.getByText("ACME")).toBeInTheDocument();
-    expect(screen.getByText(/Not yet submitted for approval/i)).toBeInTheDocument();
-    expect(screen.getByTestId("step-Submitted")).toBeInTheDocument();
-  });
-
-  it('renders an enabled "Start BOM" button for BomCreator when status is BomPending', async () => {
-    vi.mocked(api.get).mockResolvedValueOnce({ data: sample });
-    render(wrap(<RequisitionDetailPage />));
-    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
-    const btn = screen.getByRole("button", { name: /start bom/i });
-    expect(btn).not.toBeDisabled();
-  });
-
-  it("does not render action buttons for SalesPerson", async () => {
-    useAuthStore.getState().setSession({
-      accessToken: "at",
-      refreshToken: "rt",
-      role: "SalesPerson",
-      userId: 10,
-      name: "Ali",
-      branchId: 1,
-      mustChangePassword: false,
-    });
-    vi.mocked(api.get).mockResolvedValueOnce({ data: sample });
-    render(wrap(<RequisitionDetailPage />));
-    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
-    expect(screen.queryByRole("button", { name: /start bom/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /start costing/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /review/i })).not.toBeInTheDocument();
+    // V3StatusBadge renders the status text
+    expect(screen.getByText("Draft")).toBeInTheDocument();
   });
 
   it('shows a "not found" card on 404', async () => {
@@ -121,211 +122,147 @@ describe("RequisitionDetailPage", () => {
     );
   });
 
-  it("Start Costing button navigates to the costing page", async () => {
-    useAuthStore.getState().setSession({
-      accessToken: "at", refreshToken: "rt",
-      role: "Accountant", userId: 11, name: "Bob", branchId: null, mustChangePassword: false,
-    });
-    vi.mocked(api.get).mockImplementation((url: string) => {
-      if (url.includes("customer-history")) return Promise.resolve({ data: [] });
-      return Promise.resolve({ data: { ...sample, status: "CostingPending" } });
-    });
+  it("renders Submit + Cancel buttons when status=Draft for owning SalesPerson", async () => {
+    setUser("SalesPerson", 10); // matches salesPerson.id
+    mockReqGet(makeReq({ status: "Draft" }));
+    render(wrap(<RequisitionDetailPage />));
+    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /^submit$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^cancel$/i })).toBeInTheDocument();
+  });
 
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={client}>
-        <MemoryRouter initialEntries={["/requisitions/1"]}>
-          <Routes>
-            <Route path="/requisitions/:id" element={<RequisitionDetailPage />} />
-            <Route path="/requisitions/:id/costing" element={<div>Costing Page</div>} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
+  it("hides Submit/Cancel buttons when SalesPerson does not own the req", async () => {
+    setUser("SalesPerson", 999); // not the salesPerson.id (10)
+    mockReqGet(makeReq({ status: "Draft" }));
+    render(wrap(<RequisitionDetailPage />));
+    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /^submit$/i })).not.toBeInTheDocument();
+  });
 
-    const btn = await screen.findByRole("button", { name: /start costing/i });
+  it("renders Edit BOM & Costing button when status=Costing and role=Accountant", async () => {
+    setUser("Accountant", 11);
+    mockReqGet(makeReq({ status: "Costing" }));
+    render(wrap(<RequisitionDetailPage />));
+    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
+    const btn = screen.getByRole("button", { name: /edit bom & costing/i });
+    expect(btn).toBeInTheDocument();
     await userEvent.click(btn);
-
     await waitFor(() =>
       expect(screen.getByText("Costing Page")).toBeInTheDocument(),
     );
   });
 
-  it("shows populated Approval card when present", async () => {
-    vi.mocked(api.get).mockResolvedValueOnce({
-      data: {
-        ...sample,
-        status: "Approved",
-        approval: { isApproved: true, notes: null, approvedAt: "2026-04-15T12:00:00Z" },
-      },
-    });
+  it("renders Set Margin button when status=MdPricing and role=ManagingDirector", async () => {
+    setUser("ManagingDirector", 50);
+    mockReqGet(makeReq({ status: "MdPricing" }));
     render(wrap(<RequisitionDetailPage />));
     await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
-    expect(screen.getAllByText("Approved").length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("renders rejection reason block when approval.isApproved is false", async () => {
-    useAuthStore.getState().setSession({
-      accessToken: "at", refreshToken: "rt",
-      role: "SalesPerson", userId: 10, name: "Ali", branchId: 1, mustChangePassword: false,
-    });
-    const rejected: RequisitionDetail = {
-      ...sample,
-      status: "Rejected",
-      approval: {
-        isApproved: false,
-        notes: "Margin too low",
-        approvedAt: "2026-04-15T12:00:00Z",
-      },
-    };
-    vi.mocked(api.get).mockResolvedValueOnce({ data: rejected });
-    render(wrap(<RequisitionDetailPage />));
-    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
-
-    expect(screen.getByText("Rejection reason")).toBeInTheDocument();
-    expect(screen.getByText("Margin too low")).toBeInTheDocument();
-    const notesEl = screen.getByText("Margin too low").closest("div");
-    expect(notesEl).toHaveClass("text-destructive");
-  });
-
-  it("renders notes block (non-destructive) when approval.isApproved is true", async () => {
-    const approved: RequisitionDetail = {
-      ...sample,
-      status: "Approved",
-      approval: {
-        isApproved: true,
-        notes: "Approved with conditions",
-        approvedAt: "2026-04-15T12:00:00Z",
-      },
-    };
-    vi.mocked(api.get).mockResolvedValueOnce({ data: approved });
-    render(wrap(<RequisitionDetailPage />));
-    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
-
-    expect(screen.getByText("Notes")).toBeInTheDocument();
-    expect(screen.getByText("Approved with conditions")).toBeInTheDocument();
-  });
-
-  it('shows "Edit & Resubmit" button for the owning SalesPerson when status is Rejected', async () => {
-    useAuthStore.getState().setSession({
-      accessToken: "at", refreshToken: "rt",
-      role: "SalesPerson", userId: 10, name: "Ali", branchId: 1, mustChangePassword: false,
-    });
-    vi.mocked(api.get).mockResolvedValueOnce({
-      data: {
-        ...sample,
-        status: "Rejected",
-        approval: { isApproved: false, notes: "try again", approvedAt: "2026-04-15T12:00:00Z" },
-      },
-    });
-    render(wrap(<RequisitionDetailPage />));
-    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /edit & resubmit/i })).toBeInTheDocument();
-  });
-
-  it('does not show "Edit & Resubmit" for non-SalesPerson roles', async () => {
-    for (const role of ["BomCreator", "Accountant", "ManagingDirector"] as const) {
-      vi.mocked(api.get).mockResolvedValueOnce({
-        data: {
-          ...sample,
-          status: "Rejected",
-          approval: { isApproved: false, notes: "try again", approvedAt: "2026-04-15T12:00:00Z" },
-        },
-      });
-      useAuthStore.getState().setSession({
-        accessToken: "at", refreshToken: "rt",
-        role, userId: 99, name: "X", branchId: 1, mustChangePassword: false,
-      });
-      const { unmount } = render(wrap(<RequisitionDetailPage />));
-      await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
-      expect(screen.queryByRole("button", { name: /edit & resubmit/i })).not.toBeInTheDocument();
-      unmount();
-    }
-  });
-
-  it("shows amber badge when customer change history has entries", async () => {
-    const historyEntry = {
-      id: 1,
-      oldCustomerId: 2,
-      oldCustomerName: "Old Corp",
-      newCustomerId: 3,
-      newCustomerName: "New Corp",
-      changedByUserId: 10,
-      changedByUserName: "Ali",
-      changedAt: "2026-04-20T10:00:00Z",
-      reason: "Customer request",
-    };
-    vi.mocked(api.get).mockImplementation((url: string) => {
-      if ((url as string).includes("customer-history"))
-        return Promise.resolve({ data: [historyEntry] });
-      return Promise.resolve({ data: sample });
-    });
-    render(wrap(<RequisitionDetailPage />));
+    const btn = screen.getByRole("button", { name: /set margin/i });
+    expect(btn).toBeInTheDocument();
+    await userEvent.click(btn);
     await waitFor(() =>
-      expect(screen.getByText(/Customer changed \(1\)/i)).toBeInTheDocument(),
+      expect(screen.getByText("Margin Page")).toBeInTheDocument(),
     );
   });
 
-  it("shows Change-branch button for Accountant in CostingPending", async () => {
-    useAuthStore.getState().setSession({
-      accessToken: "at", refreshToken: "rt",
-      role: "Accountant", userId: 11, name: "Sara", branchId: null, mustChangePassword: false,
-    });
-    vi.mocked(api.get).mockImplementation((url: string) => {
-      if (url.includes("branch-history")) return Promise.resolve({ data: [] });
-      if (url.includes("customer-history")) return Promise.resolve({ data: [] });
-      return Promise.resolve({ data: { ...sample, status: "CostingPending" } });
-    });
-    render(wrap(<RequisitionDetailPage />));
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /change branch/i })).toBeInTheDocument(),
-    );
-  });
-
-  it("hides Change-branch button for Accountant in CostingInProgress", async () => {
-    useAuthStore.getState().setSession({
-      accessToken: "at", refreshToken: "rt",
-      role: "Accountant", userId: 11, name: "Sara", branchId: null, mustChangePassword: false,
-    });
-    vi.mocked(api.get).mockImplementation((url: string) => {
-      if (url.includes("branch-history")) return Promise.resolve({ data: [] });
-      if (url.includes("customer-history")) return Promise.resolve({ data: [] });
-      return Promise.resolve({ data: { ...sample, status: "CostingInProgress" } });
-    });
+  it("renders Confirm with Customer link when status=CustomerConfirm and SalesPerson owns req", async () => {
+    setUser("SalesPerson", 10);
+    mockReqGet(makeReq({ status: "CustomerConfirm" }));
     render(wrap(<RequisitionDetailPage />));
     await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
-    expect(screen.queryByRole("button", { name: /change branch/i })).not.toBeInTheDocument();
-    expect(screen.queryByText(/Branch changed/i)).not.toBeInTheDocument();
+    const btn = screen.getByRole("button", { name: /confirm with customer/i });
+    expect(btn).toBeInTheDocument();
+    await userEvent.click(btn);
+    await waitFor(() =>
+      expect(screen.getByText("Customer Confirm Page")).toBeInTheDocument(),
+    );
   });
 
-  it("shows 'Branch changed (1)' badge when history > 0; click opens BranchChangeHistoryModal", async () => {
-    useAuthStore.getState().setSession({
-      accessToken: "at", refreshToken: "rt",
-      role: "Accountant", userId: 11, name: "Sara", branchId: null, mustChangePassword: false,
-    });
-    const branchHistoryEntry = {
-      id: 1,
-      oldBranchId: 1,
-      oldBranchName: "Fujairah",
-      newBranchId: 2,
-      newBranchName: "Dubai",
-      changedByUserId: 11,
-      changedByUserName: "Sara",
-      changedAt: "2026-04-20T10:00:00Z",
-      reason: "Transfer",
-    };
-    vi.mocked(api.get).mockImplementation((url: string) => {
-      if (url.includes("branch-history")) return Promise.resolve({ data: [branchHistoryEntry] });
-      if (url.includes("customer-history")) return Promise.resolve({ data: [] });
-      return Promise.resolve({ data: { ...sample, status: "CostingPending" } });
-    });
+  it("renders Sign Final button when status=MdFinalSign and role=ManagingDirector", async () => {
+    setUser("ManagingDirector", 50);
+    mockReqGet(makeReq({ status: "MdFinalSign" }));
     render(wrap(<RequisitionDetailPage />));
+    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
+    const btn = screen.getByRole("button", { name: /sign final/i });
+    expect(btn).toBeInTheDocument();
+    await userEvent.click(btn);
     await waitFor(() =>
-      expect(screen.getByText(/Branch changed \(1\)/i)).toBeInTheDocument(),
-    );
-    await userEvent.click(screen.getByText(/Branch changed \(1\)/i));
-    await waitFor(() =>
-      expect(screen.getByText(/Branch change history/i)).toBeInTheDocument(),
+      expect(screen.getByText("Final Sign Page")).toBeInTheDocument(),
     );
   });
+
+  it("renders Download PDF button when status=Signed", async () => {
+    setUser("SalesPerson", 10);
+    mockReqGet(makeReq({ status: "Signed" }));
+    render(wrap(<RequisitionDetailPage />));
+    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /download pdf/i })).toBeInTheDocument();
+  });
+
+  it("renders no action buttons when status=Cancelled", async () => {
+    setUser("SalesPerson", 10);
+    mockReqGet(makeReq({ status: "Cancelled" }));
+    render(wrap(<RequisitionDetailPage />));
+    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /^submit$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /set margin/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /sign final/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /download pdf/i })).not.toBeInTheDocument();
+  });
+
+  it("renders 'Edited by accountant' badge when bomLine.lastModifiedByUserId is set", async () => {
+    setUser("SalesPerson", 10);
+    mockReqGet(
+      makeReq({
+        status: "MdPricing",
+        finishedGoods: [
+          {
+            id: 50,
+            expectedQty: 5000,
+            hasPrinting: false,
+            item: { id: 87, code: "FG-0087", description: "Test FG" },
+            bomLines: [
+              {
+                id: 100,
+                qtyPerKg: 0.44,
+                micron: "20",
+                item: { id: 12, code: "RM-0012", description: "BOPP" },
+                lastModifiedByUserId: 5,
+                lastModifiedAt: "2026-04-29T10:00:00Z",
+              },
+            ],
+            costs: null,
+          },
+        ],
+      }),
+    );
+    render(wrap(<RequisitionDetailPage />));
+    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
+    expect(screen.getByText(/edited by accountant/i)).toBeInTheDocument();
+  });
+
+  it("renders Admin can see action buttons regardless of ownership (Costing -> Edit BOM)", async () => {
+    setUser("Admin", 999);
+    mockReqGet(makeReq({ status: "Costing" }));
+    render(wrap(<RequisitionDetailPage />));
+    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /edit bom & costing/i })).toBeInTheDocument();
+  });
+
+  it("Cancel input rejects reason shorter than 5 chars", async () => {
+    setUser("SalesPerson", 10);
+    mockReqGet(makeReq({ status: "Draft" }));
+    render(wrap(<RequisitionDetailPage />));
+    await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+    const input = screen.getByLabelText(/cancel reason/i);
+    await userEvent.type(input, "no");
+    await userEvent.click(screen.getByRole("button", { name: /confirm cancel/i }));
+    // Cancel input still visible (no API call) — toast surfaced via sonner.
+    expect(screen.getByRole("button", { name: /confirm cancel/i })).toBeInTheDocument();
+  });
+
+  // V2.3 customer-history + branch-swap modals removed in Task 20 (V3 = Alain only,
+  // customer immutable post-Create). Tests for those triggers deleted with the modals.
 });

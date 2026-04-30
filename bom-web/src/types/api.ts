@@ -38,16 +38,6 @@ export interface ApiError {
 
 // ─── Plan 2: Requisitions & lookups ──────────────────────────────────────────
 
-export type RequisitionStatus =
-  | "Draft"
-  | "BomPending"
-  | "BomInProgress"
-  | "CostingPending"
-  | "CostingInProgress"
-  | "MdReview"
-  | "Approved"
-  | "Rejected";
-
 export interface RequisitionListItem {
   id: number;
   refNo: string;
@@ -388,4 +378,133 @@ export interface CustomerChangeHistoryEntry {
   changedByUserName: string;
   changedAt: string;
   reason: string | null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// V3 SIMPLIFIED WORKFLOW TYPES (post-2026-04-29)
+// Backend Phase A merged at master ea1a904.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type V3RequisitionStatus =
+  | "Draft"
+  | "Costing"
+  | "MdPricing"
+  | "CustomerConfirm"
+  | "MdFinalSign"
+  | "Signed"
+  | "Cancelled"
+  | "Rejected";
+
+// Legacy V2.3 statuses also exist on historical reqs (Approved, BomPending, etc.)
+// Use the union type below for tolerant code paths.
+export type RequisitionStatus = V3RequisitionStatus | LegacyV2RequisitionStatus;
+
+export type LegacyV2RequisitionStatus =
+  | "BomPending"
+  | "BomInProgress"
+  | "CostingPending"
+  | "CostingInProgress"
+  | "MdReview"
+  | "Approved";
+
+export type ApprovalStage = "InitialPricing" | "FinalSign";
+
+export interface V3BomLine {
+  id: number;
+  qtyPerKg: number;
+  micron: string | null;
+  item: { id: number; code: string; description: string };
+  lastModifiedByUserId?: number | null;
+  lastModifiedAt?: string | null;
+}
+
+export interface V3BomCost {
+  printingCostPerKg: number | null;
+  printingCostCurrency: string | null;
+  fohPerKg: number;
+  transportPerKg: number;
+  commissionPerKg: number;
+  lines: Array<{
+    bomLineId: number;
+    wastagePercent: number;
+    purchaseValuePerKg: number | null;
+    purchaseCurrency: string | null;
+  }>;
+}
+
+export interface V3FinishedGood {
+  id: number;
+  expectedQty: number;
+  hasPrinting: boolean;
+  item: { id: number; code: string; description: string };
+  bomLines: V3BomLine[] | null;
+  costs: V3BomCost | null;
+}
+
+export interface V3Requisition {
+  id: number;
+  refNo: string;
+  status: V3RequisitionStatus;
+  currencyCode: string;
+  notes: string | null;
+  customer: { id: number; name: string; code: string };
+  salesPerson: { id: number; name: string };
+  finishedGoods: V3FinishedGood[];
+}
+
+export interface V3ApprovalItem {
+  requisitionItemId: number;
+  marginPerKg: number;
+}
+
+export interface V3Approval {
+  id: number;
+  requisitionId: number;
+  stage: ApprovalStage;
+  isApproved: boolean;
+  isSuperseded: boolean;
+  approvedAt: string;
+  rateSnapshot: number | null;
+  costFxSnapshot: number | null;
+  notes: string | null;
+  items: V3ApprovalItem[];
+}
+
+export interface V3CreateRequisitionPayload {
+  customerId: number;
+  quotationCurrency: string;
+  referenceNumber?: string;
+  notes?: string;
+  finishedGoods: Array<{
+    itemId: number;
+    expectedQtyKg: number;
+    printing: boolean;
+    bomLines: Array<{
+      itemId: number;
+      qtyPerKg: number;
+      micron: string | null;
+      processId: number;
+    }>;
+  }>;
+}
+
+export interface V3SetMarginPayload {
+  notes?: string | null;
+  items: Array<{ requisitionItemId: number; marginPerKg: number }>;
+}
+
+export interface V3FinalSignPayload {
+  confirmationToken: string; // must equal "SIGN"
+  notes?: string | null;
+}
+
+export interface SignatureUploadResponse {
+  path: string;
+  uploadedAt: string;
+}
+
+export interface ImplicitItemResponse {
+  id: number;
+  code: string;
+  description: string;
 }

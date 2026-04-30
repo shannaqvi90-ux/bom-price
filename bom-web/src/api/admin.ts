@@ -10,7 +10,10 @@ export type AdminActionType =
   | "UnlockCosting"
   | "ResetPassword"
   | "OverridePrices"
-  | "HardDeleteCustomer";
+  | "HardDeleteCustomer"
+  // V3 additions:
+  | "RollbackToCosting"
+  | "V3CutoverMigration";
 
 export type AuditEntityType = "Requisition" | "User" | "Customer";
 

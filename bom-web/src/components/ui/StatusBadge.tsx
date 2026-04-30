@@ -1,7 +1,7 @@
 import { cn } from "@/lib/cn";
 import type { RequisitionStatus } from "@/types/api";
 
-const LABELS: Record<RequisitionStatus, string> = {
+const LABELS: Partial<Record<RequisitionStatus, string>> = {
   Draft: "Draft",
   BomPending: "BOM Pending",
   BomInProgress: "BOM In Progress",
@@ -12,7 +12,7 @@ const LABELS: Record<RequisitionStatus, string> = {
   Rejected: "Rejected",
 };
 
-const COLOURS: Record<RequisitionStatus, string> = {
+const COLOURS: Partial<Record<RequisitionStatus, string>> = {
   Draft: "bg-slate-500/10 text-slate-600 dark:text-slate-300 ring-slate-500/20",
   BomPending: "bg-amber-500/10 text-amber-600 dark:text-amber-400 ring-amber-500/20",
   CostingPending: "bg-amber-500/10 text-amber-600 dark:text-amber-400 ring-amber-500/20",

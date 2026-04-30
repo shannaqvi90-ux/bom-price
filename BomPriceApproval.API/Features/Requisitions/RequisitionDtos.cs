@@ -96,3 +96,52 @@ public record BomLineDto(
 
 // V3 — sales/admin cancellation with mandatory reason
 public record CancelRequisitionRequest(string Reason);
+
+// V3 — GET /api/requisitions/{id} response shape (matches bom-web V3Requisition TS type).
+// Old RequisitionDetail record kept for backward-compat in non-GET paths
+// (Phase C cutover will prune once all consumers migrate).
+public record V3RequisitionDetail(
+    int Id,
+    string RefNo,
+    string Status,
+    string CurrencyCode,
+    string? Notes,
+    V3CustomerSummary Customer,
+    V3SalesPersonSummary SalesPerson,
+    List<V3FinishedGoodDto> FinishedGoods);
+
+public record V3CustomerSummary(int Id, string Name, string Code);
+
+public record V3SalesPersonSummary(int Id, string Name);
+
+public record V3ItemSummary(int Id, string Code, string Description);
+
+public record V3FinishedGoodDto(
+    int Id,
+    decimal ExpectedQty,
+    bool HasPrinting,
+    V3ItemSummary Item,
+    List<V3BomLineDto>? BomLines,
+    V3BomCostDto? Costs);
+
+public record V3BomLineDto(
+    int Id,
+    decimal QtyPerKg,
+    string? Micron,
+    V3ItemSummary Item,
+    int? LastModifiedByUserId,
+    DateTime? LastModifiedAt);
+
+public record V3BomCostDto(
+    decimal? PrintingCostPerKg,
+    string? PrintingCostCurrency,
+    decimal FohPerKg,
+    decimal TransportPerKg,
+    decimal CommissionPerKg,
+    List<V3BomCostLineDto> Lines);
+
+public record V3BomCostLineDto(
+    int BomLineId,
+    decimal WastagePercent,
+    decimal? PurchaseValuePerKg,
+    string? PurchaseCurrency);

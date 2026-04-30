@@ -1,218 +1,313 @@
 import { useState } from "react";
-import { useForm, Controller } from "react-hook-form";
-import type { Path } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import {
+  useCustomers,
+  useCustomerImplicitItems,
+} from "@/features/customers/customersApi";
+import { useItems } from "@/api/lookups";
+import {
+  useCreateV3Requisition,
+  useSubmitRequisition,
+} from "@/features/requisitions/requisitionsApi";
+import { BomEditorTable, type BomLineRow } from "@/components/v3/BomEditorTable";
+import { CreateCustomerModal } from "@/components/v3/CreateCustomerModal";
+import { CreateFinishedGoodModal } from "@/components/v3/CreateFinishedGoodModal";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { SearchableSelect } from "@/components/ui/SearchableSelect";
-import { useCustomers, useItems, useActiveExchangeRates } from "@/api/lookups";
-import { useCreateRequisition } from "./requisitionsApi";
-import { RequisitionItemsEditor } from "./components/RequisitionItemsEditor";
-import { AddCustomerModal } from "@/features/customers/AddCustomerModal";
-import { BranchPicker } from "@/components/BranchPicker";
-import { notify } from "@/lib/notify";
-import { extractFieldErrors } from "@/lib/apiError";
-import { useAuthStore } from "@/store/authStore";
-import type { Customer } from "@/types/api";
+interface FgCardState {
+  itemId: number;
+  expectedQtyKg: number;
+  printing: boolean;
+  bomLines: BomLineRow[];
+}
 
-const itemRowSchema = z.object({
-  item: z
-    .object({ id: z.number() })
-    .nullable()
-    .refine((v) => v !== null, { message: "Item is required" }),
-  expectedQty: z
-    .number({ invalid_type_error: "Qty is required" })
-    .positive("Qty must be greater than zero"),
-});
+const CURRENCIES = ["AED", "USD", "EUR", "GBP", "JPY"];
 
-const schema = z.object({
-  customer: z
-    .object({ id: z.number() })
-    .nullable()
-    .refine((v) => v !== null, { message: "Customer is required" }),
-  items: z
-    .array(itemRowSchema)
-    .min(1, "At least one item is required")
-    .refine(
-      (arr) => {
-        const ids = arr
-          .map((r) => r.item?.id)
-          .filter((v): v is number => typeof v === "number");
-        return new Set(ids).size === ids.length;
-      },
-      { message: "Duplicate items not allowed" },
-    ),
-  currencyCode: z.string().min(1, "Currency is required"),
-});
-
-type FormValues = z.infer<typeof schema>;
-
-export default function NewRequisitionPage() {
+export function NewRequisitionPage() {
   const navigate = useNavigate();
-  const userBranchId = useAuthStore((s) => s.user?.branchId ?? null);
-  const [pickedBranchId, setPickedBranchId] = useState<number | null>(userBranchId);
+  const [customerId, setCustomerId] = useState<number>(0);
+  const [currency, setCurrency] = useState("AED");
+  const [referenceNumber, setReferenceNumber] = useState("");
+  const [notes, setNotes] = useState("");
+  const [fgs, setFgs] = useState<FgCardState[]>([]);
 
-  const customersQ = useCustomers();
-  const itemsQ = useItems({ branchId: pickedBranchId ?? undefined, type: "FinishedGood" });
-  const ratesQ = useActiveExchangeRates();
-  const create = useCreateRequisition();
+  const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
+  const [createFgOpen, setCreateFgOpen] = useState(false);
 
-  const [addCustomerOpen, setAddCustomerOpen] = useState(false);
+  const customers = useCustomers();
+  const allFgs = useItems({ type: "FinishedGood" });
+  const customerFgs = useCustomerImplicitItems(customerId || null);
 
-  const {
-    control,
-    handleSubmit,
-    register,
-    setError,
-    setValue,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      customer: null as unknown as { id: number },
-      items: [{ item: null as unknown as { id: number }, expectedQty: undefined as unknown as number }],
-      currencyCode: "AED",
-    },
-  });
+  const createReq = useCreateV3Requisition();
+  const submitReq = useSubmitRequisition();
 
-  const isLoadingLookups = customersQ.isLoading || itemsQ.isLoading || ratesQ.isLoading;
-  const isErrorLookups = customersQ.isError || itemsQ.isError || ratesQ.isError;
+  // Q20: when customer selected, prefer their historical FGs; else allow
+  // browsing all FGs (UX safety). Sales can still inline-create new FGs
+  // via "+ New FG".
+  const fgItemPool = customerId
+    ? (customerFgs.data ?? [])
+    : (allFgs.data ?? []);
 
-  const currencies = ["AED", ...(ratesQ.data?.map((r) => r.currencyCode) ?? [])];
-  const uniqueCurrencies = Array.from(new Set(currencies)).map((code) => ({ code }));
+  const updateFg = (idx: number, patch: Partial<FgCardState>) =>
+    setFgs((s) => s.map((fg, i) => (i === idx ? { ...fg, ...patch } : fg)));
+  const removeFg = (idx: number) => setFgs((s) => s.filter((_, i) => i !== idx));
+  const addFg = () =>
+    setFgs((s) => [
+      ...s,
+      { itemId: 0, expectedQtyKg: 0, printing: false, bomLines: [] },
+    ]);
 
-  const onSubmit = handleSubmit(async (values) => {
-    try {
-      const created = await create.mutateAsync({
-        customerId: values.customer!.id,
-        items: values.items.map((row) => ({
-          itemId: row.item!.id,
-          expectedQty: row.expectedQty,
-        })),
-        currencyCode: values.currencyCode,
-        branchId: pickedBranchId,
-      });
-      notify.success("Requisition created");
-      navigate(`/requisitions/${created.id}`, { replace: true });
-    } catch (e) {
-      const fields = extractFieldErrors(e);
-      for (const [key, msg] of Object.entries(fields)) {
-        setError(key as Path<FormValues>, { type: "server", message: msg });
-      }
-      notify.fromApiError(e, "Failed to create requisition");
+  const onSave = async (submit: boolean) => {
+    if (!customerId) {
+      toast.error("Pick a customer first");
+      return;
     }
-  });
+    if (fgs.length === 0) {
+      toast.error("Add at least one finished good");
+      return;
+    }
+    for (const fg of fgs) {
+      if (fg.itemId === 0) {
+        toast.error("Each FG must have an item selected");
+        return;
+      }
+      if (fg.bomLines.length === 0) {
+        toast.error("Each FG must have at least one BOM line");
+        return;
+      }
+    }
+
+    try {
+      const created = await createReq.mutateAsync({
+        customerId,
+        quotationCurrency: currency,
+        referenceNumber: referenceNumber || undefined,
+        notes: notes || undefined,
+        finishedGoods: fgs.map((fg) => ({
+          itemId: fg.itemId,
+          expectedQtyKg: fg.expectedQtyKg,
+          printing: fg.printing,
+          bomLines: fg.bomLines.map((b) => ({
+            itemId: b.itemId,
+            qtyPerKg: b.qtyPerKg,
+            micron: b.micron,
+            processId: b.processId,
+          })),
+        })),
+      });
+
+      if (submit) {
+        await submitReq.mutateAsync(created.id);
+        toast.success(`Submitted: ${created.refNo}`);
+      } else {
+        toast.success(`Saved as draft: ${created.refNo}`);
+      }
+      navigate(`/requisitions/${created.id}`);
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { error?: string } } } | null)?.response
+          ?.data?.error ?? "Failed to save requisition";
+      toast.error(message);
+    }
+  };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>New Requisition</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoadingLookups ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : isErrorLookups ? (
-            <p className="text-sm text-destructive">Failed to load form data. Please refresh.</p>
-          ) : (
-            <form onSubmit={onSubmit} className="space-y-4" noValidate autoComplete="off">
-              <div className="mb-4">
-                <label htmlFor="branch-picker" className="block text-sm font-medium text-slate-700 mb-1">Branch</label>
-                <BranchPicker id="branch-picker" value={pickedBranchId} onChange={setPickedBranchId} />
-              </div>
+    <div className="mx-auto max-w-5xl p-6">
+      <h1 className="text-2xl font-semibold text-gray-900">New Requisition</h1>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label htmlFor="customer" className="text-sm font-medium">
-                    Customer
-                  </label>
+      <div className="mt-6 grid grid-cols-2 gap-4">
+        <label className="block">
+          <span className="text-sm font-medium text-gray-700">Customer</span>
+          <div className="mt-1 flex gap-2">
+            <select
+              aria-label="customer"
+              value={customerId}
+              onChange={(e) => setCustomerId(parseInt(e.target.value))}
+              className="flex-1 rounded-md border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value={0}>— select —</option>
+              {(customers.data ?? []).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.code} · {c.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setCreateCustomerOpen(true)}
+              className="rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"
+            >
+              + New
+            </button>
+          </div>
+        </label>
+
+        <label className="block">
+          <span className="text-sm font-medium text-gray-700">Currency</span>
+          <select
+            aria-label="currency"
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value)}
+            className="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm"
+          >
+            {CURRENCIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block col-span-2">
+          <span className="text-sm font-medium text-gray-700">
+            Reference (optional)
+          </span>
+          <input
+            value={referenceNumber}
+            onChange={(e) => setReferenceNumber(e.target.value)}
+            placeholder="PO-9941"
+            className="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm"
+          />
+        </label>
+      </div>
+
+      <h2 className="mt-8 text-lg font-semibold text-gray-900">Finished Goods</h2>
+      {fgs.length === 0 && (
+        <p className="mt-2 text-sm text-gray-500">No finished goods added yet.</p>
+      )}
+      <div className="mt-3 space-y-4">
+        {fgs.map((fg, idx) => (
+          <div key={idx} className="rounded-lg border border-gray-200 p-4">
+            <div className="flex justify-between">
+              <h3 className="font-medium text-gray-900">FG #{idx + 1}</h3>
+              <button
+                type="button"
+                onClick={() => removeFg(idx)}
+                className="text-xs text-red-600"
+              >
+                Remove FG
+              </button>
+            </div>
+
+            <div className="mt-3 grid grid-cols-3 gap-3">
+              <label className="block col-span-2">
+                <span className="text-sm font-medium text-gray-700">FG Item</span>
+                <div className="mt-1 flex gap-2">
+                  <select
+                    aria-label="fg item"
+                    value={fg.itemId}
+                    onChange={(e) =>
+                      updateFg(idx, { itemId: parseInt(e.target.value) })
+                    }
+                    className="flex-1 rounded-md border-gray-300 px-3 py-2 text-sm"
+                  >
+                    <option value={0}>— select —</option>
+                    {fgItemPool.map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.code} · {i.description}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     type="button"
-                    onClick={() => setAddCustomerOpen(true)}
-                    className="text-sm text-primary hover:underline"
+                    onClick={() => setCreateFgOpen(true)}
+                    className="rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"
                   >
-                    + Add new customer
+                    + New FG
                   </button>
                 </div>
-                <Controller
-                  control={control}
-                  name="customer"
-                  render={({ field }) => (
-                    <SearchableSelect<Customer>
-                      id="customer"
-                      options={customersQ.data ?? []}
-                      value={field.value as Customer | null}
-                      onChange={field.onChange}
-                      getLabel={(c) => c.name}
-                      getValue={(c) => c.id}
-                      placeholder="Search customers…"
-                    />
-                  )}
-                />
-                {errors.customer && (
-                  <p className="text-xs text-destructive">{errors.customer.message as string}</p>
-                )}
-              </div>
+              </label>
 
-              <RequisitionItemsEditor
-                control={control}
-                register={register}
-                errors={errors}
-                availableItems={itemsQ.data ?? []}
+              <label className="block">
+                <span className="text-sm font-medium text-gray-700">
+                  Quantity (KG)
+                </span>
+                <input
+                  type="number"
+                  aria-label="quantity"
+                  value={fg.expectedQtyKg || ""}
+                  onChange={(e) =>
+                    updateFg(idx, {
+                      expectedQtyKg: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                  className="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm"
+                />
+              </label>
+            </div>
+
+            <label className="mt-3 inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={fg.printing}
+                onChange={(e) => updateFg(idx, { printing: e.target.checked })}
               />
+              <span className="text-sm text-gray-700">Printing required</span>
+            </label>
 
-              <div className="space-y-2">
-                <label htmlFor="currencyCode" className="text-sm font-medium">
-                  Currency
-                </label>
-                <Controller
-                  control={control}
-                  name="currencyCode"
-                  render={({ field }) => (
-                    <SearchableSelect<{ code: string }>
-                      id="currencyCode"
-                      options={uniqueCurrencies}
-                      value={field.value ? { code: field.value } : null}
-                      onChange={(v) => field.onChange(v?.code ?? "")}
-                      getLabel={(c) => c.code}
-                      getValue={(c) => c.code}
-                      placeholder="Select currency…"
-                    />
-                  )}
-                />
-                {errors.currencyCode && (
-                  <p className="text-xs text-destructive">{errors.currencyCode.message}</p>
-                )}
-              </div>
+            <h4 className="mt-4 text-sm font-medium text-gray-700">BOM Recipe</h4>
+            <div className="mt-2">
+              <BomEditorTable
+                lines={fg.bomLines}
+                onChange={(lines) => updateFg(idx, { bomLines: lines })}
+              />
+            </div>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={addFg}
+          className="rounded-md border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+        >
+          + Add Finished Good
+        </button>
+      </div>
 
-              <div className="flex justify-end gap-2 pt-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => navigate(-1)}
-                  disabled={create.isPending}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isSubmitting || create.isPending}>
-                  {create.isPending ? "Creating…" : "Create"}
-                </Button>
-              </div>
-            </form>
-          )}
-        </CardContent>
-      </Card>
+      <h2 className="mt-8 text-lg font-semibold text-gray-900">Notes</h2>
+      <textarea
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        rows={3}
+        className="mt-2 w-full rounded-md border-gray-300 px-3 py-2 text-sm"
+      />
 
-      <AddCustomerModal
-        open={addCustomerOpen}
-        onClose={() => setAddCustomerOpen(false)}
-        onCreated={(customer) => {
-          // Pass the full object so SearchableSelect's getLabel(c => c.name) renders.
-          // The zod schema only validates `{ id }` but Zod tolerates extra keys.
-          setValue("customer", customer as unknown as { id: number });
+      <div className="mt-8 flex justify-end gap-3">
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => onSave(false)}
+          disabled={createReq.isPending}
+          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          Save Draft
+        </button>
+        <button
+          type="button"
+          onClick={() => onSave(true)}
+          disabled={createReq.isPending || submitReq.isPending}
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          Submit
+        </button>
+      </div>
+
+      <CreateCustomerModal
+        open={createCustomerOpen}
+        onClose={() => setCreateCustomerOpen(false)}
+        onCreated={(cust) => setCustomerId(cust.id)}
+      />
+      <CreateFinishedGoodModal
+        open={createFgOpen}
+        onClose={() => setCreateFgOpen(false)}
+        onCreated={() => {
+          // Auto-refetch via mutation invalidation in useCreateItem.
+          // Future: also auto-set the new FG into the most-recent FG card.
         }}
       />
     </div>

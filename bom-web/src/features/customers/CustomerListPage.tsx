@@ -22,6 +22,10 @@ export default function CustomerListPage() {
 
   const isAdmin = role === "Admin";
 
+  // V3: Customer codes are server-generated via CodeGeneratorService.NextCustomerCodeAsync.
+  // The Code column here is render-only. The legacy AddCustomerModal still has a Code input
+  // for V2.3 admin manual-create flow; the V3 NewRequisitionPage uses CreateCustomerModal
+  // (preview-only Code) for the new-customer-while-creating-req path.
   const columns = useMemo<ColumnDef<Customer>[]>(() => {
     const base: ColumnDef<Customer>[] = [
       { accessorKey: "code", header: "Code", cell: (info) => <span className="font-mono text-xs">{info.getValue() as string}</span> },

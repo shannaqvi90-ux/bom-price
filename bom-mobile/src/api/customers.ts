@@ -3,12 +3,12 @@ import { api } from "./client";
 
 export interface CustomerLite {
   id: number; code: string; name: string;
-  email?: string | null; phone?: string | null; address?: string | null;
-  isDeleted: boolean;
+  email?: string | null; phoneNumber?: string | null; address?: string | null;
+  salesPersonId?: number | null; salesPersonName?: string | null;
 }
 
 export interface CreateCustomerPayload {
-  name: string; email?: string; phone?: string; address?: string;
+  name: string; email?: string; phoneNumber?: string; address?: string;
 }
 
 export const customerKeys = {
@@ -21,7 +21,7 @@ export function useCustomers(search?: string) {
     queryKey: customerKeys.list(search),
     queryFn: () => api.get<CustomerLite[]>("/api/customers", {
       params: search ? { search } : undefined,
-    }).then((r) => r.data.filter((c) => !c.isDeleted)),
+    }).then((r) => r.data),
     staleTime: 30_000,
   });
 }

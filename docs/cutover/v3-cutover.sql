@@ -1,0 +1,89 @@
+-- ============================================================================
+-- V3 Cutover Migration — DATE-STAMPED COPY ON CUTOVER DAY
+-- ============================================================================
+-- This file lives in git undated as the canonical template. On cutover day,
+-- the operator copies it to a date-stamped sibling for execution + record:
+--
+--     cp v3-cutover.sql 2026-MM-DD-v3-cutover.sql
+--     git add 2026-MM-DD-v3-cutover.sql && git commit -m "docs(cutover): record V3 cutover ran YYYY-MM-DD"
+--
+-- Run as the admin user whose ID is in :adminId.
+-- DRY RUN: set dryRun=true at top — transaction COMMITs as ROLLBACK.
+-- PROD RUN: set dryRun=false — transaction COMMITs.
+-- ============================================================================
+
+\set adminId 1                -- ← Admin user ID running the cutover (verify via SELECT first)
+\set alainBranchId 2          -- ← verified before run via pre-flight SELECT
+\set dryRun true              -- ← flip to false on prod run
+\set cutoverDateLabel '2026-MM-DD'
+
+\timing on
+\echo '=== V3 CUTOVER MIGRATION ==='
+\echo 'adminId:' :adminId
+\echo 'alainBranchId:' :alainBranchId
+\echo 'dryRun:' :dryRun
+\echo 'cutoverDateLabel:' :cutoverDateLabel
+\echo ''
+
+BEGIN;
+
+-- ============================================================================
+-- 0. PRE-FLIGHT CHECKS — assert expected DB state
+-- ============================================================================
+
+-- Admin user exists with Role='Admin' and IsActive=true.
+-- UserRole enum: Admin=0, SalesPerson=1, BomCreator=2, Accountant=3, ManagingDirector=4
+DO $$
+DECLARE admin_count INT;
+BEGIN
+  SELECT COUNT(*) INTO admin_count FROM "Users"
+   WHERE "Id" = :adminId AND "Role" = 0 AND "IsActive" = true;
+  IF admin_count != 1 THEN
+    RAISE EXCEPTION 'Pre-flight: admin user % not found or not active', :adminId;
+  END IF;
+END $$;
+
+-- Alain branch exists with Name='Al Ain' and IsActive=true.
+DO $$
+DECLARE alain_count INT;
+BEGIN
+  SELECT COUNT(*) INTO alain_count FROM "Branches"
+   WHERE "Id" = :alainBranchId AND "Name" = 'Al Ain' AND "IsActive" = true;
+  IF alain_count != 1 THEN
+    RAISE EXCEPTION 'Pre-flight: Alain branch id=% with Name=Al Ain not found or inactive', :alainBranchId;
+  END IF;
+END $$;
+
+\echo '0. Pre-flight checks PASSED.'
+
+-- ============================================================================
+-- (sections 1-4 added in subsequent tasks)
+-- ============================================================================
+
+-- ============================================================================
+-- 5. POST-FLIGHT VERIFICATION
+-- ============================================================================
+
+\echo ''
+\echo '=== POST-FLIGHT COUNTS ==='
+SELECT
+  (SELECT COUNT(*) FROM "QuotationRequests" WHERE "Status" IN (1,2,3,4,5)) AS still_inflight_v2_reqs,
+  (SELECT COUNT(*) FROM "QuotationRequests" WHERE "Status" = 13 AND "CancelReason" LIKE '%V3 cutover%') AS cutover_cancelled_reqs,
+  (SELECT COUNT(*) FROM "Users" WHERE "Role" = 2 AND "IsActive" = true) AS still_active_bomcreator_users,
+  (SELECT COUNT(*) FROM "Customers" WHERE "BranchId" != :alainBranchId AND "IsDeleted" = false) AS still_visible_nonalain_customers,
+  (SELECT COUNT(*) FROM "Items" WHERE "BranchId" != :alainBranchId AND "IsActive" = true) AS still_active_nonalain_items,
+  (SELECT COUNT(*) FROM "AdminAuditLog" WHERE "ActionType" = 'V3CutoverMigration' AND "CreatedAt" >= NOW() - INTERVAL '1 minute') AS new_audit_rows;
+
+-- ============================================================================
+-- 6. COMMIT or ROLLBACK
+-- ============================================================================
+
+\if :dryRun
+  \echo ''
+  \echo '*** DRY RUN — ROLLING BACK ***'
+  ROLLBACK;
+\else
+  \echo ''
+  \echo '*** PROD RUN — COMMITTING ***'
+  COMMIT;
+\endif

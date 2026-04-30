@@ -6,17 +6,29 @@ This runbook covers the end-to-end V3 cutover process — from pre-cutover prep 
 
 ## Cutover-day timeline
 
+> **2026-04-30 update:** the original ordering ran cutover SQL BEFORE applying
+> V3 schema migrations and BEFORE merging PR #32 (whose backend Task 2.5 ships
+> the V3 GET projection). Both were caught on the day:
+>
+> - Cutover SQL aborted on `column CancelReason does not exist` because V3 schema
+>   migrations had not been applied yet. Transaction rolled back cleanly.
+> - First Fly deploy raced PR #32 merge by ~1 minute, so the deployed backend
+>   served the V2.3 GET shape until a second deploy.
+>
+> The corrected ordering below reflects what actually worked end-to-end on prod.
+
 | Step | What | Who | Approx duration |
 |------|------|-----|---------|
-| 24h before | Send broadcast email to staff | User | — |
-| T-1h | Snapshot Neon DB (`pre-v3-cutover-YYYY-MM-DD` branch) | User via Neon Console | 1 min |
-| T-30m | Final dry-run on `cutover-dryrun-YYYY-MM-DD` Neon branch | User runs `psql` | 5 min |
-| T-0 | Maintenance window banner up on web app | User | — |
-| T+0 | Run cutover SQL on prod Neon DB | User | <1 min |
-| T+1m | Verify post-flight counts on prod | User | 1 min |
-| T+2m | Deploy V3 backend to Fly | User: `flyctl deploy --remote-only` | 3-5 min |
-| T+7m | Remove `hold` label + merge PR #32 | User: `gh pr edit 32 --remove-label hold && gh pr merge 32 --squash` | 1 min |
-| T+8m | Cloudflare Pages auto-deploys V3 frontend | (automatic) | 1-2 min |
+| 24h before | Send broadcast email to staff (skip if no live users) | User | — |
+| T-1h | Snapshot Neon DB (`pre-v3-cutover-YYYY-MM-DD` branch) — optional if pure test data | User via Neon Console | 1 min |
+| T-30m | Final dry-run on `cutover-dryrun-YYYY-MM-DD` Neon branch (or local via `test-cutover-locally.sh`) | User runs `psql` | 5 min |
+| T-0 | Maintenance window banner up on web app (skip if no live users) | User | — |
+| T+0 | **Apply V3 schema migrations** (must precede cutover SQL — otherwise `CancelReason`/`CancelledAt`/`CancelledByUserId`/`Notes`/`ReferenceNumber`/`HasPrinting` etc. don't exist yet) | User: `dotnet ef database update --project BomPriceApproval.API --connection "$NEON_PROD_URI"` | 1 min |
+| T+1m | Run cutover SQL on prod Neon DB | User | <1 min |
+| T+2m | Verify post-flight counts on prod | User | 1 min |
+| T+3m | **Merge PR #32 first** (its backend Task 2.5 ships the V3 GET projection — must be on master before deploy) | User: `gh pr edit 32 --remove-label hold && gh pr merge 32 --squash` | 1 min |
+| T+5m | Deploy V3 backend to Fly (master must include PR #32) | User: `flyctl deploy --remote-only --config fly.toml` | 3-5 min |
+| T+8m | Cloudflare Pages auto-deploys V3 frontend (triggered by PR #32 merge) | (automatic) | 1-2 min |
 | T+10m | E2E smoke test on prod | User | 5 min |
 | T+15m | Maintenance banner down; tag `v3-cutover-YYYY-MM-DD` | User | 1 min |
 

@@ -56,34 +56,34 @@ BEGIN
 
   -- 5. Refresh token for the BomCreator (revoked by cutover)
   IF NOT EXISTS (SELECT 1 FROM "RefreshTokens" WHERE "UserId" = bc_id AND "Token" = 'fixture-bc-rt') THEN
-    INSERT INTO "RefreshTokens" ("UserId", "Token", "ExpiresAt", "CreatedAt", "RevokedAt")
-      VALUES (bc_id, 'fixture-bc-rt', NOW() + INTERVAL '7 days', NOW(), NULL);
+    INSERT INTO "RefreshTokens" ("UserId", "Token", "ExpiresAt", "IsRevoked")
+      VALUES (bc_id, 'fixture-bc-rt', NOW() + INTERVAL '7 days', false);
   END IF;
 
   -- 6. Customer in Alain (preserved)
   IF NOT EXISTS (SELECT 1 FROM "Customers" WHERE "Code" = 'CUST-FIXTURE-ALAIN') THEN
-    INSERT INTO "Customers" ("Code", "Name", "Address", "Email", "PhoneNumber", "BranchId", "SalesPersonId", "CreatedByUserId", "IsDeleted")
-      VALUES ('CUST-FIXTURE-ALAIN', 'Fixture Alain Customer', 'Alain', 'alain@test.local', '+971-1', alain_id, sp_id, admin_id, false);
+    INSERT INTO "Customers" ("Code", "Name", "Address", "Email", "PhoneNumber", "BranchId", "SalesPersonId", "CreatedByUserId", "CreatedAt", "IsDeleted")
+      VALUES ('CUST-FIXTURE-ALAIN', 'Fixture Alain Customer', 'Alain', 'alain@test.local', '+971-1', alain_id, sp_id, admin_id, NOW(), false);
   END IF;
   SELECT "Id" INTO cust_alain_id FROM "Customers" WHERE "Code" = 'CUST-FIXTURE-ALAIN';
 
   -- 7. Customer in Dubai (soft-deleted by cutover)
   IF NOT EXISTS (SELECT 1 FROM "Customers" WHERE "Code" = 'CUST-FIXTURE-DUBAI') THEN
-    INSERT INTO "Customers" ("Code", "Name", "Address", "Email", "PhoneNumber", "BranchId", "SalesPersonId", "CreatedByUserId", "IsDeleted")
-      VALUES ('CUST-FIXTURE-DUBAI', 'Fixture Dubai Customer', 'Dubai', 'dubai@test.local', '+971-2', dubai_id, sp_id, admin_id, false);
+    INSERT INTO "Customers" ("Code", "Name", "Address", "Email", "PhoneNumber", "BranchId", "SalesPersonId", "CreatedByUserId", "CreatedAt", "IsDeleted")
+      VALUES ('CUST-FIXTURE-DUBAI', 'Fixture Dubai Customer', 'Dubai', 'dubai@test.local', '+971-2', dubai_id, sp_id, admin_id, NOW(), false);
   END IF;
   SELECT "Id" INTO cust_dubai_id FROM "Customers" WHERE "Code" = 'CUST-FIXTURE-DUBAI';
 
   -- 8. Item in Alain (preserved)
   IF NOT EXISTS (SELECT 1 FROM "Items" WHERE "Code" = 'FG-FIXTURE-ALAIN') THEN
-    INSERT INTO "Items" ("Code", "Description", "Type", "BranchId", "IsActive")
-      VALUES ('FG-FIXTURE-ALAIN', 'Alain FG fixture', 0, alain_id, true);
+    INSERT INTO "Items" ("Code", "Description", "Type", "BranchId", "IsActive", "CreatedAt")
+      VALUES ('FG-FIXTURE-ALAIN', 'Alain FG fixture', 0, alain_id, true, NOW());
   END IF;
 
   -- 9. Item in Dubai (deactivated by cutover)
   IF NOT EXISTS (SELECT 1 FROM "Items" WHERE "Code" = 'FG-FIXTURE-DUBAI') THEN
-    INSERT INTO "Items" ("Code", "Description", "Type", "BranchId", "IsActive")
-      VALUES ('FG-FIXTURE-DUBAI', 'Dubai FG fixture', 0, dubai_id, true);
+    INSERT INTO "Items" ("Code", "Description", "Type", "BranchId", "IsActive", "CreatedAt")
+      VALUES ('FG-FIXTURE-DUBAI', 'Dubai FG fixture', 0, dubai_id, true, NOW());
   END IF;
 
   -- 10. In-flight V2.3 req (status=BomPending=1, cancelled by cutover)

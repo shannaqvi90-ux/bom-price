@@ -46,11 +46,10 @@ CONN_STRING="Host=$PG_HOST;Port=$PG_PORT;Database=$DB_NAME;Username=$PG_USER;Pas
 echo ""
 echo "=== APPLY EF MIGRATIONS ==="
 cd "$REPO_ROOT"
+# Note: do NOT use --no-build. Stale DLLs silently skip newer migrations.
 dotnet ef database update \
   --project BomPriceApproval.API \
-  --connection "$CONN_STRING" \
-  --no-build \
-  --verbose 2>&1 | tail -10
+  --connection "$CONN_STRING" 2>&1 | tail -10
 
 PSQL_DB="psql -h $PG_HOST -p $PG_PORT -U $PG_USER -d $DB_NAME"
 
@@ -120,7 +119,7 @@ POST_CANCELLED=$($PSQL_DB -t -c "SELECT COUNT(*) FROM \"QuotationRequests\" WHER
 POST_BC=$($PSQL_DB -t -c 'SELECT COUNT(*) FROM "Users" WHERE "Role" = 2 AND "IsActive" = true;' | tr -d ' ')
 POST_NONALAIN_CUST=$($PSQL_DB -t -c "SELECT COUNT(*) FROM \"Customers\" c JOIN \"Branches\" b ON c.\"BranchId\" = b.\"Id\" WHERE b.\"Name\" != 'Al Ain' AND c.\"IsDeleted\" = false;" | tr -d ' ')
 POST_NONALAIN_ITEM=$($PSQL_DB -t -c "SELECT COUNT(*) FROM \"Items\" i JOIN \"Branches\" b ON i.\"BranchId\" = b.\"Id\" WHERE b.\"Name\" != 'Al Ain' AND i.\"IsActive\" = true;" | tr -d ' ')
-POST_AUDIT=$($PSQL_DB -t -c "SELECT COUNT(*) FROM \"AdminAuditLog\" WHERE \"ActionType\" = 'V3CutoverMigration';" | tr -d ' ')
+POST_AUDIT=$($PSQL_DB -t -c "SELECT COUNT(*) FROM \"AdminAuditLogs\" WHERE \"ActionType\" = 'V3CutoverMigration';" | tr -d ' ')
 
 # Assertions:
 # - inflight reqs == 0

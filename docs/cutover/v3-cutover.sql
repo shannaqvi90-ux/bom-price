@@ -33,26 +33,27 @@ BEGIN;
 
 -- Admin user exists with Role='Admin' and IsActive=true.
 -- UserRole enum: Admin=0, SalesPerson=1, BomCreator=2, Accountant=3, ManagingDirector=4
-DO $$
-DECLARE admin_count INT;
-BEGIN
-  SELECT COUNT(*) INTO admin_count FROM "Users"
-   WHERE "Id" = :adminId AND "Role" = 0 AND "IsActive" = true;
-  IF admin_count != 1 THEN
-    RAISE EXCEPTION 'Pre-flight: admin user % not found or not active', :adminId;
-  END IF;
-END $$;
+-- NOTE: psql `:variable` substitution does NOT work inside DO $$ ... $$ blocks
+-- (psql leaves dollar-quoted strings unparsed), so pre-flight checks use plain
+-- SQL with \gset + \if for assertions.
+SELECT COUNT(*) = 1 AS admin_ok FROM "Users"
+ WHERE "Id" = :adminId AND "Role" = 0 AND "IsActive" = true \gset
+
+\if :admin_ok
+\else
+  \echo 'ERROR: Pre-flight failed — admin user not found or not active'
+  \quit
+\endif
 
 -- Alain branch exists with Name='Al Ain' and IsActive=true.
-DO $$
-DECLARE alain_count INT;
-BEGIN
-  SELECT COUNT(*) INTO alain_count FROM "Branches"
-   WHERE "Id" = :alainBranchId AND "Name" = 'Al Ain' AND "IsActive" = true;
-  IF alain_count != 1 THEN
-    RAISE EXCEPTION 'Pre-flight: Alain branch id=% with Name=Al Ain not found or inactive', :alainBranchId;
-  END IF;
-END $$;
+SELECT COUNT(*) = 1 AS alain_ok FROM "Branches"
+ WHERE "Id" = :alainBranchId AND "Name" = 'Al Ain' AND "IsActive" = true \gset
+
+\if :alain_ok
+\else
+  \echo 'ERROR: Pre-flight failed — Alain branch not found or inactive'
+  \quit
+\endif
 
 \echo '0. Pre-flight checks PASSED.'
 
@@ -66,7 +67,7 @@ END $$;
 -- ============================================================================
 
 -- 1a. Audit rows captured BEFORE update (BeforeJson reflects original state)
-INSERT INTO "AdminAuditLog"
+INSERT INTO "AdminAuditLogs"
   ("AdminUserId", "ActionType", "EntityType", "EntityId", "Reason", "BeforeJson", "CreatedAt")
 SELECT
   :adminId,
@@ -74,14 +75,14 @@ SELECT
   'Requisition',
   q."Id",
   '[V3 cutover ' || :'cutoverDateLabel' || '] Workflow simplified — original V2.3 status preserved in BeforeJson',
-  json_build_object(
+  jsonb_build_object(
     'id', q."Id",
     'refNo', q."RefNo",
     'status', q."Status",
     'customerId', q."CustomerId",
     'salesPersonId', q."SalesPersonId",
     'updatedAt', q."UpdatedAt"
-  )::text,
+  ),
   NOW()
 FROM "QuotationRequests" q
 WHERE q."Status" IN (1, 2, 3, 4, 5);
@@ -109,7 +110,7 @@ UPDATE "QuotationRequests"
 -- ============================================================================
 
 -- 2a. Audit rows
-INSERT INTO "AdminAuditLog"
+INSERT INTO "AdminAuditLogs"
   ("AdminUserId", "ActionType", "EntityType", "EntityId", "Reason", "BeforeJson", "CreatedAt")
 SELECT
   :adminId,
@@ -117,13 +118,13 @@ SELECT
   'User',
   u."Id",
   '[V3 cutover ' || :'cutoverDateLabel' || '] BomCreator role deprecated — user deactivated per V3 design Q12',
-  json_build_object(
+  jsonb_build_object(
     'id', u."Id",
     'name', u."Name",
     'email', u."Email",
     'role', u."Role",
     'isActive', u."IsActive"
-  )::text,
+  ),
   NOW()
 FROM "Users" u
 WHERE u."Role" = 2  -- BomCreator
@@ -140,8 +141,8 @@ UPDATE "Users"
 
 -- 2c. Revoke their refresh tokens
 UPDATE "RefreshTokens"
-   SET "RevokedAt" = NOW()
- WHERE "RevokedAt" IS NULL
+   SET "IsRevoked" = true
+ WHERE "IsRevoked" = false
    AND "UserId" IN (SELECT "Id" FROM "Users" WHERE "Role" = 2 AND "IsActive" = false);
 
 \echo '2c. Revoked BomCreator refresh tokens:' :ROW_COUNT
@@ -156,7 +157,7 @@ UPDATE "RefreshTokens"
 -- ============================================================================
 
 -- 3a. Audit rows
-INSERT INTO "AdminAuditLog"
+INSERT INTO "AdminAuditLogs"
   ("AdminUserId", "ActionType", "EntityType", "EntityId", "Reason", "BeforeJson", "CreatedAt")
 SELECT
   :adminId,
@@ -164,14 +165,14 @@ SELECT
   'Customer',
   c."Id",
   '[V3 cutover ' || :'cutoverDateLabel' || '] Customer in non-Alain branch hidden per V3 design Q13',
-  json_build_object(
+  jsonb_build_object(
     'id', c."Id",
     'code', c."Code",
     'name', c."Name",
     'branchId', c."BranchId",
     'isDeleted', c."IsDeleted",
     'salesPersonId', c."SalesPersonId"
-  )::text,
+  ),
   NOW()
 FROM "Customers" c
 WHERE c."BranchId" != :alainBranchId
@@ -199,7 +200,7 @@ UPDATE "Customers"
 -- ============================================================================
 
 -- 4a. Audit rows
-INSERT INTO "AdminAuditLog"
+INSERT INTO "AdminAuditLogs"
   ("AdminUserId", "ActionType", "EntityType", "EntityId", "Reason", "BeforeJson", "CreatedAt")
 SELECT
   :adminId,
@@ -207,14 +208,14 @@ SELECT
   'Item',
   i."Id",
   '[V3 cutover ' || :'cutoverDateLabel' || '] Item in non-Alain branch deactivated per V3 design Q13',
-  json_build_object(
+  jsonb_build_object(
     'id', i."Id",
     'code', i."Code",
     'description', i."Description",
     'type', i."Type",
     'branchId', i."BranchId",
     'isActive', i."IsActive"
-  )::text,
+  ),
   NOW()
 FROM "Items" i
 WHERE i."BranchId" != :alainBranchId
@@ -242,7 +243,7 @@ SELECT
   (SELECT COUNT(*) FROM "Users" WHERE "Role" = 2 AND "IsActive" = true) AS still_active_bomcreator_users,
   (SELECT COUNT(*) FROM "Customers" WHERE "BranchId" != :alainBranchId AND "IsDeleted" = false) AS still_visible_nonalain_customers,
   (SELECT COUNT(*) FROM "Items" WHERE "BranchId" != :alainBranchId AND "IsActive" = true) AS still_active_nonalain_items,
-  (SELECT COUNT(*) FROM "AdminAuditLog" WHERE "ActionType" = 'V3CutoverMigration' AND "CreatedAt" >= NOW() - INTERVAL '1 minute') AS new_audit_rows;
+  (SELECT COUNT(*) FROM "AdminAuditLogs" WHERE "ActionType" = 'V3CutoverMigration' AND "CreatedAt" >= NOW() - INTERVAL '1 minute') AS new_audit_rows;
 
 -- ============================================================================
 -- 6. COMMIT or ROLLBACK

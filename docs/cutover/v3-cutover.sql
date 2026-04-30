@@ -147,7 +147,50 @@ UPDATE "RefreshTokens"
 \echo '2c. Revoked BomCreator refresh tokens:' :ROW_COUNT
 
 -- ============================================================================
--- (sections 3-4 added in subsequent tasks)
+-- 3. SOFT-DELETE NON-ALAIN CUSTOMERS
+-- ============================================================================
+-- Sets IsDeleted=true on every Customer whose BranchId != alainBranchId.
+-- GET /customers in V23c P2 already filters !IsDeleted, so the FE list will
+-- automatically hide them. Historical reqs that reference the customer still
+-- resolve via FK navigation (anonymize-in-place; row stays present).
+-- ============================================================================
+
+-- 3a. Audit rows
+INSERT INTO "AdminAuditLog"
+  ("AdminUserId", "ActionType", "EntityType", "EntityId", "Reason", "BeforeJson", "CreatedAt")
+SELECT
+  :adminId,
+  'V3CutoverMigration',
+  'Customer',
+  c."Id",
+  '[V3 cutover ' || :'cutoverDateLabel' || '] Customer in non-Alain branch hidden per V3 design Q13',
+  json_build_object(
+    'id', c."Id",
+    'code', c."Code",
+    'name', c."Name",
+    'branchId', c."BranchId",
+    'isDeleted', c."IsDeleted",
+    'salesPersonId', c."SalesPersonId"
+  )::text,
+  NOW()
+FROM "Customers" c
+WHERE c."BranchId" != :alainBranchId
+  AND c."IsDeleted" = false;
+
+\echo '3a. Audit rows for non-Alain customers:' :ROW_COUNT
+
+-- 3b. Soft-delete
+UPDATE "Customers"
+   SET "IsDeleted" = true,
+       "DeletedAt" = NOW(),
+       "DeletedByUserId" = :adminId
+ WHERE "BranchId" != :alainBranchId
+   AND "IsDeleted" = false;
+
+\echo '3b. Soft-deleted non-Alain customers:' :ROW_COUNT
+
+-- ============================================================================
+-- (section 4 added in subsequent task)
 -- ============================================================================
 
 -- ============================================================================

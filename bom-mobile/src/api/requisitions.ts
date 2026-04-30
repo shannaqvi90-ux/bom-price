@@ -12,18 +12,14 @@ export const requisitionKeys = {
 
 export interface CreateReqPayload {
   customerId: number;
-  currencyCode: string;
+  quotationCurrency: string;
   referenceNumber?: string;
   notes?: string;
   finishedGoods: {
     itemId: number;
-    expectedQty: number;
-    bomLines: {
-      processId: number;
-      rawMaterialItemId: number;
-      qtyPerKg: number;
-      wastagePct: number;
-    }[];
+    expectedQtyKg: number;
+    printing: boolean;
+    bomLines: { processId: number; itemId: number; qtyPerKg: number; micron?: string }[];
   }[];
 }
 

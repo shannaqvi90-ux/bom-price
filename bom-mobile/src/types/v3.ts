@@ -38,6 +38,7 @@ export interface V3BomCostLineDto {
 }
 
 export interface V3BomCostDto {
+  totalCostPerKg: number;
   printingCostPerKg?: number | null;
   printingCostCurrency?: string | null;
   fohPerKg: number;

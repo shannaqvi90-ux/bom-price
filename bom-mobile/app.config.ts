@@ -38,6 +38,13 @@ export default (): ExpoConfig => ({
         },
       },
     ],
+    [
+      "expo-image-picker",
+      {
+        photosPermission: "Allow access to photo library to upload signature.",
+        cameraPermission: "Allow camera to capture signature.",
+      },
+    ],
   ],
   scheme: "fpfquotations",
   updates: {

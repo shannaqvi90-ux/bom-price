@@ -607,7 +607,7 @@ export function useCustomerChangeHistory(requisitionId: number, enabled = true) 
         changedByUserName: string;
         changedAt: string;
         reason?: string | null;
-      }>>(`/api/requisitions/${requisitionId}/customer-change-history`);
+      }>>(`/api/requisitions/${requisitionId}/customer-history`);
       return res.data;
     },
     enabled: enabled && Number.isFinite(requisitionId) && requisitionId > 0,

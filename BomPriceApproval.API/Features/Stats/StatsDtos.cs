@@ -1,7 +1,7 @@
 namespace BomPriceApproval.API.Features.Stats;
 
-public record AccountantDashboardStats(
-    int PendingCosting,
-    int InProgress,
-    int SubmittedThisMonth,
-    int AwaitingMd);
+public record AccountantDashboardV3Dto(
+    int Costing,
+    int AwaitingMd,
+    int AwaitingCustomer,
+    int SubmittedThisMonth);

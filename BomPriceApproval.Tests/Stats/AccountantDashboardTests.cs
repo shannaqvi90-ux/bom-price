@@ -32,7 +32,7 @@ public class AccountantDashboardTests(WebApplicationFactory<Program> factory) : 
 
     /// <summary>
     /// Seeds a minimal QuotationRequest row directly to DB with the given status and updatedAt.
-    /// Uses a Guid-isolated RefNo to avoid colliding with other test data.
+    /// RefNo is auto-computed by Postgres (REQ-NNNN); no manual collision avoidance needed.
     /// Returns the seeded req ID for cleanup (if needed).
     /// </summary>
     private async Task<int> SeedReqAsync(RequisitionStatus status, DateTime? updatedAt = null)

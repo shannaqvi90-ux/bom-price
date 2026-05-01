@@ -29,7 +29,9 @@ public class StatsController(AppDbContext db) : ControllerBase
             .CountAsync(q => q.Status == RequisitionStatus.CustomerConfirm);
 
         // Proxy for "costing submitted this calendar month": reqs that have passed through
-        // Costing (Status >= MdPricing) with UpdatedAt within the current month.
+        // Costing (Status in {MdPricing, CustomerConfirm, MdFinalSign, Signed}) with UpdatedAt
+        // within the current month. Rejected is intentionally excluded — accountant dashboard
+        // shows successful MD-bound flows; rejections are surfaced via notifications instead.
         var submittedThisMonth = await db.QuotationRequests
             .CountAsync(q =>
                 (q.Status == RequisitionStatus.MdPricing

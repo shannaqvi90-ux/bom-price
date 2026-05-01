@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ScrollView, View, Text, ActivityIndicator } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useRequisition } from "../../../api/requisitions";
+import { downloadRequisitionPdf } from "../../../api/pdf";
 import { DetailHeader } from "./DetailHeader";
 import { FgReadCard } from "./FgReadCard";
 import { FinalPriceCard } from "./FinalPriceCard";
@@ -44,7 +45,7 @@ export function SalesDetailScreen() {
       <StatusFooterCta
         req={req}
         onCustomerConfirm={() => setConfirmModalOpen(true)}
-        onDownloadPdf={() => { /* wire in Task 26 */ }}
+        onDownloadPdf={() => { void downloadRequisitionPdf(req.id, req.refNo); }}
       />
       <CustomerConfirmModal
         visible={confirmModalOpen}

@@ -46,3 +46,22 @@ export function useExchangeRates() {
     select: (rates) => rates.filter((r) => r.isActive),
   });
 }
+
+export interface ProcessLite {
+  id: number;
+  name: string;
+  displayOrder: number;
+  isActive: boolean;
+}
+
+export function useProcesses() {
+  return useQuery({
+    queryKey: ["processes"],
+    queryFn: async () => {
+      const res = await api.get<ProcessLite[]>("/api/processes");
+      return res.data;
+    },
+    staleTime: 300_000,
+    select: (rows) => rows.filter((p) => p.isActive),
+  });
+}

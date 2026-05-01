@@ -1,129 +1,73 @@
-import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
-import type {
-  ChangeCustomerRequest,
-  CreateRequisitionRequest,
-  CustomerChangeHistoryEntry,
-  RequisitionDetail,
-  RequisitionListItem,
-} from "@/types/api";
+import type { V3Requisition, V3RequisitionListItem } from "../types/v3";
 
-const keys = {
+export const requisitionKeys = {
   all: ["requisitions"] as const,
-  list: () => [...keys.all, "list"] as const,
-  detail: (id: number) => [...keys.all, "detail", id] as const,
+  lists: () => [...requisitionKeys.all, "list"] as const,
+  list: (params?: Record<string, unknown>) => [...requisitionKeys.lists(), params] as const,
+  details: () => [...requisitionKeys.all, "detail"] as const,
+  detail: (id: number) => [...requisitionKeys.details(), id] as const,
 };
 
-async function fetchList(): Promise<RequisitionListItem[]> {
-  const res = await api.get<RequisitionListItem[]>("/api/requisitions");
-  return res.data;
+export interface CreateReqPayload {
+  customerId: number;
+  quotationCurrency: string;
+  referenceNumber?: string;
+  notes?: string;
+  finishedGoods: {
+    itemId: number;
+    expectedQtyKg: number;
+    printing: boolean;
+    bomLines: { processId: number; itemId: number; qtyPerKg: number; micron?: string }[];
+  }[];
 }
 
-async function fetchDetail(id: number): Promise<RequisitionDetail> {
-  const res = await api.get<RequisitionDetail>(`/api/requisitions/${id}`);
-  return res.data;
-}
-
-export function useRequisitionsList(options?: Partial<UseQueryOptions<RequisitionListItem[]>>) {
+export function useRequisitions(statuses?: string[]) {
+  const params = statuses?.length ? { status: statuses.join(",") } : undefined;
   return useQuery({
-    queryKey: keys.list(),
-    queryFn: fetchList,
-    ...options,
+    queryKey: requisitionKeys.list(params),
+    queryFn: () =>
+      api.get<V3RequisitionListItem[]>("/api/requisitions", { params }).then((r) => r.data),
   });
 }
 
-export function useRequisitionDetail(id: number, options?: Partial<UseQueryOptions<RequisitionDetail>>) {
+export function useRequisition(id: number) {
   return useQuery({
-    queryKey: keys.detail(id),
-    queryFn: () => fetchDetail(id),
+    queryKey: requisitionKeys.detail(id),
+    queryFn: () => api.get<V3Requisition>(`/api/requisitions/${id}`).then((r) => r.data),
     enabled: Number.isFinite(id) && id > 0,
-    ...options,
   });
 }
 
 export function useCreateRequisition() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: CreateRequisitionRequest): Promise<RequisitionDetail> => {
-      const res = await api.post<RequisitionDetail>("/api/requisitions", input);
-      return res.data;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: keys.list() });
-    },
+    mutationFn: (payload: CreateReqPayload) =>
+      api.post<{ id: number }>("/api/requisitions", payload).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: requisitionKeys.lists() }),
   });
 }
 
-export const requisitionKeys = keys;
-
-export function useChangeCustomer(requisitionId: number) {
+export function useUpdateRequisition() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: ChangeCustomerRequest) =>
-      api.patch(`/api/requisitions/${requisitionId}/customer`, body).then((r) => r.data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: keys.detail(requisitionId) });
-      qc.invalidateQueries({ queryKey: ["requisition", requisitionId, "customerHistory"] });
-      qc.invalidateQueries({ queryKey: keys.list() });
+    mutationFn: ({ id, payload }: { id: number; payload: CreateReqPayload }) =>
+      api.put(`/api/requisitions/${id}`, payload),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: requisitionKeys.detail(vars.id) });
+      qc.invalidateQueries({ queryKey: requisitionKeys.lists() });
     },
   });
 }
 
-export function useCustomerChangeHistory(requisitionId: number, enabled = true) {
-  return useQuery({
-    queryKey: ["requisition", requisitionId, "customerHistory"],
-    queryFn: async () => {
-      const res = await api.get<CustomerChangeHistoryEntry[]>(
-        `/api/requisitions/${requisitionId}/customer-history`,
-      );
-      return res.data;
-    },
-    enabled: enabled && requisitionId > 0,
-    staleTime: 30_000,
-  });
-}
-
-export interface ChangeBranchPayload {
-  branchId: number;
-  reason?: string;
-}
-
-export interface BranchChangeHistoryEntry {
-  id: number;
-  oldBranchId: number;
-  oldBranchName: string;
-  newBranchId: number;
-  newBranchName: string;
-  changedByUserId: number;
-  changedByUserName: string;
-  changedAt: string;
-  reason: string | null;
-}
-
-export function useChangeBranch(requisitionId: number) {
+export function useSubmitToCosting() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: ChangeBranchPayload) => {
-      await api.patch(`/api/requisitions/${requisitionId}/branch`, payload);
+    mutationFn: (id: number) => api.post(`/api/requisitions/${id}/submit`),
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: requisitionKeys.detail(id) });
+      qc.invalidateQueries({ queryKey: requisitionKeys.lists() });
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: keys.detail(requisitionId) });
-      qc.invalidateQueries({ queryKey: keys.list() });
-      qc.invalidateQueries({ queryKey: ["requisition", requisitionId, "branchHistory"] });
-    },
-  });
-}
-
-export function useBranchChangeHistory(requisitionId: number, enabled = true) {
-  return useQuery({
-    queryKey: ["requisition", requisitionId, "branchHistory"],
-    queryFn: async () => {
-      const res = await api.get<BranchChangeHistoryEntry[]>(
-        `/api/requisitions/${requisitionId}/branch-history`,
-      );
-      return res.data;
-    },
-    enabled: enabled && requisitionId > 0,
-    staleTime: 30_000,
   });
 }

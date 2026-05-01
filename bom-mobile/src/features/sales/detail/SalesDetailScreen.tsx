@@ -6,6 +6,7 @@ import { DetailHeader } from "./DetailHeader";
 import { FgReadCard } from "./FgReadCard";
 import { FinalPriceCard } from "./FinalPriceCard";
 import { StatusFooterCta } from "./StatusFooterCta";
+import { CustomerConfirmModal } from "./CustomerConfirmModal";
 
 export function SalesDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -45,8 +46,11 @@ export function SalesDetailScreen() {
         onCustomerConfirm={() => setConfirmModalOpen(true)}
         onDownloadPdf={() => { /* wire in Task 26 */ }}
       />
-      {/* CustomerConfirmModal will be wired in Task 25; for now confirmModalOpen state is set but unread */}
-      {confirmModalOpen ? null : null}
+      <CustomerConfirmModal
+        visible={confirmModalOpen}
+        req={req}
+        onClose={() => setConfirmModalOpen(false)}
+      />
     </View>
   );
 }

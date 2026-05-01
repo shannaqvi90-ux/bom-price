@@ -469,6 +469,7 @@ export interface SaveV3CostDataPayload {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
 import type { SaveV3CostDataPayload } from "@/types/v3";
+import { requisitionKeys } from "./requisitions";
 
 export function useSaveV3CostData(requisitionId: number) {
   const qc = useQueryClient();
@@ -477,7 +478,7 @@ export function useSaveV3CostData(requisitionId: number) {
       await api.put(`/api/costing/${requisitionId}/cost-data`, payload);
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["requisition", requisitionId] });
+      qc.invalidateQueries({ queryKey: requisitionKeys.detail(requisitionId) });
     },
   });
 }
@@ -489,8 +490,8 @@ export function useSubmitV3Costing(requisitionId: number) {
       await api.post(`/api/costing/${requisitionId}/submit`);
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["requisition", requisitionId] });
-      qc.invalidateQueries({ queryKey: ["requisitions"] });
+      qc.invalidateQueries({ queryKey: requisitionKeys.detail(requisitionId) });
+      qc.invalidateQueries({ queryKey: requisitionKeys.lists() });
       qc.invalidateQueries({ queryKey: ["stats", "accountantDashboardV3"] });
     },
   });

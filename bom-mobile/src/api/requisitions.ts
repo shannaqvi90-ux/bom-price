@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { api } from "./client";
 import type { V3Requisition, V3RequisitionListItem } from "../types/v3";
 
@@ -23,12 +24,19 @@ export interface CreateReqPayload {
   }[];
 }
 
-export function useRequisitions(statuses?: string[]) {
-  const params = statuses?.length ? { status: statuses.join(",") } : undefined;
+export function useRequisitions(opts?: { statuses?: string[]; from?: string }) {
+  const params = useMemo(() => {
+    const p = new URLSearchParams();
+    (opts?.statuses ?? []).forEach((s) => p.append("status", s));
+    if (opts?.from) p.append("from", opts.from);
+    return p.toString();
+  }, [opts?.statuses, opts?.from]);
   return useQuery({
-    queryKey: requisitionKeys.list(params),
+    queryKey: requisitionKeys.list({ statuses: opts?.statuses, from: opts?.from }),
     queryFn: () =>
-      api.get<V3RequisitionListItem[]>("/api/requisitions", { params }).then((r) => r.data),
+      api.get<V3RequisitionListItem[]>(`/api/requisitions${params ? `?${params}` : ""}`)
+        .then((r) => r.data),
+    staleTime: 10_000,
   });
 }
 
@@ -69,5 +77,27 @@ export function useSubmitToCosting() {
       qc.invalidateQueries({ queryKey: requisitionKeys.detail(id) });
       qc.invalidateQueries({ queryKey: requisitionKeys.lists() });
     },
+  });
+}
+
+export function useCustomerChangeHistory(requisitionId: number, enabled = true) {
+  return useQuery({
+    queryKey: ["requisition", requisitionId, "customer-change-history"],
+    queryFn: async () => {
+      const res = await api.get<Array<{
+        id: number;
+        oldCustomerId: number;
+        oldCustomerName: string;
+        newCustomerId: number;
+        newCustomerName: string;
+        changedByUserId: number;
+        changedByUserName: string;
+        changedAt: string;
+        reason?: string | null;
+      }>>(`/api/requisitions/${requisitionId}/customer-history`);
+      return res.data;
+    },
+    enabled: enabled && Number.isFinite(requisitionId) && requisitionId > 0,
+    staleTime: 30_000,
   });
 }

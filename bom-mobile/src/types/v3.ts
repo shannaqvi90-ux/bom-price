@@ -55,6 +55,25 @@ export interface V3FinishedGoodDto {
   costs?: V3BomCostDto | null;
 }
 
+export interface V3FinalPriceItem {
+  requisitionItemId: number;
+  itemId: number;
+  description: string;
+  expectedQty: number;
+  costPerKg: number;
+  marginPerKg: number;
+  salePerKg: number;
+  salePerKgAed: number;
+  totalAed: number;
+}
+
+export interface V3FinalPrice {
+  totalAed: number;
+  currencyCode: string;
+  rateSnapshot: number | null;
+  perFg: V3FinalPriceItem[];
+}
+
 export interface V3Requisition {
   id: number;
   refNo: string;
@@ -67,11 +86,9 @@ export interface V3Requisition {
   cancelReason?: string | null;
   cancelledAt?: string | null;
   cancelledByUserId?: number | null;
-  // finalPrice is NOT in backend V3RequisitionDetail. T12 FinalPriceCard component
-  // does `if (!req.finalPrice) return null` so this field will be undefined and the
-  // component renders nothing. This matches reality: V3 final-price display needs
-  // its own backend endpoint or shape, not yet implemented (Open Question — defer).
-  finalPrice?: { totalAed: number; perFg: { itemId: number; priceAed: number }[] } | null;
+  // V3 D-3 (post-PR #54): finalPrice now ships from backend on V3RequisitionDetail.
+  // FinalPriceCard renders only when present (omitted/null until MdPricing locks margins).
+  finalPrice?: V3FinalPrice | null;
 }
 
 export interface V3RequisitionListItem {

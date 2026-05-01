@@ -3,6 +3,7 @@ import type { V3Requisition } from "../../../types/v3";
 
 export function FinalPriceCard({ req }: { req: V3Requisition }) {
   if (!req.finalPrice) return null;
+  const fp = req.finalPrice;
   return (
     <View style={{
       margin: 12, padding: 18, borderRadius: 14,
@@ -12,13 +13,13 @@ export function FinalPriceCard({ req }: { req: V3Requisition }) {
         Final price
       </Text>
       <Text style={{ color: "white", fontSize: 32, fontWeight: "700", marginTop: 4 }}>
-        AED {req.finalPrice.totalAed.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        AED {fp.totalAed.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </Text>
-      {req.finalPrice.perFg.length > 1 && (
+      {fp.perFg.length > 1 && (
         <View style={{ marginTop: 10 }}>
-          {req.finalPrice.perFg.map((p) => (
-            <Text key={p.itemId} style={{ color: "rgba(255,255,255,0.9)", fontSize: 12, marginTop: 2 }}>
-              FG {p.itemId}: AED {p.priceAed.toFixed(2)}
+          {fp.perFg.map((p) => (
+            <Text key={p.requisitionItemId} style={{ color: "rgba(255,255,255,0.9)", fontSize: 12, marginTop: 2 }}>
+              {p.description}: AED {p.totalAed.toFixed(2)}
             </Text>
           ))}
         </View>

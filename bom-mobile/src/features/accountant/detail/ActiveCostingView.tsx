@@ -81,7 +81,7 @@ export function ActiveCostingView({ req }: Props) {
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={{ paddingTop: 8, paddingBottom: 8 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 8, paddingBottom: 8 }}>
         <View style={{ paddingHorizontal: 12, marginBottom: 8 }}>
           <Text style={{ fontSize: 13, color: "#64748b", fontWeight: "600", letterSpacing: 0.5 }}>CUSTOMER</Text>
           <Text style={{ fontSize: 16, fontWeight: "700", color: "#0f172a", marginTop: 4 }}>{req.customer.name}</Text>

@@ -29,7 +29,7 @@ export function SubmitAllFooter({ readyCount, totalCount, submitting, onSubmit }
           alignItems: "center",
         })}
       >
-        <Text style={{ fontSize: 16, color: "#ffffff", fontWeight: "700" }}>
+        <Text style={{ fontSize: 16, color: enabled ? "#ffffff" : "#475569", fontWeight: "700" }}>
           {submitting ? "Submitting…" : enabled ? "Submit to MD" : `${readyCount} of ${totalCount} FGs ready`}
         </Text>
       </Pressable>

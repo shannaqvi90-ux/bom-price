@@ -131,3 +131,12 @@ export interface V3FgCostInput {
 export interface SaveV3CostDataPayload {
   finishedGoods: V3FgCostInput[];
 }
+
+// ===== Stats endpoint shapes =====
+
+export interface AccountantDashboardV3Stats {
+  costing: number;
+  awaitingMd: number;
+  awaitingCustomer: number;
+  submittedThisMonth: number;
+}

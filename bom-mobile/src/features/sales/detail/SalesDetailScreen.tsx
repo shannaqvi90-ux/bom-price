@@ -1,17 +1,15 @@
 import { useState } from "react";
-import { ScrollView, View, Text, ActivityIndicator, Pressable } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { ScrollView, View, Text, ActivityIndicator } from "react-native";
+import { useLocalSearchParams } from "expo-router";
 import { useRequisition } from "../../../api/requisitions";
 import { DetailHeader } from "./DetailHeader";
 import { FgReadCard } from "./FgReadCard";
 import { FinalPriceCard } from "./FinalPriceCard";
 import { StatusFooterCta } from "./StatusFooterCta";
-import { theme } from "../../../theme";
 
 export function SalesDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const reqId = Number(id);
-  const router = useRouter();
   const { data: req, isLoading } = useRequisition(reqId);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 
@@ -22,14 +20,6 @@ export function SalesDetailScreen() {
     <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 16 }}>
         <DetailHeader req={req} />
-        {req.status === "Draft" && (
-          <Pressable
-            onPress={() => router.push(`/(sales)/edit/${req.id}`)}
-            style={{ alignSelf: "flex-end", padding: 12 }}
-          >
-            <Text style={{ color: theme.colors.primary, fontWeight: "600" }}>Edit ✎</Text>
-          </Pressable>
-        )}
         {req.status === "Signed" && <FinalPriceCard req={req} />}
         {req.status === "Cancelled" && req.cancelReason && (
           <View style={{ margin: 12, padding: 12, backgroundColor: "#fef2f2", borderRadius: 10 }}>

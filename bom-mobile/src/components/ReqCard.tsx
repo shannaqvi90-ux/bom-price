@@ -1,9 +1,9 @@
 import { Pressable, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
-import type { V3RequisitionListItem } from "../../../types/v3";
-import { STATUS_COLOR, STATUS_LABEL } from "../utils/statusMap";
-import { OwnedByBadge } from "../../../components/OwnedByBadge";
-import { useAuth } from "../../../auth/AuthContext";
+import type { V3RequisitionListItem } from "../types/v3";
+import { STATUS_COLOR, STATUS_LABEL } from "../utils/v3StatusMap";
+import { OwnedByBadge } from "./OwnedByBadge";
+import { useAuth } from "../auth/AuthContext";
 
 interface Props {
   req: V3RequisitionListItem;

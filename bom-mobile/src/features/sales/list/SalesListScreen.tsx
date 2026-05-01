@@ -3,9 +3,9 @@ import { View, FlatList, RefreshControl, Pressable, Text, ActivityIndicator } fr
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useRequisitions } from "../../../api/requisitions";
-import { STATUS_TO_TAB, type ListTab } from "../utils/statusMap";
+import { STATUS_TO_TAB, type ListTab } from "../../../utils/v3StatusMap";
 import { StatusTabs } from "./StatusTabs";
-import { ReqCard } from "./ReqCard";
+import { ReqCard } from "../../../components/ReqCard";
 import { theme } from "../../../theme";
 
 export function SalesListScreen() {

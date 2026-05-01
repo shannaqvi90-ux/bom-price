@@ -15,8 +15,14 @@ export function AccountantListScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ tab?: string; filter?: string; from?: string }>();
 
-  const initialTab = (params.tab as AccountantTab | undefined) ?? "queue";
-  const initialFilter = (params.filter as InFlightSubFilter | undefined) ?? "all";
+  const VALID_TABS: AccountantTab[] = ["queue", "in-flight", "done", "closed"];
+  const VALID_FILTERS: InFlightSubFilter[] = ["all", "md", "customer"];
+  const initialTab: AccountantTab = VALID_TABS.includes(params.tab as AccountantTab)
+    ? (params.tab as AccountantTab)
+    : "queue";
+  const initialFilter: InFlightSubFilter = VALID_FILTERS.includes(params.filter as InFlightSubFilter)
+    ? (params.filter as InFlightSubFilter)
+    : "all";
 
   const [tab, setTab] = useState<AccountantTab>(initialTab);
   const [sub, setSub] = useState<InFlightSubFilter>(initialFilter);
@@ -41,7 +47,7 @@ export function AccountantListScreen() {
         <InFlightSubFilterChips active={sub} onChange={setSub} />
       ) : null}
 
-      {from ? (
+      {tab === "in-flight" && from ? (
         <View style={{
           flexDirection: "row",
           alignItems: "center",

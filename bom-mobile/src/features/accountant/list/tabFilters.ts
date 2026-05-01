@@ -14,5 +14,7 @@ export function statusesForTab(tab: AccountantTab, sub: InFlightSubFilter = "all
       if (sub === "md") return ["MdPricing", "MdFinalSign"];
       if (sub === "customer") return ["CustomerConfirm"];
       return ["MdPricing", "CustomerConfirm", "MdFinalSign"];
+    default:
+      return ["Costing"];
   }
 }

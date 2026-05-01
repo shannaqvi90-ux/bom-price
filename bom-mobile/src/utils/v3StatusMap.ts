@@ -1,4 +1,4 @@
-import type { V3Status } from "../../../types/v3";
+import type { V3Status } from "../types/v3";
 
 export type ListTab = "active" | "done" | "closed";
 

@@ -10,6 +10,11 @@ node_modules/
 *.swp
 *.DS_Store
 
+# Smoke / debug artifacts (emulator screenshots, uiautomator dumps)
+.tmp_*.png
+.smoke-fail-evidence-*.png
+ui.xml
+
 # Secrets — never commit
 user id pwd.txt
 *.secrets.json

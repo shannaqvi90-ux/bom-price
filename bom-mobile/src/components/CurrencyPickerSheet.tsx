@@ -5,6 +5,7 @@ interface Props {
   value: string;
   options: string[];
   onChange: (code: string) => void;
+  placeholder?: string;
 }
 
 /**
@@ -13,8 +14,10 @@ interface Props {
  * under 10 entries, so search/filter is not needed (unlike SearchablePicker which
  * is keyed by numeric id and built for long catalogs).
  */
-export function CurrencyPickerSheet({ value, options, onChange }: Props) {
+export function CurrencyPickerSheet({ value, options, onChange, placeholder }: Props) {
   const [open, setOpen] = useState(false);
+  const isEmpty = !value;
+  const displayText = isEmpty ? (placeholder ?? "Select…") : `${value} ▼`;
 
   return (
     <View>
@@ -30,7 +33,7 @@ export function CurrencyPickerSheet({ value, options, onChange }: Props) {
           alignItems: "center",
         }}
       >
-        <Text style={{ fontSize: 14, fontWeight: "600", color: "#1e40af" }}>{value} ▼</Text>
+        <Text style={{ fontSize: 14, fontWeight: "600", color: isEmpty ? "#94a3b8" : "#1e40af" }}>{displayText}</Text>
       </Pressable>
 
       <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>

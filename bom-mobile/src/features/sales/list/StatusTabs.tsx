@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
-import type { ListTab } from "../utils/statusMap";
+import type { ListTab } from "../../../utils/v3StatusMap";
 import { theme } from "../../../theme";
 
 interface Props {

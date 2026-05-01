@@ -1,7 +1,7 @@
 // bom-mobile/src/features/sales/detail/DetailHeader.tsx
 import { View, Text } from "react-native";
 import type { V3Requisition } from "../../../types/v3";
-import { STATUS_COLOR, STATUS_LABEL } from "../utils/statusMap";
+import { STATUS_COLOR, STATUS_LABEL } from "../../../utils/v3StatusMap";
 
 export function DetailHeader({ req }: { req: V3Requisition }) {
   return (

@@ -109,3 +109,34 @@ export interface V3FinishedGoodDraft {
   expectedQty: number;
   bomLines: V3BomLineDraft[];
 }
+
+// ===== PUT /api/costing/{id}/cost-data INPUT types (request body shapes) =====
+
+export interface V3RawMaterialCostInput {
+  bomLineId: number;
+  costPerKg: number;
+  currencyCode: string;
+}
+
+export interface V3FgCostInput {
+  requisitionItemId: number;
+  rawMaterialCosts: V3RawMaterialCostInput[];
+  printingCostPerKg: number | null;
+  printingCostCurrency: string | null;
+  fohPerKg: number;
+  transportPerKg: number;
+  commissionPerKg: number;
+}
+
+export interface SaveV3CostDataPayload {
+  finishedGoods: V3FgCostInput[];
+}
+
+// ===== Stats endpoint shapes =====
+
+export interface AccountantDashboardV3Stats {
+  costing: number;
+  awaitingMd: number;
+  awaitingCustomer: number;
+  submittedThisMonth: number;
+}

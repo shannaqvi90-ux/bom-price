@@ -13,11 +13,11 @@ function initFromFg(fg: V3FinishedGoodDto): FgDraftState {
       return {
         bomLineId: bl.id,
         costPerKg: existingCost?.purchaseValuePerKg != null ? String(existingCost.purchaseValuePerKg) : "",
-        currencyCode: existingCost?.purchaseCurrency ?? "AED",
+        currencyCode: existingCost?.purchaseCurrency ?? "",
       };
     }),
     printingCostPerKg: existing?.printingCostPerKg != null ? String(existing.printingCostPerKg) : "",
-    printingCostCurrency: existing?.printingCostCurrency ?? "AED",
+    printingCostCurrency: existing?.printingCostCurrency ?? "",
     fohPerKg: existing?.fohPerKg != null ? String(existing.fohPerKg) : "",
     transportPerKg: existing?.transportPerKg != null ? String(existing.transportPerKg) : "",
     commissionPerKg: existing?.commissionPerKg != null ? String(existing.commissionPerKg) : "",

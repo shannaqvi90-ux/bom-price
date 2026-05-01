@@ -80,6 +80,19 @@ export function useSubmitToCosting() {
   });
 }
 
+export function useChangeCustomer(requisitionId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { customerId: number; reason?: string }) => {
+      await api.patch(`/api/requisitions/${requisitionId}/customer`, payload);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: requisitionKeys.detail(requisitionId) });
+      qc.invalidateQueries({ queryKey: requisitionKeys.lists() });
+    },
+  });
+}
+
 export function useCustomerChangeHistory(requisitionId: number, enabled = true) {
   return useQuery({
     queryKey: [...requisitionKeys.detail(requisitionId), "customer-history"],

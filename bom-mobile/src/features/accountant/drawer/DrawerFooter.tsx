@@ -22,37 +22,39 @@ export function DrawerFooter({ onCancel, onSave, saving }: Props) {
         backgroundColor: "#ffffff",
       }}
     >
-      <Pressable
-        onPress={onCancel}
-        style={({ pressed }) => ({
-          flex: 1,
-          paddingVertical: 12,
-          borderRadius: 10,
-          borderWidth: 1,
-          borderColor: "#cbd5e1",
-          opacity: pressed ? 0.7 : 1,
-          alignItems: "center",
-        })}
-      >
-        <Text style={{ fontSize: 15, color: "#475569", fontWeight: "600" }}>Cancel</Text>
-      </Pressable>
+      <View style={{ flex: 1 }}>
+        <Pressable
+          onPress={onCancel}
+          style={({ pressed }) => ({
+            paddingVertical: 12,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: "#cbd5e1",
+            opacity: pressed ? 0.7 : 1,
+            alignItems: "center",
+          })}
+        >
+          <Text style={{ fontSize: 15, color: "#475569", fontWeight: "600" }}>Cancel</Text>
+        </Pressable>
+      </View>
 
-      <Pressable
-        onPress={onSave}
-        disabled={saving}
-        style={({ pressed }) => ({
-          flex: 2,
-          paddingVertical: 12,
-          borderRadius: 10,
-          backgroundColor: saving ? "#93c5fd" : "#1e40af",
-          opacity: pressed && !saving ? 0.85 : 1,
-          alignItems: "center",
-        })}
-      >
-        <Text style={{ fontSize: 15, color: "#ffffff", fontWeight: "700" }}>
-          {saving ? "Saving…" : "Save & Close"}
-        </Text>
-      </Pressable>
+      <View style={{ flex: 2 }}>
+        <Pressable
+          onPress={onSave}
+          disabled={saving}
+          style={({ pressed }) => ({
+            paddingVertical: 12,
+            borderRadius: 10,
+            backgroundColor: saving ? "#93c5fd" : "#1e40af",
+            opacity: pressed && !saving ? 0.85 : 1,
+            alignItems: "center",
+          })}
+        >
+          <Text style={{ fontSize: 15, color: "#ffffff", fontWeight: "700" }}>
+            {saving ? "Saving…" : "Save & Close"}
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }

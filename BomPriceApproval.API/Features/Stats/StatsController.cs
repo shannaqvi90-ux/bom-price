@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using BomPriceApproval.API.Domain.Enums;
 using BomPriceApproval.API.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
@@ -11,6 +12,47 @@ namespace BomPriceApproval.API.Features.Stats;
 [Authorize]
 public class StatsController(AppDbContext db) : ControllerBase
 {
+    private string? CurrentRole => User.FindFirstValue(ClaimTypes.Role);
+
+    /// <summary>
+    /// V3 unified dashboard endpoint. Branches by role:
+    ///   - ManagingDirector → 4 MD KPI counts (toPrice, toSign, inFlight, signedToday).
+    ///   - other roles → 403.
+    /// Accountant dashboard remains on its own endpoint for back-compat with shipped mobile (D-2).
+    /// </summary>
+    [HttpGet("v3-dashboard")]
+    [Authorize(Roles = "ManagingDirector,Admin")]
+    public async Task<IActionResult> V3Dashboard()
+    {
+        if (CurrentRole == "ManagingDirector" || CurrentRole == "Admin")
+        {
+            var todayUtc = DateTime.UtcNow.Date;
+            var tomorrowUtc = todayUtc.AddDays(1);
+
+            var toPrice = await db.QuotationRequests
+                .CountAsync(r => r.Status == RequisitionStatus.MdPricing);
+            var toSign = await db.QuotationRequests
+                .CountAsync(r => r.Status == RequisitionStatus.MdFinalSign);
+            var inFlight = await db.QuotationRequests
+                .CountAsync(r => r.Status == RequisitionStatus.CustomerConfirm
+                              || r.Status == RequisitionStatus.Costing);
+            var signedToday = await db.QuotationRequests
+                .CountAsync(r => r.Status == RequisitionStatus.Signed
+                              && r.UpdatedAt >= todayUtc
+                              && r.UpdatedAt < tomorrowUtc);
+
+            return Ok(new
+            {
+                toPrice,
+                toSign,
+                inFlight,
+                signedToday,
+            });
+        }
+
+        return Forbid();
+    }
+
     [HttpGet("accountant-dashboard")]
     [Authorize(Roles = "Accountant,Admin")]
     public async Task<ActionResult<AccountantDashboardV3Dto>> AccountantDashboard()

@@ -400,17 +400,23 @@ public class ApprovalsController(
             await notificationSvc.SendAsync(req.SalesPersonId,
                 $"{req.RefNo} priced — confirm with customer", req.Id, "QuotationRequest");
 
+            // D-3 B4: also notify branch accountants so they can plan re-pricing
+            // if customer-confirm bounces back to MdPricing.
             var accountantIds = await db.UserBranches
                 .Where(ub => ub.BranchId == req.BranchId
                           && ub.User.Role == UserRole.Accountant
                           && ub.User.IsActive)
                 .Select(ub => ub.UserId)
+                .Distinct()
                 .ToListAsync();
-            await notificationSvc.SendToUsersAsync(
-                accountantIds,
-                $"{req.RefNo} pricing complete",
-                req.Id,
-                "QuotationRequest");
+            if (accountantIds.Count > 0)
+            {
+                await notificationSvc.SendToUsersAsync(
+                    accountantIds,
+                    $"{req.RefNo} margin set by MD — going to customer",
+                    req.Id,
+                    "QuotationRequest");
+            }
         }
         catch (Exception ex)
         {

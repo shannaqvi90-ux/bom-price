@@ -113,7 +113,10 @@ public record V3RequisitionDetail(
     // Without these, frontend renders "Cancelled" with no explanation.
     string? CancelReason,
     DateTime? CancelledAt,
-    int? CancelledByUserId);
+    int? CancelledByUserId,
+    // V3 D-3 — final pricing summary, populated only when Status is MdFinalSign or Signed.
+    // Null in earlier statuses; consumed by the MD mobile pricing screen.
+    V3FinalPrice? FinalPrice);
 
 public record V3CustomerSummary(int Id, string Name, string Code);
 

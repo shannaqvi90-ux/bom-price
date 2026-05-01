@@ -41,7 +41,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         mb.Entity<QuotationRequest>()
             .Property(q => q.RefNo)
-            .HasComputedColumnSql("'REQ-' || LPAD(\"Id\"::text, 4, '0')", stored: true);
+            .HasComputedColumnSql("'REQ-' || LPAD(\"Id\"::text, 6, '0')", stored: true);
 
         mb.Entity<User>().HasIndex(u => u.Email).IsUnique();
 

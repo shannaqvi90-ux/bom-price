@@ -231,6 +231,23 @@ public class RequisitionsController(
                 costs);
         }).ToList();
 
+        // V3 D-3 — populate finalPrice once the MD has applied a margin and the
+        // workflow is at MdFinalSign or Signed. Costing/MdPricing/CustomerConfirm
+        // statuses still expose a margin via QuotationApproval but the price isn't
+        // "final" until the customer has accepted; mobile MD screen renders only
+        // post-accept totals to avoid confusion.
+        V3FinalPrice? finalPrice = null;
+        if (q.Status == RequisitionStatus.MdFinalSign || q.Status == RequisitionStatus.Signed)
+        {
+            var approval = await db.QuotationApprovals
+                .Include(qa => qa.Items)
+                .Where(qa => qa.QuotationRequestId == id && !qa.IsSuperseded)
+                .OrderByDescending(qa => qa.ApprovedAt)
+                .FirstOrDefaultAsync();
+            if (approval is not null)
+                finalPrice = FinalPriceComputer.Compute(q, approval);
+        }
+
         return Ok(new V3RequisitionDetail(
             q.Id,
             q.RefNo,
@@ -242,7 +259,8 @@ public class RequisitionsController(
             finishedGoods,
             q.CancelReason,
             q.CancelledAt,
-            q.CancelledByUserId));
+            q.CancelledByUserId,
+            finalPrice));
     }
 
     [HttpPost]

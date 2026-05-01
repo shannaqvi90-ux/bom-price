@@ -50,9 +50,10 @@ export function PrintingCostSection({ costPerKg, currency, onChange }: Props) {
         <View style={{ width: 110 }}>
           <Text style={{ fontSize: 11, color: "#854d0e", marginBottom: 4 }}>Currency</Text>
           <CurrencyPickerSheet
-            value={currency || "AED"}
+            value={currency}
             options={CURRENCIES}
             onChange={(code) => onChange({ currency: code })}
+            placeholder="Set…"
           />
         </View>
       </View>

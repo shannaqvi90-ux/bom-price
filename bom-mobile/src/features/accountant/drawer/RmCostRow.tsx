@@ -70,9 +70,10 @@ export function RmCostRow({ bom, cost, onChange }: Props) {
         <View style={{ width: 110 }}>
           <Text style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>Currency</Text>
           <CurrencyPickerSheet
-            value={cost.currencyCode || "AED"}
+            value={cost.currencyCode}
             options={CURRENCIES}
             onChange={(code) => onChange({ currencyCode: code })}
+            placeholder="Set…"
           />
         </View>
       </View>

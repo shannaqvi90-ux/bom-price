@@ -598,7 +598,7 @@ D-2's customer-swap retention (D10) requires the existing `CustomerChangeHistory
 ```typescript
 export function useCustomerChangeHistory(requisitionId: number, enabled = true) {
   return useQuery({
-    queryKey: ["requisition", requisitionId, "customer-change-history"],
+    queryKey: [...requisitionKeys.detail(requisitionId), "customer-history"],
     queryFn: async () => {
       const res = await api.get<Array<{
         id: number;

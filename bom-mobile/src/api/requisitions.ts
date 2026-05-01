@@ -82,7 +82,7 @@ export function useSubmitToCosting() {
 
 export function useCustomerChangeHistory(requisitionId: number, enabled = true) {
   return useQuery({
-    queryKey: ["requisition", requisitionId, "customer-change-history"],
+    queryKey: [...requisitionKeys.detail(requisitionId), "customer-history"],
     queryFn: async () => {
       const res = await api.get<Array<{
         id: number;

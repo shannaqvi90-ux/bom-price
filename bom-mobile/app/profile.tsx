@@ -1,7 +1,8 @@
-import { Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Button } from "@/components/Button";
 import { useAuth } from "@/auth/AuthContext";
+import { ProfileSignatureSection } from "@/features/profile/ProfileSignatureSection";
 
 export default function Profile() {
   const { user, logout } = useAuth();
@@ -13,7 +14,7 @@ export default function Profile() {
   };
 
   return (
-    <View className="flex-1 p-6 bg-slate-50">
+    <ScrollView className="flex-1 bg-slate-50" contentContainerStyle={{ padding: 24 }}>
       <Text className="text-2xl font-bold text-slate-900 mb-4">Profile</Text>
       <View className="bg-white rounded-md p-4 mb-4 border border-slate-200">
         <Text className="text-sm text-slate-500">Name</Text>
@@ -25,7 +26,12 @@ export default function Profile() {
           {user?.branchId != null ? `#${user.branchId}` : "All branches"}
         </Text>
       </View>
+      {user?.role === "ManagingDirector" && (
+        <View className="bg-white rounded-md mb-4 border border-slate-200">
+          <ProfileSignatureSection />
+        </View>
+      )}
       <Button title="Log out" variant="danger" onPress={onLogout} />
-    </View>
+    </ScrollView>
   );
 }

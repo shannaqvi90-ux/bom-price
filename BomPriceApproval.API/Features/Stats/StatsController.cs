@@ -13,35 +13,33 @@ public class StatsController(AppDbContext db) : ControllerBase
 {
     [HttpGet("accountant-dashboard")]
     [Authorize(Roles = "Accountant,Admin")]
-    public async Task<IActionResult> AccountantDashboard()
+    public async Task<ActionResult<AccountantDashboardV3Dto>> AccountantDashboard()
     {
-        // Spec §4.1.1: Accountant dashboard counts are global (cross-branch) by design.
-        // Admin is also branch-less. Branch filter intentionally omitted.
-
-        // Spec §10 #1: count by UTC month; ~5h skew vs PKT is accepted imprecision.
+        // Counts are global (cross-branch) by design — accountants triage across all branches.
         var startOfMonth = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        // V3 status mapping (V2.3 sub-states collapsed):
-        //   CostingPending + CostingInProgress -> Costing  (single accountant-active state)
-        //   MdReview                           -> MdPricing (V3 name for initial-margin review)
-        // V3 has no V2.3-equivalent of "in-progress" sub-state, so the InProgress counter
-        // is reported as 0 to preserve the response contract for the (Phase B-rewritten) UI.
-
-        var pendingCosting = await db.QuotationRequests
+        var costing = await db.QuotationRequests
             .CountAsync(q => q.Status == RequisitionStatus.Costing);
 
-        const int inProgress = 0; // V3 collapsed sub-state; field kept for FE-compat.
-
-        var submittedThisMonth = await db.QuotationRequests
-            .CountAsync(q => q.Status == RequisitionStatus.MdPricing && q.UpdatedAt >= startOfMonth);
-
         var awaitingMd = await db.QuotationRequests
-            .CountAsync(q => q.Status == RequisitionStatus.MdPricing);
+            .CountAsync(q => q.Status == RequisitionStatus.MdPricing
+                          || q.Status == RequisitionStatus.MdFinalSign);
 
-        return Ok(new AccountantDashboardStats(
-            PendingCosting: pendingCosting,
-            InProgress: inProgress,
-            SubmittedThisMonth: submittedThisMonth,
-            AwaitingMd: awaitingMd));
+        var awaitingCustomer = await db.QuotationRequests
+            .CountAsync(q => q.Status == RequisitionStatus.CustomerConfirm);
+
+        // Proxy for "costing submitted this calendar month": reqs that have passed through
+        // Costing (Status in {MdPricing, CustomerConfirm, MdFinalSign, Signed}) with UpdatedAt
+        // within the current month. Rejected is intentionally excluded — accountant dashboard
+        // shows successful MD-bound flows; rejections are surfaced via notifications instead.
+        var submittedThisMonth = await db.QuotationRequests
+            .CountAsync(q =>
+                (q.Status == RequisitionStatus.MdPricing
+                 || q.Status == RequisitionStatus.CustomerConfirm
+                 || q.Status == RequisitionStatus.MdFinalSign
+                 || q.Status == RequisitionStatus.Signed)
+                && q.UpdatedAt >= startOfMonth);
+
+        return Ok(new AccountantDashboardV3Dto(costing, awaitingMd, awaitingCustomer, submittedThisMonth));
     }
 }

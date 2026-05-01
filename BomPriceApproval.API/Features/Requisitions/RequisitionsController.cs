@@ -24,6 +24,14 @@ public class RequisitionsController(
     private string CurrentRole => User.FindFirstValue(ClaimTypes.Role)!;
     private int? CurrentBranchId => int.TryParse(User.FindFirstValue("branchId"), out var b) && b > 0 ? b : null;
 
+    /// <summary>
+    /// V3: customer swap is only allowed while the requisition is still being
+    /// worked on by the SP or Accountant. Once the MD starts pricing, the
+    /// customer is locked to the context they reviewed.
+    /// </summary>
+    private static readonly HashSet<RequisitionStatus> CustomerSwapAllowedStatuses =
+        new() { RequisitionStatus.Draft, RequisitionStatus.Costing };
+
     [HttpGet]
     public async Task<IActionResult> GetAll(
         [FromQuery(Name = "status")] string[]? statuses = null,
@@ -673,12 +681,11 @@ public class RequisitionsController(
         if (CurrentRole == "Accountant" && q.BranchId != CurrentBranchId)
             return Forbid();
 
-        if (q.Status != RequisitionStatus.CostingPending &&
-            q.Status != RequisitionStatus.CostingInProgress)
+        if (!CustomerSwapAllowedStatuses.Contains(q.Status))
         {
             return Validation
-                .Detail("Customer can only be changed during the costing stage.")
-                .Field("Status", "Not in a costing state.")
+                .Detail("Customer can only be changed in Draft or Costing status.")
+                .Field("Status", "Allowed: Draft, Costing.")
                 .Return();
         }
 

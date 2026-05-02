@@ -22,12 +22,10 @@ export function useUploadSignature() {
         type: mime,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
-      // Don't set Content-Type — axios + RN must compute the multipart boundary
-      // automatically. Setting it manually strips the boundary and the backend
-      // can't parse the body.
       const r = await api.post<UploadResult>("/api/profile/signature", formData, {
-        timeout: 60_000, // multipart upload + Fly cold-start headroom
-        transformRequest: (data) => data, // prevent axios from JSON.stringify'ing FormData
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 60_000,
+        transformRequest: (data) => data,
       });
       return r.data;
     },

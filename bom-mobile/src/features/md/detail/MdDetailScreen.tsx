@@ -1,6 +1,7 @@
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
+import { AxiosError } from "axios";
 import { useRequisition } from "../../../api/requisitions";
 import { useAuth } from "../../../auth/AuthContext";
 import { LoadingView } from "../../../components/LoadingView";
@@ -63,11 +64,30 @@ export function MdDetailScreen() {
   }
 
   if (reqQ.isError || !reqQ.data) {
+    const status = reqQ.error instanceof AxiosError ? reqQ.error.response?.status : undefined;
+    // 404: req hard-deleted (admin C1) or never existed.
+    // 403: branch-isolation forbids (e.g. V2.3 non-Alain reqs post-V3 cutover).
+    // Other: generic network/server error — keep retry path.
+    const gone = status === 404 || status === 403;
     return (
       <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
         <Stack.Screen options={{ headerShown: false }} />
         <ScreenHeader title="Requisition" back right={HeaderRight} />
-        <ErrorBanner message="Failed to load requisition" onRetry={() => reqQ.refetch()} />
+        {gone ? (
+          <View style={{ padding: 24 }}>
+            <Text style={{ fontSize: 16, color: "#0f172a", fontWeight: "600", marginBottom: 8 }}>
+              This requisition is no longer available
+            </Text>
+            <Text style={{ fontSize: 14, color: "#475569", lineHeight: 20 }}>
+              It may have been deleted, cancelled, or moved out of your access.
+              The notification can be safely ignored.
+            </Text>
+          </View>
+        ) : (
+          <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+            <ErrorBanner message="Failed to load requisition" onRetry={() => reqQ.refetch()} />
+          </View>
+        )}
       </View>
     );
   }

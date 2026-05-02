@@ -16,18 +16,26 @@ public class ItemsListBranchAndTypeTests(WebApplicationFactory<Program> factory)
     }
 
     [Fact]
-    public async Task SP_GetItems_ExcludesRawMaterial_RegardlessOfTypeParam()
+    public async Task SP_GetItems_DefaultsToFinishedGood_WhenNoTypeFilter()
     {
         var token = await TokenAsync("ali@test.com", "Test@1234");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var items = (await _client.GetFromJsonAsync<List<ItemShort>>("/api/items"))!;
-        items.Should().OnlyContain(i => i.Type == "FinishedGood");
+        items.Should().OnlyContain(i => i.Type == "FinishedGood",
+            "SP defaults to FinishedGood when ?type= is not specified");
+    }
 
-        // Even if SP explicitly asks for RawMaterial, server still excludes
-        var withParam = (await _client.GetFromJsonAsync<List<ItemShort>>("/api/items?type=RawMaterial"))!;
-        withParam.Should().OnlyContain(i => i.Type == "FinishedGood",
-            "SP role server-enforces RawMaterial exclusion as defense-in-depth");
+    [Fact]
+    public async Task SP_GetItems_HonorsExplicitRawMaterialFilter()
+    {
+        var token = await TokenAsync("ali@test.com", "Test@1234");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        // V3: SP needs RawMaterial visibility to populate BOM-line picker on the
+        // combined req+BOM create page. Explicit ?type=RawMaterial must be honored.
+        var rms = (await _client.GetFromJsonAsync<List<ItemShort>>("/api/items?type=RawMaterial"))!;
+        rms.Should().OnlyContain(i => i.Type == "RawMaterial");
     }
 
     [Fact]

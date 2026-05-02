@@ -41,14 +41,19 @@ public class ItemsController(AppDbContext db, ICodeGeneratorService codeGen) : C
     {
         var query = db.Items.AsQueryable();
 
-        // V23a: SP role server-enforces FinishedGood-only (defense-in-depth — UI also filters)
-        if (CurrentRole == "SalesPerson")
-        {
-            query = query.Where(i => i.Type == ItemType.FinishedGood);
-        }
-        else if (!string.IsNullOrWhiteSpace(type) && Enum.TryParse<ItemType>(type, ignoreCase: true, out var parsed))
+        // Honor explicit ?type= for any role. V3 SP needs RawMaterial access for the
+        // BOM-line picker on the new combined req+BOM create page; the V23a-era
+        // SP-force-FinishedGood blanket was overriding the explicit filter and
+        // leaving SPs unable to see RMs anywhere. When no type is specified, SP
+        // still defaults to FinishedGood to preserve V2.3 behavior on legacy
+        // call sites that don't pass a type filter.
+        if (!string.IsNullOrWhiteSpace(type) && Enum.TryParse<ItemType>(type, ignoreCase: true, out var parsed))
         {
             query = query.Where(i => i.Type == parsed);
+        }
+        else if (CurrentRole == "SalesPerson")
+        {
+            query = query.Where(i => i.Type == ItemType.FinishedGood);
         }
 
         // Branch scoping: an explicit ?branchId= param takes precedence (SP cross-branch picker).

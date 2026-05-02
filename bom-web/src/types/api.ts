@@ -472,6 +472,11 @@ export interface V3Requisition {
   finishedGoods: V3FinishedGood[];
   // Populated once MdPricing locks margins (PR #54). Null/omitted before that.
   finalPrice?: V3FinalPrice | null;
+  // Terminal-reason fields. Populated on Cancelled (admin C1) and on Rejected
+  // (MD reject from MdPricing/MdReview). Field name is V3-Cancelled historical.
+  cancelReason?: string | null;
+  cancelledAt?: string | null;
+  cancelledByUserId?: number | null;
 }
 
 export interface V3ApprovalItem {

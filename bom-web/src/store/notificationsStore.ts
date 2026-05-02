@@ -3,6 +3,7 @@ import * as signalR from "@microsoft/signalr";
 import { api, HUB_BASE_URL } from "@/api/axios";
 import { notify } from "@/lib/notify";
 import { getAppNavigate } from "@/lib/navigator";
+import { queryClient } from "@/api/queryClient";
 import type { Notification } from "@/types/api";
 
 function pathForNotification(n: Notification): string | null {
@@ -45,6 +46,19 @@ export const notificationsStore = create<NotificationsState>()((set, get) => ({
     connection.on("ReceiveNotification", (n: Notification) => {
       get().prependNotification(n);
       get().showToastForNotification(n);
+      // Status-flip notifications carry referenceType "QuotationRequest". Invalidate
+      // the requisitions list + dashboard counts so MD/SP/Accountant see fresh state
+      // without manual refresh. Detail page also invalidated so an open req tab
+      // reflects the new status the moment it changes.
+      if (n.referenceType === "QuotationRequest") {
+        queryClient.invalidateQueries({ queryKey: ["requisitions"] });
+        queryClient.invalidateQueries({ queryKey: ["stats"] });
+        if (n.referenceId) {
+          queryClient.invalidateQueries({
+            queryKey: ["requisitions", "detail", n.referenceId],
+          });
+        }
+      }
     });
 
     set({ _connection: connection });

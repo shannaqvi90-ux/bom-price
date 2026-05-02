@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useV3Requisition } from "@/features/requisitions/requisitionsApi";
 import { useFinalSign } from "@/features/approvals/approvalsApi";
+import { useOwnSignatureBlobUrl } from "@/features/profile/profileApi";
 import { V3StatusBadge } from "@/components/v3/V3StatusBadge";
 import { FinalPriceSummary } from "./FinalPriceSummary";
 
@@ -11,6 +12,7 @@ export function MdFinalSignPage() {
   const navigate = useNavigate();
   const reqId = id ? parseInt(id) : 0;
   const { data: req, isLoading } = useV3Requisition(reqId);
+  const { data: signatureUrl, isLoading: sigLoading } = useOwnSignatureBlobUrl();
   const sign = useFinalSign();
   const [token, setToken] = useState("");
   const [notes, setNotes] = useState("");
@@ -52,6 +54,30 @@ export function MdFinalSignPage() {
         </div>
       )}
 
+      <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
+        <h2 className="text-xs font-bold uppercase tracking-wider text-gray-500">
+          Your signature (will be applied to the PDF)
+        </h2>
+        {sigLoading ? (
+          <div className="mt-3 h-20 w-48 animate-pulse rounded bg-gray-100" />
+        ) : signatureUrl ? (
+          <div className="mt-3 inline-block rounded border border-gray-200 bg-gray-50 p-2">
+            <img
+              src={signatureUrl}
+              alt="Your signature"
+              className="h-20 max-w-xs object-contain"
+            />
+          </div>
+        ) : (
+          <div className="mt-3 rounded-md border border-yellow-300 bg-yellow-50 px-3 py-3 text-sm text-yellow-900">
+            ⚠️ No signature uploaded. Final-sign will fail until you upload one.{" "}
+            <Link to="/profile/signature" className="font-semibold underline">
+              Upload now →
+            </Link>
+          </div>
+        )}
+      </div>
+
       <div className="mt-4 rounded-lg border border-orange-200 bg-orange-50 p-4">
         <h2 className="text-base font-semibold text-orange-900">
           Final sign locks this quotation
@@ -92,7 +118,8 @@ export function MdFinalSignPage() {
         </button>
         <button
           onClick={onSubmit}
-          disabled={token !== "SIGN" || sign.isPending}
+          disabled={token !== "SIGN" || sign.isPending || !signatureUrl}
+          title={!signatureUrl ? "Upload your signature first" : undefined}
           className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50"
         >
           Sign and Lock

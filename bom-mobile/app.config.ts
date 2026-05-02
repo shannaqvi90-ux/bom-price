@@ -55,12 +55,12 @@ export default (): ExpoConfig => ({
   },
   extra: {
     // API base URL.
-    //   Dev: defaults to http://localhost:7300 (use `adb reverse` to reach
-    //        host's API from emulator, or set EXPO_PUBLIC_API_BASE_URL=http://192.168.x.x:7300
-    //        in `.env.local` when testing on a physical device on LAN).
-    //   Prod: set EXPO_PUBLIC_API_BASE_URL on EAS build profile env vars
-    //        (eas.json) — e.g. "https://bom-fpf-api.fly.dev".
-    apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://localhost:7300",
+    //   Dev (`expo start`):     auto-loads `.env.development` → LAN IP for physical-device testing.
+    //   OTA (`eas update`):     auto-loads `.env.production` if present, else the fallback below.
+    //   APK build (`eas build`): reads `eas.json` env per profile (preview/production both → Fly).
+    //   Default fallback = production Fly URL so OTAs work without an env file
+    //   (`.env.production` is gitignored). Devs override via `.env.development`.
+    apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "https://bom-fpf-api.fly.dev",
     eas: {
       projectId: "4d550ebf-6917-4811-8d0c-db0aa90e559f",
     },

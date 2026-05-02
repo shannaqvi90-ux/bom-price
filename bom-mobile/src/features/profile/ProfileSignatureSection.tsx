@@ -93,7 +93,7 @@ export function ProfileSignatureSection() {
         PNG/JPG · max 500KB · used on signed quotation PDFs
       </Text>
       <Text style={{ fontSize: 10, color: "#cbd5e1", marginTop: 2 }}>
-        build: smoke-fix-4
+        build: smoke-fix-5
       </Text>
 
       {ownSignatureQ.data?.exists ? (

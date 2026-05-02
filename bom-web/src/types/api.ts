@@ -419,6 +419,7 @@ export interface V3BomLine {
 }
 
 export interface V3BomCost {
+  totalCostPerKg: number;
   printingCostPerKg: number | null;
   printingCostCurrency: string | null;
   fohPerKg: number;
@@ -430,6 +431,25 @@ export interface V3BomCost {
     purchaseValuePerKg: number | null;
     purchaseCurrency: string | null;
   }>;
+}
+
+export interface V3FinalPriceItem {
+  requisitionItemId: number;
+  itemId: number;
+  description: string;
+  expectedQty: number;
+  costPerKg: number;
+  marginPerKg: number;
+  salePerKg: number;
+  salePerKgAed: number;
+  totalAed: number;
+}
+
+export interface V3FinalPrice {
+  totalAed: number;
+  currencyCode: string;
+  rateSnapshot: number | null;
+  perFg: V3FinalPriceItem[];
 }
 
 export interface V3FinishedGood {
@@ -450,6 +470,8 @@ export interface V3Requisition {
   customer: { id: number; name: string; code: string };
   salesPerson: { id: number; name: string };
   finishedGoods: V3FinishedGood[];
+  // Populated once MdPricing locks margins (PR #54). Null/omitted before that.
+  finalPrice?: V3FinalPrice | null;
 }
 
 export interface V3ApprovalItem {

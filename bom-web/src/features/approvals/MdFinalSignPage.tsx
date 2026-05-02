@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useV3Requisition } from "@/features/requisitions/requisitionsApi";
 import { useFinalSign } from "@/features/approvals/approvalsApi";
 import { V3StatusBadge } from "@/components/v3/V3StatusBadge";
+import { FinalPriceSummary } from "./FinalPriceSummary";
 
 export function MdFinalSignPage() {
   const { id } = useParams();
@@ -41,7 +42,17 @@ export function MdFinalSignPage() {
       </div>
       <p className="mt-1 text-sm text-gray-500">Customer: {req.customer.name}</p>
 
-      <div className="mt-6 rounded-lg border border-orange-200 bg-orange-50 p-4">
+      {req.finalPrice ? (
+        <div className="mt-6">
+          <FinalPriceSummary finalPrice={req.finalPrice} />
+        </div>
+      ) : (
+        <div className="mt-6 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+          Final price not available — margin must be set first.
+        </div>
+      )}
+
+      <div className="mt-4 rounded-lg border border-orange-200 bg-orange-50 p-4">
         <h2 className="text-base font-semibold text-orange-900">
           Final sign locks this quotation
         </h2>

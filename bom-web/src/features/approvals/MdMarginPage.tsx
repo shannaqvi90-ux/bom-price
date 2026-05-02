@@ -1,9 +1,10 @@
-import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useV3Requisition } from "@/features/requisitions/requisitionsApi";
 import { useSetMargin } from "@/features/approvals/approvalsApi";
 import { V3StatusBadge } from "@/components/v3/V3StatusBadge";
+import { useMdPricingState } from "./useMdPricingState";
+import { MdFgPricingCard } from "./MdFgPricingCard";
 
 export function MdMarginPage() {
   const { id } = useParams();
@@ -11,25 +12,35 @@ export function MdMarginPage() {
   const reqId = id ? parseInt(id) : 0;
   const { data: req, isLoading } = useV3Requisition(reqId);
   const setMargin = useSetMargin();
-  const [margins, setMargins] = useState<Record<number, number>>({});
-  const [notes, setNotes] = useState("");
 
   if (isLoading || !req) return <div className="p-6">Loading…</div>;
 
+  return <MdMarginPageBody req={req} reqId={reqId} setMargin={setMargin} navigate={navigate} />;
+}
+
+interface BodyProps {
+  req: NonNullable<ReturnType<typeof useV3Requisition>["data"]>;
+  reqId: number;
+  setMargin: ReturnType<typeof useSetMargin>;
+  navigate: ReturnType<typeof useNavigate>;
+}
+
+function MdMarginPageBody({ req, reqId, setMargin, navigate }: BodyProps) {
+  const state = useMdPricingState(req);
+
   const onSubmit = async () => {
-    const items = req.finishedGoods.map((fg) => ({
-      requisitionItemId: fg.id,
-      marginPerKg: margins[fg.id] ?? 0,
-    }));
-    if (items.some((i) => i.marginPerKg < 0)) {
-      toast.error("Margin must be ≥ 0");
+    if (!state.isValid) {
+      toast.error("Enter a margin (≥ 0) for every FG");
       return;
     }
-
+    const items = req.finishedGoods.map((fg) => ({
+      requisitionItemId: fg.id,
+      marginPerKg: state.parsed[fg.id]!,
+    }));
     try {
       await setMargin.mutateAsync({
         requisitionId: reqId,
-        payload: { notes: notes || undefined, items },
+        payload: { notes: state.notes.trim() || undefined, items },
       });
       toast.success("Margin saved — now sales will confirm with customer");
       navigate(`/requisitions/${reqId}`);
@@ -52,45 +63,50 @@ export function MdMarginPage() {
       </p>
 
       <h2 className="mt-6 text-lg font-semibold text-gray-900">
-        Set Margin per FG ({req.currencyCode}/KG)
+        Set Margin per FG
       </h2>
-      <table className="mt-2 w-full text-sm">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="px-3 py-2 text-left font-medium text-gray-700">Finished Good</th>
-            <th className="px-3 py-2 text-right font-medium text-gray-700">Qty (KG)</th>
-            <th className="px-3 py-2 text-right font-medium text-gray-700">Margin/KG</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {req.finishedGoods.map((fg) => (
-            <tr key={fg.id}>
-              <td className="px-3 py-2">{fg.item.description}</td>
-              <td className="px-3 py-2 text-right">{fg.expectedQty.toLocaleString()}</td>
-              <td className="px-3 py-2 text-right">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={margins[fg.id] ?? ""}
-                  onChange={(e) =>
-                    setMargins((m) => ({
-                      ...m,
-                      [fg.id]: parseFloat(e.target.value) || 0,
-                    }))
-                  }
-                  className="w-28 rounded border-gray-300 px-2 py-1 text-right text-sm"
-                />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <p className="mt-1 text-sm text-gray-500">
+        Cost includes raw materials, FOH, transport, and commission. Expand each card to see BOM lines.
+      </p>
+
+      <div className="mt-3 space-y-3">
+        {req.finishedGoods.map((fg, idx) => (
+          <MdFgPricingCard
+            key={fg.id}
+            fg={fg}
+            index={idx}
+            marginInput={state.margins[fg.id] ?? ""}
+            onMarginChange={(v) => state.setMargin(fg.id, v)}
+            livePerFg={
+              state.livePreview?.perFg.find((p) => p.requisitionItemId === fg.id) ?? null
+            }
+            currencyCode={req.currencyCode}
+          />
+        ))}
+      </div>
+
+      {state.livePreview ? (
+        <div className="mt-4 rounded-lg bg-blue-700 px-5 py-4 text-white">
+          <div className="text-xs font-semibold uppercase tracking-wider opacity-90">
+            Grand Total (preview)
+          </div>
+          <div className="mt-1 text-3xl font-bold">
+            {req.currencyCode}{" "}
+            {state.livePreview.totalAed.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </div>
+          {req.currencyCode !== "AED" ? (
+            <div className="mt-1 text-xs opacity-80">
+              Backend re-snaps the FX rate at save time. Final AED total computed on the server.
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <label className="mt-6 block">
         <span className="text-sm font-medium text-gray-700">Notes (optional)</span>
         <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+          value={state.notes}
+          onChange={(e) => state.setNotes(e.target.value)}
           rows={3}
           className="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm"
         />
@@ -105,10 +121,10 @@ export function MdMarginPage() {
         </button>
         <button
           onClick={onSubmit}
-          disabled={setMargin.isPending}
+          disabled={!state.isValid || setMargin.isPending}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
         >
-          Submit
+          {setMargin.isPending ? "Submitting…" : "Approve & send"}
         </button>
       </div>
     </div>

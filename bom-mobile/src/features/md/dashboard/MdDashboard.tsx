@@ -52,6 +52,16 @@ export function MdDashboard() {
 
   const HeaderRight = (
     <>
+      <Pressable
+        onPress={() => {
+          Haptics.selectionAsync();
+          router.push("/profile");
+        }}
+        hitSlop={6}
+        style={{ paddingHorizontal: 8, paddingVertical: 6 }}
+      >
+        <Text style={{ fontSize: 22 }}>👤</Text>
+      </Pressable>
       <NotificationBell />
       <Pressable
         onPress={onLogout}

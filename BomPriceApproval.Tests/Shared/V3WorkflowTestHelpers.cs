@@ -123,14 +123,14 @@ public static class V3WorkflowTestHelpers
     /// <summary>
     /// Clears the MD's seeded signature path so signature-related tests can
     /// assert the "no signature on file" branch independent of execution order.
-    /// Does NOT delete the on-disk file (cheap to leave, harmless to re-overwrite).
     /// </summary>
     public static async Task ClearMdSignatureAsync(IServiceProvider services)
     {
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var md = await db.Users.FirstAsync(u => u.Email == "md@test.com");
-        md.SignatureImagePath = null;
+        md.SignatureImage = null;
+        md.SignatureMimeType = null;
         await db.SaveChangesAsync();
     }
 

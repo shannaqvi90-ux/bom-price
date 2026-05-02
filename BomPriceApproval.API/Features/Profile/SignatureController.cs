@@ -8,11 +8,16 @@ namespace BomPriceApproval.API.Features.Profile;
 [ApiController]
 [Route("api/profile")]
 [Authorize]
-public class SignatureController(AppDbContext db, IConfiguration config) : ControllerBase
+public class SignatureController(AppDbContext db) : ControllerBase
 {
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    private static readonly string[] AllowedExtensions = [".png", ".jpg", ".jpeg"];
+    private static readonly Dictionary<string, string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".png"] = "image/png",
+        [".jpg"] = "image/jpeg",
+        [".jpeg"] = "image/jpeg",
+    };
     private const long MaxBytes = 500 * 1024;
 
     [HttpPost("signature")]
@@ -24,24 +29,20 @@ public class SignatureController(AppDbContext db, IConfiguration config) : Contr
         if (file.Length > MaxBytes)
             return BadRequest(new { error = "File too large (max 500KB)" });
 
-        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (!AllowedExtensions.Contains(ext))
+        var ext = Path.GetExtension(file.FileName);
+        if (!AllowedExtensions.TryGetValue(ext, out var mimeType))
             return BadRequest(new { error = "Only .png/.jpg/.jpeg allowed" });
 
         var user = await db.Users.FindAsync(CurrentUserId);
         if (user is null) return NotFound();
 
-        var dir = config["Signatures:Directory"] ?? "/data/signatures";
-        Directory.CreateDirectory(dir);
-        var path = Path.Combine(dir, $"{CurrentUserId}.png");
-
-        await using (var stream = System.IO.File.Create(path))
-            await file.CopyToAsync(stream);
-
-        user.SignatureImagePath = path;
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms);
+        user.SignatureImage = ms.ToArray();
+        user.SignatureMimeType = mimeType;
         await db.SaveChangesAsync();
 
-        return Ok(new SignatureUploadResponse(path, DateTime.UtcNow));
+        return Ok(new SignatureUploadResponse(user.SignatureImage.Length, DateTime.UtcNow));
     }
 
     [HttpGet("signature")]
@@ -49,10 +50,8 @@ public class SignatureController(AppDbContext db, IConfiguration config) : Contr
     public async Task<IActionResult> GetOwn()
     {
         var user = await db.Users.FindAsync(CurrentUserId);
-        if (user?.SignatureImagePath is null)
+        if (user?.SignatureImage is null || user.SignatureImage.Length == 0)
             return NotFound(new { error = "No signature uploaded" });
-        if (!System.IO.File.Exists(user.SignatureImagePath))
-            return NotFound(new { error = "Signature file missing" });
-        return PhysicalFile(user.SignatureImagePath, "image/png");
+        return File(user.SignatureImage, user.SignatureMimeType ?? "image/png");
     }
 }

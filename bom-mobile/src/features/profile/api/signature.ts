@@ -7,7 +7,7 @@ export const profileKeys = {
 };
 
 interface UploadResult {
-  path: string;
+  sizeBytes: number;
   uploadedAt: string;
 }
 
@@ -18,12 +18,16 @@ export function useUploadSignature() {
       const formData = new FormData();
       formData.append("file", {
         uri,
-        name: "signature.png",
+        name: mime === "image/jpeg" ? "signature.jpg" : "signature.png",
         type: mime,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
+      // Don't set Content-Type — axios + RN must compute the multipart boundary
+      // automatically. Setting it manually strips the boundary and the backend
+      // can't parse the body.
       const r = await api.post<UploadResult>("/api/profile/signature", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 60_000, // multipart upload + Fly cold-start headroom
+        transformRequest: (data) => data, // prevent axios from JSON.stringify'ing FormData
       });
       return r.data;
     },

@@ -32,11 +32,13 @@ export function ProfileSignatureSection() {
       source === "gallery"
         ? await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ["images"],
-            quality: 0.9,
+            quality: 0.6,
+            allowsEditing: true,
           })
         : await ImagePicker.launchCameraAsync({
             mediaTypes: ["images"],
-            quality: 0.9,
+            quality: 0.4,
+            allowsEditing: true,
           });
 
     if (result.canceled) return;

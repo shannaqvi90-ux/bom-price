@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useV3Requisition } from "@/features/requisitions/requisitionsApi";
@@ -5,6 +6,7 @@ import { useSetMargin } from "@/features/approvals/approvalsApi";
 import { V3StatusBadge } from "@/components/v3/V3StatusBadge";
 import { useMdPricingState } from "./useMdPricingState";
 import { MdFgPricingCard } from "./MdFgPricingCard";
+import { RejectReqModal } from "./RejectReqModal";
 
 export function MdMarginPage() {
   const { id } = useParams();
@@ -27,6 +29,7 @@ interface BodyProps {
 
 function MdMarginPageBody({ req, reqId, setMargin, navigate }: BodyProps) {
   const state = useMdPricingState(req);
+  const [rejectOpen, setRejectOpen] = useState(false);
 
   const onSubmit = async () => {
     if (!state.isValid) {
@@ -112,21 +115,37 @@ function MdMarginPageBody({ req, reqId, setMargin, navigate }: BodyProps) {
         />
       </label>
 
-      <div className="mt-6 flex justify-end gap-3">
+      <div className="mt-6 flex items-center justify-between gap-3">
         <button
-          onClick={() => navigate(-1)}
-          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          onClick={() => setRejectOpen(true)}
+          className="rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
         >
-          Cancel
+          Reject
         </button>
-        <button
-          onClick={onSubmit}
-          disabled={!state.isValid || setMargin.isPending}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-        >
-          {setMargin.isPending ? "Submitting…" : "Approve & send"}
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onSubmit}
+            disabled={!state.isValid || setMargin.isPending}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {setMargin.isPending ? "Submitting…" : "Approve & send"}
+          </button>
+        </div>
       </div>
+
+      <RejectReqModal
+        requisitionId={reqId}
+        refNo={req.refNo}
+        open={rejectOpen}
+        onClose={() => setRejectOpen(false)}
+        onRejected={() => navigate(`/requisitions/${reqId}`)}
+      />
     </div>
   );
 }

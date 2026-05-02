@@ -220,10 +220,12 @@ public class ApprovalsController(
             .FirstOrDefaultAsync(q => q.Id == requisitionId);
 
         if (req is null) return NotFound();
-        if (req.Status != RequisitionStatus.MdReview)
+        // V3 transitions MdPricing → Rejected; V2.3 (legacy) transitions MdReview → Rejected.
+        // Both routes share this endpoint and end in the same Rejected terminal state.
+        if (req.Status != RequisitionStatus.MdReview && req.Status != RequisitionStatus.MdPricing)
             return Validation
-                .Detail("Requisition is not in MdReview status")
-                .Field("Status", "Requisition is not in MdReview status.")
+                .Detail("Requisition is not in MdReview/MdPricing status")
+                .Field("Status", "Requisition must be in MdReview or MdPricing to reject.")
                 .Return();
 
         var approval = new QuotationApproval
@@ -235,6 +237,14 @@ public class ApprovalsController(
         };
         db.QuotationApprovals.Add(approval);
         req.Status = RequisitionStatus.Rejected;
+        // Populate CancelReason on reject too — the field name is V3-Cancelled-flow
+        // historical, but the V3RequisitionDetail surfaces it as the terminal-reason
+        // for both Cancelled and Rejected so web/mobile can render the reason without
+        // an extra approvals fetch. The reason still lives in QuotationApproval.Notes
+        // for the audit trail.
+        req.CancelReason = request.Notes;
+        req.CancelledAt = DateTime.UtcNow;
+        req.CancelledByUserId = CurrentUserId;
         req.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 

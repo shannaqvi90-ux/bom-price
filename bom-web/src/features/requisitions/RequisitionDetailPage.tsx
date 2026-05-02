@@ -13,6 +13,8 @@ import { useAuthStore } from "@/store/authStore";
 import { V3StatusBadge } from "@/components/v3/V3StatusBadge";
 import { BomEditorTable } from "@/components/v3/BomEditorTable";
 import { AdminActionsCard } from "@/features/admin/AdminActionsCard";
+import { SignedQuotationViewer } from "./SignedQuotationViewer";
+import { FinalPriceSummary } from "@/features/approvals/FinalPriceSummary";
 import { api } from "@/api/axios";
 import type { V3RequisitionStatus } from "@/types/api";
 
@@ -194,6 +196,8 @@ export default function RequisitionDetailPage() {
         </div>
       </div>
 
+      <StatusBanner status={status} req={req} />
+
       {showCancelInput && (
         <Card>
           <CardContent className="py-4">
@@ -292,7 +296,60 @@ export default function RequisitionDetailPage() {
         </CardContent>
       </Card>
 
+      {status === "Signed" && req.finalPrice ? (
+        <FinalPriceSummary finalPrice={req.finalPrice} />
+      ) : null}
+
+      {status === "Signed" ? (
+        <SignedQuotationViewer requisitionId={numericId} refNo={req.refNo} />
+      ) : null}
+
       <AdminActionsCard requisition={{ id: req.id, refNo: req.refNo, status: req.status }} />
     </div>
   );
+}
+
+interface StatusBannerProps {
+  status: V3RequisitionStatus;
+  req: {
+    cancelReason?: string | null;
+  };
+}
+
+function StatusBanner({ status, req }: StatusBannerProps) {
+  if (status === "Costing" || status === "Draft") {
+    return (
+      <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        Waiting on accountant costing.
+      </div>
+    );
+  }
+  if (status === "CustomerConfirm") {
+    return (
+      <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        Waiting on sales person to confirm with customer.
+      </div>
+    );
+  }
+  if (status === "Rejected") {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+        <div className="text-sm font-semibold text-red-900">Rejected</div>
+        <div className="mt-1 text-sm text-red-900">
+          Reason: {req.cancelReason ?? "(no reason recorded)"}
+        </div>
+      </div>
+    );
+  }
+  if (status === "Cancelled") {
+    return (
+      <div className="rounded-lg border border-slate-300 bg-slate-100 px-4 py-3">
+        <div className="text-sm font-semibold text-slate-700">Cancelled</div>
+        <div className="mt-1 text-sm text-slate-700">
+          Reason: {req.cancelReason ?? "(no reason recorded)"}
+        </div>
+      </div>
+    );
+  }
+  return null;
 }

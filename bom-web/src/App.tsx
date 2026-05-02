@@ -15,6 +15,7 @@ import CostingEntryV3Page from "@/features/costing/CostingEntryV3Page";
 import { CustomerConfirmPage } from "@/features/requisitions/CustomerConfirmPage";
 import { MdMarginPage } from "@/features/approvals/MdMarginPage";
 import { MdFinalSignPage } from "@/features/approvals/MdFinalSignPage";
+import { MdListPage } from "@/features/md/MdListPage";
 import { ProfileSignaturePage } from "@/features/profile/ProfileSignaturePage";
 import NotificationsPage from "@/features/notifications/NotificationsPage";
 import ExchangeRatesPage from "@/features/exchange-rates/ExchangeRatesPage";
@@ -194,6 +195,14 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute allow={["ManagingDirector"]}>
             <ProfileSignaturePage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "md/list",
+        element: (
+          <ProtectedRoute allow={["ManagingDirector", "Admin"]}>
+            <MdListPage />
           </ProtectedRoute>
         ),
       },

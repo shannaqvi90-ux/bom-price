@@ -196,7 +196,11 @@ describe("RequisitionDetailPage", () => {
     mockReqGet(makeReq({ status: "Signed" }));
     render(wrap(<RequisitionDetailPage />));
     await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /download pdf/i })).toBeInTheDocument();
+    // Two Download PDF buttons exist on Signed: the top status-aware action
+    // and one inside the SignedQuotationViewer card. Either is sufficient
+    // for this assertion.
+    const buttons = screen.getAllByRole("button", { name: /download pdf/i });
+    expect(buttons.length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders no action buttons when status=Cancelled", async () => {

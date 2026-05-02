@@ -14,6 +14,7 @@ import {
   ScrollText,
   ChevronLeft,
   ChevronRight,
+  Inbox,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { notificationsStore } from "@/store/notificationsStore";
@@ -29,6 +30,12 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  {
+    to: "/md/list",
+    label: "My Queue",
+    icon: Inbox,
+    roles: ["ManagingDirector"],
+  },
   {
     to: "/requisitions",
     label: "Requisitions",

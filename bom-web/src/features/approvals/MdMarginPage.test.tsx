@@ -67,7 +67,7 @@ describe("MdMarginPage", () => {
     const inputs = screen.getAllByRole("spinbutton") as HTMLInputElement[];
     await userEvent.type(inputs[0], "0.5");
     await userEvent.type(inputs[1], "0.7");
-    await userEvent.click(screen.getByRole("button", { name: /submit/i }));
+    await userEvent.click(screen.getByRole("button", { name: /approve & send/i }));
 
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(

@@ -70,7 +70,7 @@ export function AccountantDashboard() {
     <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <ScreenHeader label="ACCOUNTANT" title={`${greet()}, ${firstName} 👋`} right={HeaderRight} />
+      <ScreenHeader label="ACCOUNTANT" title="Accountant Dashboard" right={HeaderRight} />
 
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingTop: 4, paddingBottom: Math.max(insets.bottom, 16) + 16 }}
@@ -79,6 +79,13 @@ export function AccountantDashboard() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1e40af" colors={["#1e40af"]} />
         }
       >
+        <Text
+          style={{ color: "#475569", fontSize: 16, fontWeight: "500", marginBottom: 12 }}
+          numberOfLines={2}
+        >
+          {greet()}, {firstName} 👋
+        </Text>
+
         <KpiHeroCard
           count={statsQ.data?.costing}
           loading={statsQ.isPending}

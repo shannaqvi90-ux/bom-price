@@ -76,7 +76,7 @@ export function MdDashboard() {
     <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <ScreenHeader label="MANAGING DIRECTOR" title={`${greet()}, ${firstName} 👋`} right={HeaderRight} />
+      <ScreenHeader label="MANAGING DIRECTOR" title="MD Dashboard" right={HeaderRight} />
 
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingTop: 4, paddingBottom: Math.max(insets.bottom, 16) + 16 }}
@@ -85,6 +85,13 @@ export function MdDashboard() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1e40af" colors={["#1e40af"]} />
         }
       >
+        <Text
+          style={{ color: "#475569", fontSize: 16, fontWeight: "500", marginBottom: 12 }}
+          numberOfLines={2}
+        >
+          {greet()}, {firstName} 👋
+        </Text>
+
         {sigQ.data && !sigQ.data.exists ? <SignatureMissingBanner /> : null}
 
         {/* Hero: To price */}

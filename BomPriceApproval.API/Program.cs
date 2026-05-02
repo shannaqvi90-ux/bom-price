@@ -50,6 +50,7 @@ builder.Services.AddScoped<AdminAuditLogger>();
 builder.Services.AddSingleton<WebPushService>();
 builder.Services.AddScoped<ICodeGeneratorService, CodeGeneratorService>();
 builder.Services.AddHostedService<RevokedJtiCleanupService>();
+builder.Services.AddHostedService<DbKeepAliveService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt =>

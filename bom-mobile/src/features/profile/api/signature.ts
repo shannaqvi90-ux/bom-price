@@ -24,8 +24,6 @@ export function useUploadSignature() {
       } as any);
       const r = await api.post<UploadResult>("/api/profile/signature", formData, {
         headers: { "Content-Type": "multipart/form-data" },
-        timeout: 60_000,
-        transformRequest: (data) => data,
       });
       return r.data;
     },

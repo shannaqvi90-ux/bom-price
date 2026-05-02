@@ -58,7 +58,21 @@ export function ProfileSignatureSection() {
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed");
+      const err = e as {
+        message?: string;
+        code?: string;
+        response?: { status?: number; data?: unknown };
+        request?: { _response?: string };
+      };
+      const parts = [
+        err.message ?? "Upload failed",
+        err.code ? `code=${err.code}` : null,
+        err.response?.status ? `http=${err.response.status}` : null,
+        err.request?._response ? `native=${String(err.request._response).slice(0, 120)}` : null,
+        `uri=${asset.uri.slice(0, 60)}`,
+        `mime=${asset.mimeType ?? "?"}`,
+      ].filter(Boolean);
+      setError(parts.join(" | "));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   };
@@ -77,6 +91,9 @@ export function ProfileSignatureSection() {
       </Text>
       <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
         PNG/JPG · max 500KB · used on signed quotation PDFs
+      </Text>
+      <Text style={{ fontSize: 10, color: "#cbd5e1", marginTop: 2 }}>
+        build: smoke-fix-4
       </Text>
 
       {ownSignatureQ.data?.exists ? (

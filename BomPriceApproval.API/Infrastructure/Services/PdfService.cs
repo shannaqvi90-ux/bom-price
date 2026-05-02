@@ -384,11 +384,9 @@ public class PdfService(AppDbContext db)
                         {
                             col.Item().Text("Approved & Signed by MD").FontSize(8).FontColor("#64748b");
 
-                            if (!string.IsNullOrEmpty(signer.SignatureImagePath)
-                                && File.Exists(signer.SignatureImagePath))
+                            if (signer.SignatureImage is { Length: > 0 })
                             {
-                                var imgBytes = File.ReadAllBytes(signer.SignatureImagePath);
-                                col.Item().Height(50).Image(imgBytes);
+                                col.Item().Height(50).Image(signer.SignatureImage);
                             }
                             else
                             {

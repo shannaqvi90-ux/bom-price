@@ -13,7 +13,8 @@ public class User
     public int? GroupId { get; set; }
     public bool IsActive { get; set; } = true;
     public bool MustChangePassword { get; set; } = false;
-    public string? SignatureImagePath { get; set; }
+    public byte[]? SignatureImage { get; set; }
+    public string? SignatureMimeType { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public int FailedLoginAttempts { get; set; } = 0;
     public DateTime? LockedUntil { get; set; }

@@ -14,7 +14,7 @@ namespace BomPriceApproval.Tests.Profile;
 ///   • POST /api/profile/signature — MD-only upload, ≤ 500 KB, .png/.jpg/.jpeg
 ///   • GET  /api/profile/signature — MD reads back; 404 when none on file
 ///
-/// Tests reset the MD seed user's <c>SignatureImagePath</c> at start so they
+/// Tests reset the MD seed user's <c>SignatureImage</c> at start so they
 /// stay order-independent against the shared dev DB.
 /// </summary>
 public class SignatureControllerTests(WebApplicationFactory<Program> factory)
@@ -41,14 +41,13 @@ public class SignatureControllerTests(WebApplicationFactory<Program> factory)
         var resp = await client.PostAsync("/api/profile/signature", content);
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        // DB row updated.
+        // DB row updated with bytes.
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var md = await db.Users.FirstAsync(u => u.Email == "md@test.com");
-        md.SignatureImagePath.Should().NotBeNullOrWhiteSpace();
-
-        // File written to disk where DB says it is.
-        File.Exists(md.SignatureImagePath!).Should().BeTrue();
+        md.SignatureImage.Should().NotBeNullOrEmpty();
+        md.SignatureMimeType.Should().Be("image/png");
+        md.SignatureImage!.Should().BeEquivalentTo(OnePixelPng);
     }
 
     [Fact]

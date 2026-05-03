@@ -13,6 +13,9 @@ import {
 import { BomEditorTable, type BomLineRow } from "@/components/v3/BomEditorTable";
 import { CreateCustomerModal } from "@/components/v3/CreateCustomerModal";
 import { CreateFinishedGoodModal } from "@/components/v3/CreateFinishedGoodModal";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
 
 interface FgCardState {
   itemId: number;
@@ -119,11 +122,11 @@ export function NewRequisitionPage() {
         <label className="block">
           <span className="text-sm font-medium text-gray-700">Customer</span>
           <div className="mt-1 flex gap-2">
-            <select
+            <Select
               aria-label="customer"
               value={customerId}
               onChange={(e) => setCustomerId(parseInt(e.target.value))}
-              className="flex-1 rounded-md border-gray-300 px-3 py-2 text-sm"
+              className="flex-1"
             >
               <option value={0}>— select —</option>
               {(customers.data ?? []).map((c) => (
@@ -131,7 +134,7 @@ export function NewRequisitionPage() {
                   {c.code} · {c.name}
                 </option>
               ))}
-            </select>
+            </Select>
             <button
               type="button"
               onClick={() => setCreateCustomerOpen(true)}
@@ -144,29 +147,29 @@ export function NewRequisitionPage() {
 
         <label className="block">
           <span className="text-sm font-medium text-gray-700">Currency</span>
-          <select
+          <Select
             aria-label="currency"
             value={currency}
             onChange={(e) => setCurrency(e.target.value)}
-            className="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm"
+            className="mt-1"
           >
             {CURRENCIES.map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
 
         <label className="block col-span-2">
           <span className="text-sm font-medium text-gray-700">
             Reference (optional)
           </span>
-          <input
+          <Input
             value={referenceNumber}
             onChange={(e) => setReferenceNumber(e.target.value)}
             placeholder="PO-9941"
-            className="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm"
+            className="mt-1"
           />
         </label>
       </div>
@@ -193,13 +196,13 @@ export function NewRequisitionPage() {
               <label className="block col-span-2">
                 <span className="text-sm font-medium text-gray-700">FG Item</span>
                 <div className="mt-1 flex gap-2">
-                  <select
+                  <Select
                     aria-label="fg item"
                     value={fg.itemId}
                     onChange={(e) =>
                       updateFg(idx, { itemId: parseInt(e.target.value) })
                     }
-                    className="flex-1 rounded-md border-gray-300 px-3 py-2 text-sm"
+                    className="flex-1"
                   >
                     <option value={0}>— select —</option>
                     {fgItemPool.map((i) => (
@@ -207,7 +210,7 @@ export function NewRequisitionPage() {
                         {i.code} · {i.description}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                   <button
                     type="button"
                     onClick={() => setCreateFgOpen(true)}
@@ -222,7 +225,7 @@ export function NewRequisitionPage() {
                 <span className="text-sm font-medium text-gray-700">
                   Quantity (KG)
                 </span>
-                <input
+                <Input
                   type="number"
                   aria-label="quantity"
                   value={fg.expectedQtyKg || ""}
@@ -231,7 +234,7 @@ export function NewRequisitionPage() {
                       expectedQtyKg: parseFloat(e.target.value) || 0,
                     })
                   }
-                  className="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm"
+                  className="mt-1"
                 />
               </label>
             </div>
@@ -264,11 +267,11 @@ export function NewRequisitionPage() {
       </div>
 
       <h2 className="mt-8 text-lg font-semibold text-gray-900">Notes</h2>
-      <textarea
+      <Textarea
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
         rows={3}
-        className="mt-2 w-full rounded-md border-gray-300 px-3 py-2 text-sm"
+        className="mt-2"
       />
 
       <div className="mt-8 flex justify-end gap-3">

@@ -242,7 +242,9 @@ public class AdminRequisitionsController(
         try
         {
             await db.Entry(newApproval).Collection(a => a.Items).LoadAsync();
-            var pdf = pdfSvc.GenerateQuotation(req, newApproval);
+            // Override creates a new InitialPricing approval that hasn't been
+            // final-signed yet — no signer.
+            var pdf = await pdfSvc.GenerateQuotationAsync(req, newApproval, signer: null);
 
             if (!string.IsNullOrWhiteSpace(req.SalesPerson.Email))
             {

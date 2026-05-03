@@ -18,6 +18,7 @@ interface BomLineCost {
   bomLineId: number;
   costPerKg: string; // string in input state, parsed on submit
   currencyCode: string;
+  wastagePercent: string; // production wastage per RM line, persists to BomLine.WastagePct
 }
 
 interface FgCostState {
@@ -48,6 +49,10 @@ function initStateFromReq(req: V3Requisition): FgCostState[] {
             ? String(existing.purchaseValuePerKg)
             : "",
         currencyCode: existing?.purchaseCurrency ?? "AED",
+        wastagePercent:
+          existing?.wastagePercent !== undefined && existing?.wastagePercent !== null
+            ? String(existing.wastagePercent)
+            : "0",
       };
     }),
     printingCostPerKg:
@@ -119,6 +124,7 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
           bomLineId: rc.bomLineId,
           costPerKg: parseNum(rc.costPerKg),
           currencyCode: rc.currencyCode || "AED",
+          wastagePercent: parseNum(rc.wastagePercent),
         })),
         printingCostPerKg: hasPrinting ? parseNum(fg.printingCostPerKg) : null,
         printingCostCurrency: hasPrinting ? fg.printingCostCurrency || "AED" : null,
@@ -189,6 +195,7 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
                   <th className="px-3 py-1.5">Micron</th>
                   <th className="px-3 py-1.5 text-right">Cost/KG</th>
                   <th className="px-3 py-1.5">Currency</th>
+                  <th className="px-3 py-1.5 text-right">Wastage %</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -239,6 +246,25 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
                             </option>
                           ))}
                         </Select>
+                      </td>
+                      <td className="px-3 py-1.5 text-right">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          value={rc.wastagePercent}
+                          onChange={(e) =>
+                            setState((s) => {
+                              const next = [...s];
+                              next[fgIdx] = { ...next[fgIdx] };
+                              next[fgIdx].rawMaterialCosts = [...next[fgIdx].rawMaterialCosts];
+                              next[fgIdx].rawMaterialCosts[blIdx] = { ...rc, wastagePercent: e.target.value };
+                              return next;
+                            })
+                          }
+                          className="h-8 w-20 px-2 py-1 text-right text-sm"
+                          aria-label={`wastage-${blIdx}`}
+                        />
                       </td>
                     </tr>
                   );

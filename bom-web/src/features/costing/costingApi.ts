@@ -97,6 +97,10 @@ export interface V3RawMaterialCostInput {
   bomLineId: number;
   costPerKg: number;
   currencyCode: string;
+  // Production wastage % per RM line. Persisted to BomLine.WastagePct so
+  // both cost computation and the MD pricing read DTO see the value.
+  // Defaults to 0 — backend rejects negatives.
+  wastagePercent: number;
 }
 
 export interface V3FgCostInput {

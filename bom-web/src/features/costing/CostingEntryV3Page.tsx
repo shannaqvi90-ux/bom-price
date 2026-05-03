@@ -11,8 +11,7 @@ import { V3StatusBadge } from "@/components/v3/V3StatusBadge";
 import type { V3Requisition } from "@/types/api";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-
-const CURRENCIES = ["AED", "USD", "EUR", "GBP", "PKR", "INR", "CNY"];
+import { useActiveCurrencies } from "@/features/exchange-rates/exchangeRatesApi";
 
 interface BomLineCost {
   bomLineId: number;
@@ -108,6 +107,7 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
   const saveCost = useSaveV3CostData();
   const submitCost = useSubmitV3Costing();
   const [state, setState] = useState<FgCostState[]>(() => initStateFromReq(req));
+  const CURRENCIES = useActiveCurrencies();
 
   const fgById = useMemo(
     () => Object.fromEntries(req.finishedGoods.map((fg) => [fg.id, fg] as const)),

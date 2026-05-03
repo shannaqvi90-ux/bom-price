@@ -15,7 +15,7 @@ export function InstallBanner() {
       <button
         type="button"
         onClick={promptInstall}
-        className="rounded bg-white px-2 py-0.5 text-xs font-medium text-blue-700"
+        className="rounded bg-card px-2 py-0.5 text-xs font-medium text-blue-700"
       >
         Install
       </button>

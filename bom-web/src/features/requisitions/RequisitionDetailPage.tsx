@@ -273,12 +273,12 @@ export default function RequisitionDetailPage() {
                   fg.bomLines != null &&
                   fg.bomLines.length > 0;
                 return (
-                  <div key={fg.id} className="rounded-lg border border-gray-200 p-4">
+                  <div key={fg.id} className="rounded-lg border border-border p-4">
                     <div className="flex items-baseline justify-between">
-                      <h3 className="font-medium text-gray-900">
+                      <h3 className="font-medium text-foreground">
                         {fg.item.code} · {fg.item.description}
                       </h3>
-                      <span className="text-sm text-gray-600">
+                      <span className="text-sm text-muted-foreground">
                         {fg.expectedQty.toLocaleString()} KG
                         {fg.hasPrinting ? " · Printed" : ""}
                       </span>
@@ -364,9 +364,9 @@ function StatusBanner({ status, req }: StatusBannerProps) {
   }
   if (status === "Cancelled") {
     return (
-      <div className="rounded-lg border border-slate-300 bg-slate-100 px-4 py-3">
-        <div className="text-sm font-semibold text-slate-700">Cancelled</div>
-        <div className="mt-1 text-sm text-slate-700">
+      <div className="rounded-lg border border-border bg-muted px-4 py-3">
+        <div className="text-sm font-semibold text-foreground">Cancelled</div>
+        <div className="mt-1 text-sm text-foreground">
           Reason: {req.cancelReason ?? "(no reason recorded)"}
         </div>
       </div>
@@ -388,9 +388,9 @@ function CostAwareBomTable({
   const costs = fg.costs!;
   const lines = fg.bomLines ?? [];
   return (
-    <div className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
+    <div className="rounded-md border border-border bg-muted px-3 py-2">
       <table className="w-full text-xs">
-        <thead className="text-gray-500">
+        <thead className="text-muted-foreground">
           <tr>
             <th className="px-1 py-1 text-left font-medium">Raw Material</th>
             <th className="px-1 py-1 text-right font-medium">Qty/KG</th>
@@ -399,7 +399,7 @@ function CostAwareBomTable({
             <th className="px-1 py-1 text-right font-medium">Total/KG</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-border">
           {lines.map((line) => {
             const lineCost = costs.lines.find((l) => l.bomLineId === line.id);
             const wastageMult =
@@ -412,21 +412,21 @@ function CostAwareBomTable({
                 : null;
             return (
               <tr key={line.id}>
-                <td className="px-1 py-1 text-gray-800">{line.item.description}</td>
-                <td className="px-1 py-1 text-right text-gray-700">
+                <td className="px-1 py-1 text-foreground">{line.item.description}</td>
+                <td className="px-1 py-1 text-right text-foreground">
                   {line.qtyPerKg.toFixed(4)}
                 </td>
-                <td className="px-1 py-1 text-right text-gray-700">
+                <td className="px-1 py-1 text-right text-foreground">
                   {lineCost?.wastagePercent != null
                     ? `${lineCost.wastagePercent.toFixed(2)}%`
                     : "—"}
                 </td>
-                <td className="px-1 py-1 text-right text-gray-700">
+                <td className="px-1 py-1 text-right text-foreground">
                   {lineCost?.purchaseValuePerKg != null
                     ? `${lineCost.purchaseCurrency ?? ""} ${lineCost.purchaseValuePerKg.toFixed(2)}`
                     : "—"}
                 </td>
-                <td className="px-1 py-1 text-right font-medium text-gray-900">
+                <td className="px-1 py-1 text-right font-medium text-foreground">
                   {lineTotal != null
                     ? `${lineCost?.purchaseCurrency ?? currencyCode} ${lineTotal.toFixed(2)}`
                     : "—"}
@@ -436,7 +436,7 @@ function CostAwareBomTable({
           })}
         </tbody>
       </table>
-      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-gray-200 pt-2 text-xs text-gray-600">
+      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
         {costs.printingCostPerKg != null ? (
           <div className="flex justify-between">
             <span>Printing/KG</span>
@@ -465,9 +465,9 @@ function CostAwareBomTable({
           </span>
         </div>
       </div>
-      <div className="mt-2 flex justify-between border-t border-gray-300 pt-2 text-sm">
-        <span className="font-semibold text-gray-700">Total Cost/KG</span>
-        <span className="font-bold text-gray-900">
+      <div className="mt-2 flex justify-between border-t border-border pt-2 text-sm">
+        <span className="font-semibold text-foreground">Total Cost/KG</span>
+        <span className="font-bold text-foreground">
           {currencyCode} {costs.totalCostPerKg.toFixed(2)}
         </span>
       </div>

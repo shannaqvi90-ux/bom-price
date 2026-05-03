@@ -73,7 +73,7 @@ export function ResetPasswordModal({ user, onClose }: Props) {
         This password is shown <strong>once</strong>. Copy it now and hand it to the user. They
         will be required to change it on next login.
       </p>
-      <div className="bg-gray-100 p-3 rounded font-mono text-lg break-all">{tempPassword}</div>
+      <div className="bg-muted p-3 rounded font-mono text-lg break-all">{tempPassword}</div>
       <div className="mt-4 flex justify-end gap-2">
         <Button variant="outline" onClick={handleCopy}>
           Copy

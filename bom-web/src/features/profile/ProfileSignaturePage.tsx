@@ -39,23 +39,23 @@ export function ProfileSignaturePage() {
 
   return (
     <div className="mx-auto max-w-2xl p-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Profile · Signature</h1>
-      <p className="mt-1 text-sm text-gray-500">
+      <h1 className="text-2xl font-semibold text-foreground">Profile · Signature</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
         Uploaded signature appears on signed quotation PDFs. PNG/JPG ≤ 500KB.
         ~600×200px recommended.
       </p>
 
-      <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6">
-        <h2 className="text-sm font-medium text-gray-700">Current signature</h2>
-        <div className="mt-2 flex h-24 items-center justify-center rounded-md border border-dashed border-gray-300 bg-gray-50">
+      <div className="mt-6 rounded-lg border border-border bg-card p-6">
+        <h2 className="text-sm font-medium text-foreground">Current signature</h2>
+        <div className="mt-2 flex h-24 items-center justify-center rounded-md border border-dashed border-border bg-muted">
           {ownSig.data ? (
             <img src={ownSig.data} alt="Current signature" className="max-h-20" />
           ) : (
-            <span className="text-xs text-gray-400">[no signature uploaded]</span>
+            <span className="text-xs text-muted-foreground">[no signature uploaded]</span>
           )}
         </div>
 
-        <h2 className="mt-6 text-sm font-medium text-gray-700">Upload new</h2>
+        <h2 className="mt-6 text-sm font-medium text-foreground">Upload new</h2>
         <input
           type="file"
           accept="image/png,image/jpeg"
@@ -66,11 +66,11 @@ export function ProfileSignaturePage() {
 
         {previewUrl && (
           <div className="mt-3">
-            <p className="text-xs text-gray-500">Preview:</p>
+            <p className="text-xs text-muted-foreground">Preview:</p>
             <img
               src={previewUrl}
               alt="Preview"
-              className="mt-1 max-h-24 rounded border border-gray-200"
+              className="mt-1 max-h-24 rounded border border-border"
             />
           </div>
         )}

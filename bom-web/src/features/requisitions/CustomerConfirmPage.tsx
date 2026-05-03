@@ -57,26 +57,26 @@ export function CustomerConfirmPage() {
   return (
     <div className="mx-auto max-w-4xl p-6">
       <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-semibold text-gray-900">{req.refNo}</h1>
+        <h1 className="text-2xl font-semibold text-foreground">{req.refNo}</h1>
         <V3StatusBadge status={req.status} />
       </div>
-      <p className="mt-1 text-sm text-gray-500">
+      <p className="mt-1 text-sm text-muted-foreground">
         Customer: {req.customer.name} · Currency: {req.currencyCode}
       </p>
 
-      <h2 className="mt-6 text-lg font-semibold text-gray-900">MD-Priced Quotation</h2>
+      <h2 className="mt-6 text-lg font-semibold text-foreground">MD-Priced Quotation</h2>
       <table className="mt-2 w-full text-sm">
-        <thead className="bg-gray-50">
+        <thead className="bg-muted">
           <tr>
-            <th className="px-3 py-2 text-left font-medium text-gray-700">Finished Good</th>
-            <th className="px-3 py-2 text-right font-medium text-gray-700">Qty (KG)</th>
-            <th className="px-3 py-2 text-right font-medium text-gray-700">
+            <th className="px-3 py-2 text-left font-medium text-foreground">Finished Good</th>
+            <th className="px-3 py-2 text-right font-medium text-foreground">Qty (KG)</th>
+            <th className="px-3 py-2 text-right font-medium text-foreground">
               Price/KG ({req.currencyCode})
             </th>
-            <th className="px-3 py-2 text-right font-medium text-gray-700">Total (AED)</th>
+            <th className="px-3 py-2 text-right font-medium text-foreground">Total (AED)</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-border">
           {req.finishedGoods.map((fg) => {
             const priced = req.finalPrice?.perFg.find(
               (p) => p.requisitionItemId === fg.id,
@@ -101,8 +101,8 @@ export function CustomerConfirmPage() {
         </tbody>
         {req.finalPrice ? (
           <tfoot>
-            <tr className="border-t-2 border-gray-300">
-              <td colSpan={3} className="px-3 py-3 text-right text-sm font-bold text-gray-900">
+            <tr className="border-t-2 border-border">
+              <td colSpan={3} className="px-3 py-3 text-right text-sm font-bold text-foreground">
                 GRAND TOTAL
               </td>
               <td className="px-3 py-3 text-right text-base font-bold text-blue-700">
@@ -116,7 +116,7 @@ export function CustomerConfirmPage() {
         ) : null}
       </table>
 
-      <h2 className="mt-8 text-lg font-semibold text-gray-900">Customer feedback</h2>
+      <h2 className="mt-8 text-lg font-semibold text-foreground">Customer feedback</h2>
       <Textarea
         value={feedback}
         onChange={(e) => setFeedback(e.target.value)}

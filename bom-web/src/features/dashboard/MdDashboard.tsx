@@ -178,7 +178,7 @@ interface KpiProps {
 const accentMap = {
   blue: "bg-blue-50 border-blue-200 text-blue-900",
   orange: "bg-orange-50 border-orange-200 text-orange-900",
-  slate: "bg-slate-50 border-slate-200 text-slate-900",
+  slate: "bg-muted border-border text-foreground",
   green: "bg-emerald-50 border-emerald-200 text-emerald-900",
 } as const;
 

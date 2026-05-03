@@ -58,7 +58,7 @@ export function SignedQuotationViewer({ requisitionId, refNo }: Props) {
           <iframe
             src={pdf.data}
             title={`${refNo} signed quotation`}
-            className="h-[70vh] w-full rounded border border-gray-200"
+            className="h-[70vh] w-full rounded border border-border"
           />
         ) : null}
       </CardContent>

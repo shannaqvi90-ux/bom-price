@@ -161,13 +161,13 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
   return (
     <div className="mx-auto max-w-5xl p-6">
       <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-semibold text-gray-900">{req.refNo}</h1>
+        <h1 className="text-2xl font-semibold text-foreground">{req.refNo}</h1>
         <V3StatusBadge status={req.status} />
       </div>
-      <p className="mt-1 text-sm text-gray-500">
+      <p className="mt-1 text-sm text-muted-foreground">
         Customer: {req.customer.name} · Quote currency: {req.currencyCode}
       </p>
-      <p className="mt-2 text-sm text-gray-600">
+      <p className="mt-2 text-sm text-muted-foreground">
         Enter cost per KG for each raw material + per-FG cost components. RM costs may be in any
         currency; FOH / Transport / Commission are AED. Save persists data; Submit also forwards to
         MD for margin pricing.
@@ -177,18 +177,18 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
         const ref = fgById[fg.requisitionItemId];
         if (!ref) return null;
         return (
-          <section key={fg.requisitionItemId} className="mt-8 rounded-md border border-gray-200 p-4">
+          <section key={fg.requisitionItemId} className="mt-8 rounded-md border border-border p-4">
             <header className="mb-3 flex items-baseline gap-3">
-              <h2 className="text-lg font-semibold text-gray-900">{ref.item.description}</h2>
-              <span className="text-xs text-gray-500">
+              <h2 className="text-lg font-semibold text-foreground">{ref.item.description}</h2>
+              <span className="text-xs text-muted-foreground">
                 ({ref.item.code}, {ref.expectedQty.toLocaleString()} KG
                 {ref.hasPrinting ? ", printed" : ""})
               </span>
             </header>
 
-            <h3 className="text-sm font-medium text-gray-700">Raw materials</h3>
+            <h3 className="text-sm font-medium text-foreground">Raw materials</h3>
             <table className="mt-1 w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs text-gray-600">
+              <thead className="bg-muted text-left text-xs text-muted-foreground">
                 <tr>
                   <th className="px-3 py-1.5">RM</th>
                   <th className="px-3 py-1.5 text-right">Qty/KG</th>
@@ -198,14 +198,14 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
                   <th className="px-3 py-1.5 text-right">Wastage %</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border">
                 {(ref.bomLines ?? []).map((bl, blIdx) => {
                   const rc = fg.rawMaterialCosts[blIdx];
                   if (!rc) return null;
                   return (
                     <tr key={bl.id}>
                       <td className="px-3 py-1.5">
-                        {bl.item.description} <span className="text-xs text-gray-500">({bl.item.code})</span>
+                        {bl.item.description} <span className="text-xs text-muted-foreground">({bl.item.code})</span>
                       </td>
                       <td className="px-3 py-1.5 text-right">{bl.qtyPerKg}</td>
                       <td className="px-3 py-1.5">{bl.micron ?? "—"}</td>
@@ -276,7 +276,7 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
               {ref.hasPrinting && (
                 <>
                   <label className="block">
-                    <span className="text-xs text-gray-600">Printing cost/KG</span>
+                    <span className="text-xs text-muted-foreground">Printing cost/KG</span>
                     <Input
                       type="number"
                       step="0.0001"
@@ -292,7 +292,7 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
                     />
                   </label>
                   <label className="block">
-                    <span className="text-xs text-gray-600">Printing currency</span>
+                    <span className="text-xs text-muted-foreground">Printing currency</span>
                     <Select
                       value={fg.printingCostCurrency}
                       onChange={(e) =>
@@ -314,7 +314,7 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
                 </>
               )}
               <label className="block">
-                <span className="text-xs text-gray-600">FOH/KG (AED)</span>
+                <span className="text-xs text-muted-foreground">FOH/KG (AED)</span>
                 <Input
                   type="number"
                   step="0.0001"
@@ -330,7 +330,7 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
                 />
               </label>
               <label className="block">
-                <span className="text-xs text-gray-600">Transport/KG (AED)</span>
+                <span className="text-xs text-muted-foreground">Transport/KG (AED)</span>
                 <Input
                   type="number"
                   step="0.0001"
@@ -346,7 +346,7 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
                 />
               </label>
               <label className="block">
-                <span className="text-xs text-gray-600">Commission/KG (AED)</span>
+                <span className="text-xs text-muted-foreground">Commission/KG (AED)</span>
                 <Input
                   type="number"
                   step="0.0001"
@@ -369,14 +369,14 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
       <div className="mt-6 flex justify-end gap-3">
         <button
           onClick={() => navigate(-1)}
-          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
         >
           Cancel
         </button>
         <button
           onClick={onSave}
           disabled={saveCost.isPending}
-          className="rounded-md border border-blue-600 bg-white px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+          className="rounded-md border border-blue-600 bg-card px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50"
         >
           Save
         </button>

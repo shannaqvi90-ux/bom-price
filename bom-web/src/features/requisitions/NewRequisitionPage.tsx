@@ -131,11 +131,11 @@ export function NewRequisitionPage() {
 
   return (
     <div className="mx-auto max-w-5xl p-6">
-      <h1 className="text-2xl font-semibold text-gray-900">New Requisition</h1>
+      <h1 className="text-2xl font-semibold text-foreground">New Requisition</h1>
 
       <div className="mt-6 grid grid-cols-2 gap-4">
         <label className="block">
-          <span className="text-sm font-medium text-gray-700">Customer</span>
+          <span className="text-sm font-medium text-foreground">Customer</span>
           <div className="mt-1 flex gap-2">
             <Select
               aria-label="customer"
@@ -161,7 +161,7 @@ export function NewRequisitionPage() {
         </label>
 
         <label className="block">
-          <span className="text-sm font-medium text-gray-700">Currency</span>
+          <span className="text-sm font-medium text-foreground">Currency</span>
           <Select
             aria-label="currency"
             value={currency}
@@ -177,7 +177,7 @@ export function NewRequisitionPage() {
         </label>
 
         <label className="block col-span-2">
-          <span className="text-sm font-medium text-gray-700">
+          <span className="text-sm font-medium text-foreground">
             Reference (optional)
           </span>
           <Input
@@ -189,15 +189,15 @@ export function NewRequisitionPage() {
         </label>
       </div>
 
-      <h2 className="mt-8 text-lg font-semibold text-gray-900">Finished Goods</h2>
+      <h2 className="mt-8 text-lg font-semibold text-foreground">Finished Goods</h2>
       {fgs.length === 0 && (
-        <p className="mt-2 text-sm text-gray-500">No finished goods added yet.</p>
+        <p className="mt-2 text-sm text-muted-foreground">No finished goods added yet.</p>
       )}
       <div className="mt-3 space-y-4">
         {fgs.map((fg, idx) => (
-          <div key={idx} className="rounded-lg border border-gray-200 p-4">
+          <div key={idx} className="rounded-lg border border-border p-4">
             <div className="flex justify-between">
-              <h3 className="font-medium text-gray-900">FG #{idx + 1}</h3>
+              <h3 className="font-medium text-foreground">FG #{idx + 1}</h3>
               <button
                 type="button"
                 onClick={() => removeFg(idx)}
@@ -209,7 +209,7 @@ export function NewRequisitionPage() {
 
             <div className="mt-3 grid grid-cols-3 gap-3">
               <label className="block col-span-2">
-                <span className="text-sm font-medium text-gray-700">FG Item</span>
+                <span className="text-sm font-medium text-foreground">FG Item</span>
                 <div className="mt-1 flex gap-2">
                   <Select
                     aria-label="fg item"
@@ -240,7 +240,7 @@ export function NewRequisitionPage() {
               </label>
 
               <label className="block">
-                <span className="text-sm font-medium text-gray-700">
+                <span className="text-sm font-medium text-foreground">
                   Quantity (KG)
                 </span>
                 <Input
@@ -263,10 +263,10 @@ export function NewRequisitionPage() {
                 checked={fg.printing}
                 onChange={(e) => updateFg(idx, { printing: e.target.checked })}
               />
-              <span className="text-sm text-gray-700">Printing required</span>
+              <span className="text-sm text-foreground">Printing required</span>
             </label>
 
-            <h4 className="mt-4 text-sm font-medium text-gray-700">BOM Recipe</h4>
+            <h4 className="mt-4 text-sm font-medium text-foreground">BOM Recipe</h4>
             <div className="mt-2">
               <BomEditorTable
                 lines={fg.bomLines}
@@ -284,7 +284,7 @@ export function NewRequisitionPage() {
         </button>
       </div>
 
-      <h2 className="mt-8 text-lg font-semibold text-gray-900">Notes</h2>
+      <h2 className="mt-8 text-lg font-semibold text-foreground">Notes</h2>
       <Textarea
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
@@ -296,7 +296,7 @@ export function NewRequisitionPage() {
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
         >
           Cancel
         </button>
@@ -304,7 +304,7 @@ export function NewRequisitionPage() {
           type="button"
           onClick={() => onSave(false)}
           disabled={createReq.isPending}
-          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50"
         >
           Save Draft
         </button>

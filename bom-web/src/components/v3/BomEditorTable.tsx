@@ -44,15 +44,15 @@ export function BomEditorTable({ lines, onChange, readOnly = false }: Props) {
   return (
     <div className="space-y-2">
       <table className="w-full text-sm">
-        <thead className="bg-gray-50">
+        <thead className="bg-muted">
           <tr>
-            <th className="px-2 py-1 text-left font-medium text-gray-700">Item</th>
-            <th className="px-2 py-1 text-left font-medium text-gray-700">Qty/KG</th>
-            <th className="px-2 py-1 text-left font-medium text-gray-700">Micron</th>
+            <th className="px-2 py-1 text-left font-medium text-foreground">Item</th>
+            <th className="px-2 py-1 text-left font-medium text-foreground">Qty/KG</th>
+            <th className="px-2 py-1 text-left font-medium text-foreground">Micron</th>
             {!readOnly && <th />}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-border">
           {lines.map((line, idx) => {
             const item = itemMap.get(line.itemId);
             return (
@@ -125,7 +125,7 @@ export function BomEditorTable({ lines, onChange, readOnly = false }: Props) {
           <button
             type="button"
             onClick={addLine}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
           >
             + Add Raw Material
           </button>

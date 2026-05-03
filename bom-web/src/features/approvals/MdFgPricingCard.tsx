@@ -21,34 +21,34 @@ export function MdFgPricingCard({
   const costPerKg = costs?.totalCostPerKg ?? 0;
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-xs font-bold uppercase tracking-wider text-gray-500">
+          <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
             FG {index + 1}
           </div>
-          <div className="mt-1 text-base font-semibold text-gray-900">
+          <div className="mt-1 text-base font-semibold text-foreground">
             {fg.item.description}
           </div>
-          <div className="mt-0.5 text-xs text-gray-500">
+          <div className="mt-0.5 text-xs text-muted-foreground">
             {fg.item.code} · {fg.expectedQty.toLocaleString()} KG
           </div>
         </div>
         <div className="text-right">
-          <div className="text-xs text-gray-500">Cost/KG</div>
-          <div className="text-lg font-semibold text-gray-900">
+          <div className="text-xs text-muted-foreground">Cost/KG</div>
+          <div className="text-lg font-semibold text-foreground">
             {currencyCode} {costPerKg.toFixed(2)}
           </div>
         </div>
       </div>
 
       {fg.bomLines && fg.bomLines.length > 0 ? (
-        <details className="mt-3 rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
-          <summary className="cursor-pointer text-xs font-medium text-gray-600">
+        <details className="mt-3 rounded-md border border-border bg-muted px-3 py-2">
+          <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
             BOM lines ({fg.bomLines.length})
           </summary>
           <table className="mt-2 w-full text-xs">
-            <thead className="text-gray-500">
+            <thead className="text-muted-foreground">
               <tr>
                 <th className="px-1 py-1 text-left font-medium">Raw Material</th>
                 <th className="px-1 py-1 text-right font-medium">Qty/KG</th>
@@ -57,7 +57,7 @@ export function MdFgPricingCard({
                 <th className="px-1 py-1 text-right font-medium">Total/KG</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-border">
               {fg.bomLines.map((line) => {
                 const lineCost = costs?.lines.find((l) => l.bomLineId === line.id);
                 const wastageMult =
@@ -70,21 +70,21 @@ export function MdFgPricingCard({
                     : null;
                 return (
                   <tr key={line.id}>
-                    <td className="px-1 py-1 text-gray-800">{line.item.description}</td>
-                    <td className="px-1 py-1 text-right text-gray-700">
+                    <td className="px-1 py-1 text-foreground">{line.item.description}</td>
+                    <td className="px-1 py-1 text-right text-foreground">
                       {line.qtyPerKg.toFixed(4)}
                     </td>
-                    <td className="px-1 py-1 text-right text-gray-700">
+                    <td className="px-1 py-1 text-right text-foreground">
                       {lineCost?.wastagePercent != null
                         ? `${lineCost.wastagePercent.toFixed(2)}%`
                         : "—"}
                     </td>
-                    <td className="px-1 py-1 text-right text-gray-700">
+                    <td className="px-1 py-1 text-right text-foreground">
                       {lineCost?.purchaseValuePerKg != null
                         ? `${lineCost.purchaseCurrency ?? ""} ${lineCost.purchaseValuePerKg.toFixed(2)}`
                         : "—"}
                     </td>
-                    <td className="px-1 py-1 text-right font-medium text-gray-900">
+                    <td className="px-1 py-1 text-right font-medium text-foreground">
                       {lineTotal != null
                         ? `${lineCost?.purchaseCurrency ?? currencyCode} ${lineTotal.toFixed(2)}`
                         : "—"}
@@ -95,7 +95,7 @@ export function MdFgPricingCard({
             </tbody>
           </table>
           {costs ? (
-            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-gray-200 pt-2 text-xs text-gray-600">
+            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
               {costs.printingCostPerKg != null ? (
                 <div className="flex justify-between">
                   <span>Printing/KG</span>
@@ -156,14 +156,14 @@ export function MdFgPricingCard({
       {livePerFg ? (
         <div className="mt-2 flex items-center justify-between rounded-md bg-emerald-50 px-3 py-2 text-sm">
           <div>
-            <span className="text-gray-700">Sale/KG</span>{" "}
-            <span className="font-semibold text-gray-900">
+            <span className="text-foreground">Sale/KG</span>{" "}
+            <span className="font-semibold text-foreground">
               {currencyCode} {livePerFg.salePerKg.toFixed(2)}
             </span>
           </div>
           <div>
-            <span className="text-gray-700">Total</span>{" "}
-            <span className="font-semibold text-gray-900">
+            <span className="text-foreground">Total</span>{" "}
+            <span className="font-semibold text-foreground">
               {currencyCode}{" "}
               {livePerFg.totalAed.toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </span>

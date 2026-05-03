@@ -419,6 +419,9 @@ export interface V3BomLine {
 }
 
 export interface V3BomCost {
+  // Sum of (per-line cost × qty × wastage-multiplier) + printing + FOH +
+  // transport + commission, all in quote currency. Computed + persisted by
+  // the costing endpoint; surfaced here for the MD pricing view.
   totalCostPerKg: number;
   printingCostPerKg: number | null;
   printingCostCurrency: string | null;

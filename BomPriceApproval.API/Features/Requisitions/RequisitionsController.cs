@@ -208,6 +208,7 @@ public class RequisitionsController(
                 .ToList();
 
             V3BomCostDto? costs = cost is null ? null : new V3BomCostDto(
+                cost.TotalCostPerKg,
                 cost.PrintingCostPerKg,
                 cost.PrintingCostCurrency,
                 cost.FohPerKg,

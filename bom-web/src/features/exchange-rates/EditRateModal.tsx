@@ -100,8 +100,19 @@ export function EditRateModal({ open, rate, onClose }: Props) {
 
         {update.isError && (
           <p className="text-sm text-destructive">
-            {(update.error as { response?: { data?: { message?: string } } })?.response
-              ?.data?.message ?? "Failed to save"}
+            {(() => {
+              const err = update.error as {
+                response?: { data?: { detail?: string; title?: string; message?: string } };
+                message?: string;
+              };
+              return (
+                err?.response?.data?.detail ??
+                err?.response?.data?.title ??
+                err?.response?.data?.message ??
+                err?.message ??
+                "Failed to save"
+              );
+            })()}
           </p>
         )}
 

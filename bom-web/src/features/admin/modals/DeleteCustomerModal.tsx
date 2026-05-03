@@ -49,19 +49,19 @@ export function DeleteCustomerModal({ customer, onClose }: Props) {
 
   return (
     <Dialog open title={`Delete customer ${customer.code}?`} onClose={onClose}>
-      <p className="text-sm text-red-700 mb-3">
+      <p className="text-sm text-red-700 mb-3 dark:text-red-300">
         This will permanently anonymize <strong>{customer.name}</strong> and hide it from all
         listings. Historical requisitions will still reference the (now-anonymized) record. PII
         (name / email / phone / address) will be erased. This cannot be undone.
       </p>
 
       {blocked && (
-        <div className="mb-4 rounded border border-red-300 bg-red-50 p-3 text-sm">
-          <p className="font-medium text-red-800">{blocked.error}</p>
-          <p className="mt-1 text-red-700">
+        <div className="mb-4 rounded border border-red-300 bg-red-50 p-3 text-sm dark:border-red-800/60 dark:bg-red-900/30">
+          <p className="font-medium text-red-800 dark:text-red-300">{blocked.error}</p>
+          <p className="mt-1 text-red-700 dark:text-red-300">
             Blocking requisition IDs: {blocked.blockingRequisitions.join(", ")}
           </p>
-          <p className="mt-1 text-xs text-red-600">
+          <p className="mt-1 text-xs text-red-600 dark:text-red-300">
             Resolve (approve / reject / hard-delete) those requisitions before deleting this
             customer.
           </p>

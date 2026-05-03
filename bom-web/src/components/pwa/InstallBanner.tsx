@@ -9,13 +9,13 @@ export function InstallBanner() {
   if (!canPromptInstall || dismissed) return null;
 
   return (
-    <div className="fixed top-3 right-3 z-40 flex items-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-sm text-white shadow-lg">
+    <div className="fixed top-3 right-3 z-40 flex items-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-sm text-white shadow-lg dark:bg-blue-800">
       <Download className="h-4 w-4" />
       <span>Install FPF Quotations</span>
       <button
         type="button"
         onClick={promptInstall}
-        className="rounded bg-white px-2 py-0.5 text-xs font-medium text-blue-700"
+        className="rounded bg-card px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-300"
       >
         Install
       </button>

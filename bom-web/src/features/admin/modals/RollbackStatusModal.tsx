@@ -19,7 +19,7 @@ export function RollbackStatusModal({ requisition, onClose }: Props) {
   if (!target) {
     return (
       <Dialog open title={`Rollback ${requisition.refNo}`} onClose={onClose}>
-        <p className="text-sm text-gray-700">
+        <p className="text-sm text-foreground">
           No rollback target available for status {requisition.status}.
         </p>
         <div className="mt-4 flex justify-end">

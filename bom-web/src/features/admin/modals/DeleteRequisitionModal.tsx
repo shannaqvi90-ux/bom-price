@@ -26,7 +26,7 @@ export function DeleteRequisitionModal({ requisition, onClose }: Props) {
 
   return (
     <Dialog open title={`Delete requisition ${requisition.refNo}?`} onClose={onClose}>
-      <p className="text-sm text-red-700 mb-4">
+      <p className="text-sm text-red-700 mb-4 dark:text-red-300">
         This will permanently delete the requisition and all related BOM, costing, and approval
         data. This cannot be undone.
       </p>

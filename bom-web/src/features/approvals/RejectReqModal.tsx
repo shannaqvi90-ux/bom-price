@@ -50,18 +50,18 @@ export function RejectReqModal({ requisitionId, refNo, open, onClose, onRejected
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl"
+        className="w-full max-w-md rounded-lg bg-card p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="reject-modal-title" className="text-lg font-semibold text-gray-900">
+        <h2 id="reject-modal-title" className="text-lg font-semibold text-foreground">
           Reject {refNo}
         </h2>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           Provide a reason. The req moves to Rejected and the sales person is notified.
         </p>
 
         <label className="mt-4 block">
-          <span className="text-xs font-semibold uppercase tracking-wider text-gray-600">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Reason
           </span>
           <Textarea
@@ -75,7 +75,7 @@ export function RejectReqModal({ requisitionId, refNo, open, onClose, onRejected
         </label>
 
         {error ? (
-          <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800/60 dark:bg-red-900/30 dark:text-red-300">
             {error}
           </div>
         ) : null}
@@ -84,7 +84,7 @@ export function RejectReqModal({ requisitionId, refNo, open, onClose, onRejected
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
           >
             Cancel
           </button>

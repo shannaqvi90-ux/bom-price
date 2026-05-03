@@ -88,7 +88,7 @@ export function MdListPage() {
         <h1 className="text-2xl font-semibold tracking-tight">My Requisitions</h1>
       </div>
 
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-border">
         {VALID_TABS.map((t) => {
           const active = t === tab;
           return (
@@ -98,16 +98,16 @@ export function MdListPage() {
               onClick={() => setTab(t)}
               className={`relative px-4 py-2 text-sm font-medium transition ${
                 active
-                  ? "text-blue-700"
-                  : "text-gray-600 hover:text-gray-900"
+                  ? "text-blue-700 dark:text-blue-300"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {TAB_LABELS[t]}
               <span
                 className={`ml-2 rounded-full px-2 py-0.5 text-xs font-semibold ${
                   active
-                    ? "bg-blue-100 text-blue-800"
-                    : "bg-gray-100 text-gray-700"
+                    ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
+                    : "bg-muted text-foreground"
                 }`}
               >
                 {counts[t]}
@@ -127,7 +127,7 @@ export function MdListPage() {
             data={filtered}
             isLoading={isLoading}
             emptyState={
-              <div className="px-6 py-10 text-center text-sm text-gray-500">
+              <div className="px-6 py-10 text-center text-sm text-muted-foreground">
                 {emptyHintFor(tab)}
               </div>
             }

@@ -44,15 +44,15 @@ export function BomEditorTable({ lines, onChange, readOnly = false }: Props) {
   return (
     <div className="space-y-2">
       <table className="w-full text-sm">
-        <thead className="bg-gray-50">
+        <thead className="bg-muted">
           <tr>
-            <th className="px-2 py-1 text-left font-medium text-gray-700">Item</th>
-            <th className="px-2 py-1 text-left font-medium text-gray-700">Qty/KG</th>
-            <th className="px-2 py-1 text-left font-medium text-gray-700">Micron</th>
+            <th className="px-2 py-1 text-left font-medium text-foreground">Item</th>
+            <th className="px-2 py-1 text-left font-medium text-foreground">Qty/KG</th>
+            <th className="px-2 py-1 text-left font-medium text-foreground">Micron</th>
             {!readOnly && <th />}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-border">
           {lines.map((line, idx) => {
             const item = itemMap.get(line.itemId);
             return (
@@ -108,7 +108,7 @@ export function BomEditorTable({ lines, onChange, readOnly = false }: Props) {
                     <button
                       type="button"
                       onClick={() => removeLine(idx)}
-                      className="text-xs text-red-600 hover:text-red-700"
+                      className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                     >
                       Remove
                     </button>
@@ -125,14 +125,14 @@ export function BomEditorTable({ lines, onChange, readOnly = false }: Props) {
           <button
             type="button"
             onClick={addLine}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
           >
             + Add Raw Material
           </button>
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+            className="rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-800/60 dark:bg-blue-900/30 dark:text-blue-300"
           >
             + Create new RM
           </button>

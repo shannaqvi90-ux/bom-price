@@ -42,19 +42,19 @@ export function CreateRawMaterialModal({ open, onClose, onCreated }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-        <h2 className="text-lg font-semibold text-gray-900">Create Raw Material</h2>
-        <p className="mt-1 text-xs text-gray-500">Code auto-generated (RM-XXXX). Branch: Alain.</p>
+      <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-xl">
+        <h2 className="text-lg font-semibold text-foreground">Create Raw Material</h2>
+        <p className="mt-1 text-xs text-muted-foreground">Code auto-generated (RM-XXXX). Branch: Alain.</p>
         <form onSubmit={onSubmit} className="mt-4 space-y-3">
           <label className="block">
-            <span className="text-sm font-medium text-gray-700">Description</span>
+            <span className="text-sm font-medium text-foreground">Description</span>
             <Input value={description} onChange={(e) => setDescription(e.target.value)} aria-label="description" autoFocus
               className="mt-1" />
           </label>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose}
-              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+              className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted">Cancel</button>
             <button type="submit" disabled={createItem.isPending}
               className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
               {createItem.isPending ? "Creating…" : "Create"}

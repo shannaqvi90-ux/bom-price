@@ -48,28 +48,28 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-        <h2 className="text-lg font-semibold text-gray-900">Create Customer</h2>
-        <p className="mt-1 text-xs text-gray-500">Code is auto-generated as CUST-XXXX on save.</p>
+      <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-xl">
+        <h2 className="text-lg font-semibold text-foreground">Create Customer</h2>
+        <p className="mt-1 text-xs text-muted-foreground">Code is auto-generated as CUST-XXXX on save.</p>
 
         <form onSubmit={onSubmit} className="mt-4 space-y-3">
           <label className="block">
-            <span className="text-sm font-medium text-gray-700">Name</span>
+            <span className="text-sm font-medium text-foreground">Name</span>
             <Input value={name} onChange={(e) => setName(e.target.value)}
               className="mt-1" aria-label="name" autoFocus />
           </label>
           <label className="block">
-            <span className="text-sm font-medium text-gray-700">Email</span>
+            <span className="text-sm font-medium text-foreground">Email</span>
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
               className="mt-1" aria-label="email" />
           </label>
           <label className="block">
-            <span className="text-sm font-medium text-gray-700">Phone</span>
+            <span className="text-sm font-medium text-foreground">Phone</span>
             <Input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)}
               className="mt-1" aria-label="phone" />
           </label>
           <label className="block">
-            <span className="text-sm font-medium text-gray-700">Address</span>
+            <span className="text-sm font-medium text-foreground">Address</span>
             <Input value={address} onChange={(e) => setAddress(e.target.value)}
               className="mt-1" aria-label="address" />
           </label>
@@ -78,7 +78,7 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
 
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose}
-              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted">
               Cancel
             </button>
             <button type="submit" disabled={createCustomer.isPending}

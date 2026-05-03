@@ -8,15 +8,15 @@ export function InstallModal() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-2xl">
         <div className="mb-4 flex items-center gap-3">
-          <div className="rounded-xl bg-blue-700 p-2">
+          <div className="rounded-xl bg-blue-700 p-2 dark:bg-blue-800">
             <img src="/apple-touch-icon-180x180.png" alt="" className="h-10 w-10 rounded-lg" />
           </div>
           <h2 className="text-xl font-semibold">Install FPF Quotations</h2>
         </div>
 
-        <p className="mb-4 text-sm text-gray-600">
+        <p className="mb-4 text-sm text-muted-foreground">
           Get the full app experience on your home screen — faster access, notifications, and offline support.
         </p>
 
@@ -35,7 +35,7 @@ export function InstallModal() {
         <button
           type="button"
           onClick={dismissIosModal}
-          className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50"
+          className="w-full rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
         >
           I'll do it later
         </button>
@@ -47,10 +47,10 @@ export function InstallModal() {
 function Step({ n, icon, children }: { n: number; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-3">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
         {n}
       </div>
-      <div className="flex flex-1 items-center gap-2 pt-0.5 text-sm text-gray-800">
+      <div className="flex flex-1 items-center gap-2 pt-0.5 text-sm text-foreground">
         {icon} <span>{children}</span>
       </div>
     </div>

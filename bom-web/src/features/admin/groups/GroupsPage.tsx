@@ -207,7 +207,7 @@ export default function GroupsPage() {
         header: "Status",
         cell: (i) =>
           (i.getValue() as boolean) ? (
-            <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+            <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-emerald-900/30 dark:text-emerald-300">
               Active
             </span>
           ) : (

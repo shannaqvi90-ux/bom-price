@@ -59,25 +59,25 @@ function MdMarginPageBody({ req, reqId, setMargin, navigate }: BodyProps) {
   return (
     <div className="mx-auto max-w-4xl p-6">
       <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-semibold text-gray-900">{req.refNo}</h1>
+        <h1 className="text-2xl font-semibold text-foreground">{req.refNo}</h1>
         <V3StatusBadge status={req.status} />
       </div>
-      <p className="mt-1 text-sm text-gray-500">
+      <p className="mt-1 text-sm text-muted-foreground">
         Customer: {req.customer.name} · Currency: {req.currencyCode}
       </p>
 
       {req.previousMargin ? (
-        <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+        <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/60 dark:bg-amber-900/30">
           <div className="flex items-baseline justify-between">
-            <h3 className="text-sm font-semibold text-amber-900">
+            <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-300">
               Previous attempt — rejected by customer
             </h3>
-            <span className="text-xs text-amber-700">
+            <span className="text-xs text-amber-700 dark:text-amber-300">
               {new Date(req.previousMargin.supersededAt).toLocaleDateString()}
             </span>
           </div>
           <table className="mt-2 w-full text-xs">
-            <thead className="text-amber-800">
+            <thead className="text-amber-800 dark:text-amber-300">
               <tr>
                 <th className="px-1 py-1 text-left font-medium">Finished Good</th>
                 <th className="px-1 py-1 text-right font-medium">
@@ -97,11 +97,11 @@ function MdMarginPageBody({ req, reqId, setMargin, navigate }: BodyProps) {
                 const prevSale = prev != null ? cost + prev.marginPerKg : null;
                 return (
                   <tr key={fg.id}>
-                    <td className="px-1 py-1 text-amber-900">{fg.item.description}</td>
-                    <td className="px-1 py-1 text-right text-amber-900">
+                    <td className="px-1 py-1 text-amber-900 dark:text-amber-300">{fg.item.description}</td>
+                    <td className="px-1 py-1 text-right text-amber-900 dark:text-amber-300">
                       {prev != null ? prev.marginPerKg.toFixed(2) : "—"}
                     </td>
-                    <td className="px-1 py-1 text-right font-medium text-amber-900">
+                    <td className="px-1 py-1 text-right font-medium text-amber-900 dark:text-amber-300">
                       {prevSale != null ? prevSale.toFixed(2) : "—"}
                     </td>
                   </tr>
@@ -109,16 +109,16 @@ function MdMarginPageBody({ req, reqId, setMargin, navigate }: BodyProps) {
               })}
             </tbody>
           </table>
-          <p className="mt-2 text-xs text-amber-800">
+          <p className="mt-2 text-xs text-amber-800 dark:text-amber-300">
             Customer feedback recorded in Notes (above). Re-price below.
           </p>
         </div>
       ) : null}
 
-      <h2 className="mt-6 text-lg font-semibold text-gray-900">
+      <h2 className="mt-6 text-lg font-semibold text-foreground">
         Set Margin per FG
       </h2>
-      <p className="mt-1 text-sm text-gray-500">
+      <p className="mt-1 text-sm text-muted-foreground">
         Cost includes raw materials, FOH, transport, and commission. Expand each card to see BOM lines.
       </p>
 
@@ -139,7 +139,7 @@ function MdMarginPageBody({ req, reqId, setMargin, navigate }: BodyProps) {
       </div>
 
       <label className="mt-6 block">
-        <span className="text-sm font-medium text-gray-700">Notes (optional)</span>
+        <span className="text-sm font-medium text-foreground">Notes (optional)</span>
         <Textarea
           value={state.notes}
           onChange={(e) => state.setNotes(e.target.value)}
@@ -151,14 +151,14 @@ function MdMarginPageBody({ req, reqId, setMargin, navigate }: BodyProps) {
       <div className="mt-6 flex items-center justify-between gap-3">
         <button
           onClick={() => setRejectOpen(true)}
-          className="rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+          className="rounded-md border border-red-300 bg-card px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-800/60 dark:text-red-300 dark:hover:bg-red-900/30"
         >
           Reject
         </button>
         <div className="flex gap-3">
           <button
             onClick={() => navigate(-1)}
-            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
           >
             Cancel
           </button>

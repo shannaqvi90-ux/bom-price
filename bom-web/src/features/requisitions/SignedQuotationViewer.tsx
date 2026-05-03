@@ -51,14 +51,14 @@ export function SignedQuotationViewer({ requisitionId, refNo }: Props) {
             Loading PDF…
           </div>
         ) : pdf.isError ? (
-          <div className="flex h-[60vh] items-center justify-center text-sm text-red-700">
+          <div className="flex h-[60vh] items-center justify-center text-sm text-red-700 dark:text-red-300">
             Failed to load PDF.
           </div>
         ) : pdf.data ? (
           <iframe
             src={pdf.data}
             title={`${refNo} signed quotation`}
-            className="h-[70vh] w-full rounded border border-gray-200"
+            className="h-[70vh] w-full rounded border border-border"
           />
         ) : null}
       </CardContent>

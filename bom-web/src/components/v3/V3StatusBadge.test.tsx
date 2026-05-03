@@ -7,7 +7,7 @@ describe("V3StatusBadge", () => {
     render(<V3StatusBadge status="Draft" />);
     const badge = screen.getByText("Draft");
     expect(badge).toBeInTheDocument();
-    expect(badge.className).toMatch(/bg-gray-/);
+    expect(badge.className).toMatch(/bg-muted/);
   });
 
   it("renders Signed status with success styling", () => {

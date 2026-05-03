@@ -252,6 +252,34 @@ public class RequisitionsController(
                 finalPrice = FinalPriceComputer.Compute(q, approval);
         }
 
+        // Re-margin context: when a customer rejects a quote, RejectCustomer
+        // supersedes the active approval and flips status back to MdPricing.
+        // The MD then needs to see the previously priced margins to make an
+        // informed re-quote. Surface only the most-recently-superseded
+        // approval — older history is preserved in the DB but not useful inline.
+        V3PreviousMargin? previousMargin = null;
+        if (q.Status == RequisitionStatus.MdPricing)
+        {
+            var lastSuperseded = await db.QuotationApprovals
+                .Include(qa => qa.Items)
+                .Where(qa => qa.QuotationRequestId == id
+                          && qa.Stage == ApprovalStage.InitialPricing
+                          && qa.IsSuperseded
+                          && qa.SupersededAt != null)
+                .OrderByDescending(qa => qa.SupersededAt)
+                .FirstOrDefaultAsync();
+            if (lastSuperseded is not null && lastSuperseded.Items.Count > 0)
+            {
+                previousMargin = new V3PreviousMargin(
+                    lastSuperseded.SupersededAt!.Value,
+                    lastSuperseded.Items
+                        .Select(ai => new V3PreviousMarginItem(
+                            ai.RequisitionItemId,
+                            ai.MarginPerKg ?? 0m))
+                        .ToList());
+            }
+        }
+
         return Ok(new V3RequisitionDetail(
             q.Id,
             q.RefNo,
@@ -264,7 +292,8 @@ public class RequisitionsController(
             q.CancelReason,
             q.CancelledAt,
             q.CancelledByUserId,
-            finalPrice));
+            finalPrice,
+            previousMargin));
     }
 
     [HttpPost]

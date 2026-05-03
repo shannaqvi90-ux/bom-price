@@ -4,14 +4,22 @@ import { StatusBadge } from "./StatusBadge";
 import type { RequisitionStatus } from "@/types/api";
 
 const cases: Array<{ status: RequisitionStatus; label: string }> = [
+  // V3 statuses (current workflow):
   { status: "Draft", label: "Draft" },
+  { status: "Costing", label: "Costing" },
+  { status: "MdPricing", label: "MD Pricing" },
+  { status: "CustomerConfirm", label: "Customer Confirm" },
+  { status: "MdFinalSign", label: "MD Sign" },
+  { status: "Signed", label: "Signed" },
+  { status: "Cancelled", label: "Cancelled" },
+  { status: "Rejected", label: "Rejected" },
+  // Legacy V2.3 statuses (historical reqs):
   { status: "BomPending", label: "BOM Pending" },
   { status: "BomInProgress", label: "BOM In Progress" },
   { status: "CostingPending", label: "Costing Pending" },
   { status: "CostingInProgress", label: "Costing In Progress" },
   { status: "MdReview", label: "MD Review" },
   { status: "Approved", label: "Approved" },
-  { status: "Rejected", label: "Rejected" },
 ];
 
 describe("StatusBadge", () => {

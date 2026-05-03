@@ -28,6 +28,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<UserBranch> UserBranches => Set<UserBranch>();
     public DbSet<BranchChangeHistory> BranchChangeHistories => Set<BranchChangeHistory>();
     public DbSet<CodeCounter> CodeCounters => Set<CodeCounter>();
+    public DbSet<CompanySettings> CompanySettings => Set<CompanySettings>();
     public DbSet<SalesGroup> SalesGroups => Set<SalesGroup>();
     public DbSet<AdminAuditLog> AdminAuditLogs => Set<AdminAuditLog>();
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
@@ -38,6 +39,45 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             new Branch { Id = 1, Name = "Fujairah", IsActive = true },
             new Branch { Id = 2, Name = "Al Ain", IsActive = true }
         );
+
+        mb.Entity<CompanySettings>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).ValueGeneratedNever();
+            e.Property(s => s.CompanyName).IsRequired();
+            e.Property(s => s.Address).IsRequired();
+            e.Property(s => s.Telephone).IsRequired();
+            e.Property(s => s.Trn).IsRequired();
+            e.Property(s => s.Email).IsRequired();
+            e.Property(s => s.Website).IsRequired();
+            e.Property(s => s.TermsAndConditions).IsRequired();
+            e.Property(s => s.QuotationValidityDays).IsRequired();
+            e.HasOne(s => s.UpdatedByUser)
+             .WithMany()
+             .HasForeignKey(s => s.UpdatedByUserId)
+             .OnDelete(DeleteBehavior.SetNull);
+            e.HasData(new CompanySettings
+            {
+                Id = 1,
+                CompanyName = "FUJAIRAH PLASTIC FACTORY",
+                Address = "Fujairah, United Arab Emirates",
+                Telephone = "",
+                Trn = "",
+                Email = "info@fujairahplastic.com",
+                Website = "",
+                QuotationValidityDays = 30,
+                TermsAndConditions = string.Join("\n", new[]
+                {
+                    "This quotation is valid for 30 days from the date of issue.",
+                    "Prices are subject to change without prior notice after the validity period.",
+                    "Payment terms as per mutually agreed contract.",
+                    "Delivery: Ex-Works Fujairah unless otherwise agreed in writing.",
+                    "All disputes are subject to the jurisdiction of UAE courts."
+                }),
+                UpdatedAt = new DateTime(2026, 5, 3, 0, 0, 0, DateTimeKind.Utc),
+                UpdatedByUserId = null
+            });
+        });
 
         mb.Entity<QuotationRequest>()
             .Property(q => q.RefNo)

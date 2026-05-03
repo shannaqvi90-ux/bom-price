@@ -116,7 +116,18 @@ public record V3RequisitionDetail(
     int? CancelledByUserId,
     // V3 D-3 — final pricing summary, populated only when Status is MdFinalSign or Signed.
     // Null in earlier statuses; consumed by the MD mobile pricing screen.
-    V3FinalPrice? FinalPrice);
+    V3FinalPrice? FinalPrice,
+    // Set when the most recent prior approval was superseded (e.g. customer
+    // rejected → status flipped back to MdPricing). Lets the MD see what
+    // they previously priced vs what the customer pushed back on. Null when
+    // no prior approval has been superseded.
+    V3PreviousMargin? PreviousMargin);
+
+public record V3PreviousMargin(
+    DateTime SupersededAt,
+    List<V3PreviousMarginItem> Items);
+
+public record V3PreviousMarginItem(int RequisitionItemId, decimal MarginPerKg);
 
 public record V3CustomerSummary(int Id, string Name, string Code);
 

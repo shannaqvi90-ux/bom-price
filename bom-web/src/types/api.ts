@@ -475,11 +475,20 @@ export interface V3Requisition {
   finishedGoods: V3FinishedGood[];
   // Populated once MdPricing locks margins (PR #54). Null/omitted before that.
   finalPrice?: V3FinalPrice | null;
+  // Set when status is MdPricing AND a prior approval was superseded
+  // (e.g. customer rejected → re-margin loop). Lets the MD see what was
+  // previously priced before re-quoting. Null in all other paths.
+  previousMargin?: V3PreviousMargin | null;
   // Terminal-reason fields. Populated on Cancelled (admin C1) and on Rejected
   // (MD reject from MdPricing/MdReview). Field name is V3-Cancelled historical.
   cancelReason?: string | null;
   cancelledAt?: string | null;
   cancelledByUserId?: number | null;
+}
+
+export interface V3PreviousMargin {
+  supersededAt: string;
+  items: Array<{ requisitionItemId: number; marginPerKg: number }>;
 }
 
 export interface V3ApprovalItem {

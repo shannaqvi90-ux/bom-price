@@ -66,6 +66,55 @@ function MdMarginPageBody({ req, reqId, setMargin, navigate }: BodyProps) {
         Customer: {req.customer.name} · Currency: {req.currencyCode}
       </p>
 
+      {req.previousMargin ? (
+        <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-baseline justify-between">
+            <h3 className="text-sm font-semibold text-amber-900">
+              Previous attempt — rejected by customer
+            </h3>
+            <span className="text-xs text-amber-700">
+              {new Date(req.previousMargin.supersededAt).toLocaleDateString()}
+            </span>
+          </div>
+          <table className="mt-2 w-full text-xs">
+            <thead className="text-amber-800">
+              <tr>
+                <th className="px-1 py-1 text-left font-medium">Finished Good</th>
+                <th className="px-1 py-1 text-right font-medium">
+                  Prev Margin/KG ({req.currencyCode})
+                </th>
+                <th className="px-1 py-1 text-right font-medium">
+                  Prev Sale/KG ({req.currencyCode})
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {req.finishedGoods.map((fg) => {
+                const prev = req.previousMargin!.items.find(
+                  (p) => p.requisitionItemId === fg.id,
+                );
+                const cost = fg.costs?.totalCostPerKg ?? 0;
+                const prevSale = prev != null ? cost + prev.marginPerKg : null;
+                return (
+                  <tr key={fg.id}>
+                    <td className="px-1 py-1 text-amber-900">{fg.item.description}</td>
+                    <td className="px-1 py-1 text-right text-amber-900">
+                      {prev != null ? prev.marginPerKg.toFixed(2) : "—"}
+                    </td>
+                    <td className="px-1 py-1 text-right font-medium text-amber-900">
+                      {prevSale != null ? prevSale.toFixed(2) : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="mt-2 text-xs text-amber-800">
+            Customer feedback recorded in Notes (above). Re-price below.
+          </p>
+        </div>
+      ) : null}
+
       <h2 className="mt-6 text-lg font-semibold text-gray-900">
         Set Margin per FG
       </h2>

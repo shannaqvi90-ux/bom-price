@@ -16,6 +16,7 @@ import { CreateFinishedGoodModal } from "@/components/v3/CreateFinishedGoodModal
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
+import type { Item } from "@/types/api";
 
 interface FgCardState {
   itemId: number;
@@ -36,6 +37,14 @@ export function NewRequisitionPage() {
 
   const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
   const [createFgOpen, setCreateFgOpen] = useState(false);
+  // Tracks which FG card opened the "+ New FG" modal, so we can auto-select
+  // the freshly-created item back into that card on success.
+  const [creatingFgForIdx, setCreatingFgForIdx] = useState<number | null>(null);
+  // Holds FGs created in this session. Customer-implicit items (the default
+  // pool when a customer is selected) are sourced from historical reqs, so a
+  // brand-new FG won't appear there until at least one quote uses it. We
+  // merge these into the dropdown pool so the user sees what they just made.
+  const [recentlyCreatedFgs, setRecentlyCreatedFgs] = useState<Item[]>([]);
 
   const customers = useCustomers();
   const allFgs = useItems({ type: "FinishedGood" });
@@ -47,9 +56,15 @@ export function NewRequisitionPage() {
   // Q20: when customer selected, prefer their historical FGs; else allow
   // browsing all FGs (UX safety). Sales can still inline-create new FGs
   // via "+ New FG".
-  const fgItemPool = customerId
+  const baseFgPool = customerId
     ? (customerFgs.data ?? [])
     : (allFgs.data ?? []);
+  const fgItemPool = [
+    ...baseFgPool,
+    ...recentlyCreatedFgs.filter(
+      (rc) => !baseFgPool.some((p) => p.id === rc.id),
+    ),
+  ];
 
   const updateFg = (idx: number, patch: Partial<FgCardState>) =>
     setFgs((s) => s.map((fg, i) => (i === idx ? { ...fg, ...patch } : fg)));
@@ -213,7 +228,10 @@ export function NewRequisitionPage() {
                   </Select>
                   <button
                     type="button"
-                    onClick={() => setCreateFgOpen(true)}
+                    onClick={() => {
+                      setCreatingFgForIdx(idx);
+                      setCreateFgOpen(true);
+                    }}
                     className="rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"
                   >
                     + New FG
@@ -307,10 +325,23 @@ export function NewRequisitionPage() {
       />
       <CreateFinishedGoodModal
         open={createFgOpen}
-        onClose={() => setCreateFgOpen(false)}
-        onCreated={() => {
-          // Auto-refetch via mutation invalidation in useCreateItem.
-          // Future: also auto-set the new FG into the most-recent FG card.
+        onClose={() => {
+          setCreateFgOpen(false);
+          setCreatingFgForIdx(null);
+        }}
+        onCreated={(item) => {
+          // Make the new FG visible in the dropdown immediately. The
+          // customer-implicit-items query won't return this id until the req
+          // is saved + appears in customer history, so we hold the new item
+          // in local state and merge it into fgItemPool.
+          setRecentlyCreatedFgs((prev) =>
+            prev.some((p) => p.id === item.id) ? prev : [...prev, item],
+          );
+          // Auto-select on the FG card that triggered the modal.
+          if (creatingFgForIdx !== null) {
+            updateFg(creatingFgForIdx, { itemId: item.id });
+          }
+          setCreatingFgForIdx(null);
         }}
       />
     </div>

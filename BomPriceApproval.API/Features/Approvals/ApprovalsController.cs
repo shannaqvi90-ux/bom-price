@@ -170,7 +170,8 @@ public class ApprovalsController(
         try
         {
             await db.Entry(approval).Collection(a => a.Items).LoadAsync();
-            var pdf = pdfSvc.GenerateQuotation(req, approval);
+            // V2.3 Approve flow — no signer (final-sign step is V3-only).
+            var pdf = await pdfSvc.GenerateQuotationAsync(req, approval, signer: null);
 
             await notificationSvc.SendAsync(req.SalesPersonId,
                 $"Quotation approved! Download ready: {req.RefNo}", req.Id, "QuotationRequest");
@@ -302,7 +303,15 @@ public class ApprovalsController(
         var currentApproval = req.Approvals.FirstOrDefault(a => !a.IsSuperseded);
         if (currentApproval is null || !currentApproval.IsApproved) return NotFound();
 
-        var pdf = pdfSvc.GenerateQuotation(req, currentApproval);
+        // For Signed reqs, look up the MD signer (with SignatureImage byte[])
+        // so the PDF embeds their actual signature image. For pre-Signed
+        // statuses (Approved, MdReview legacy), signer is null and the PDF
+        // shows "(signature pending)" instead.
+        User? signer = null;
+        if (req.Status == RequisitionStatus.Signed)
+            signer = await db.Users.FindAsync(currentApproval.ApprovedByUserId);
+
+        var pdf = await pdfSvc.GenerateQuotationAsync(req, currentApproval, signer);
         return File(pdf, "application/pdf", $"{req.RefNo}-Quotation.pdf");
     }
 
@@ -610,25 +619,24 @@ public class ApprovalsController(
         logger.LogInformation("[Audit] V3 final-sign {RequisitionId} {RefNo} ApprovalId={ApprovalId} SignedByUserId={UserId}",
             req.Id, req.RefNo, current.Id, CurrentUserId);
 
-        // Generate signed PDF (stub — Task 31). PDF generation failure must not
-        // roll back the state change, but can fail loudly since the stub is
-        // intentionally unimplemented.
+        // Pre-warm the signed PDF (verifies signature embeds correctly + the
+        // V3 price math runs end-to-end). The bytes are not persisted here —
+        // GET /approvals/{reqId}/pdf re-generates on demand. Failure does NOT
+        // roll back the state change.
         try
         {
             var signer = await db.Users.FindAsync(CurrentUserId);
             if (signer is not null)
             {
-                _ = await pdfSvc.GenerateSignedQuotationAsync(req, current, signer);
+                await db.Entry(current).Collection(a => a.Items).LoadAsync();
+                var pdf = await pdfSvc.GenerateQuotationAsync(req, current, signer);
+                logger.LogInformation("[FinalSign] Signed PDF generated for {RefNo} ({Bytes} bytes)",
+                    req.RefNo, pdf.Length);
             }
-        }
-        catch (NotImplementedException)
-        {
-            // Expected during Phase A until Task 31 lands.
-            logger.LogWarning("[FinalSign] GenerateSignedQuotationAsync stubbed — Task 31 pending for {RefNo}", req.RefNo);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Signed-PDF generation failed for {RefNo}", req.RefNo);
+            logger.LogError(ex, "Signed-PDF pre-warm failed for {RefNo}", req.RefNo);
         }
 
         // D23 — notify SP + branch accountants only; never the customer.

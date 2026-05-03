@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/axios";
 import type { SignatureUploadResponse } from "@/types/api";
@@ -58,17 +58,19 @@ export function useOwnSignatureBlobUrl() {
     refetchOnWindowFocus: true,
   });
 
-  const [url, setUrl] = useState<string | null>(null);
+  // Derive URL from cached blob via useMemo (no setState-in-effect — React 19
+  // compiler era prefers derived state over effect-driven state). Cleanup
+  // revokes the previous URL when the blob changes or the consumer unmounts.
+  const blob = query.data ?? null;
+  const url = useMemo(
+    () => (blob ? URL.createObjectURL(blob) : null),
+    [blob],
+  );
   useEffect(() => {
-    const blob = query.data;
-    if (!blob) {
-      setUrl(null);
-      return;
-    }
-    const newUrl = URL.createObjectURL(blob);
-    setUrl(newUrl);
-    return () => URL.revokeObjectURL(newUrl);
-  }, [query.data]);
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [url]);
 
   return {
     ...query,

@@ -73,19 +73,47 @@ export function CustomerConfirmPage() {
             <th className="px-3 py-2 text-right font-medium text-gray-700">
               Price/KG ({req.currencyCode})
             </th>
-            <th className="px-3 py-2 text-right font-medium text-gray-700">Total</th>
+            <th className="px-3 py-2 text-right font-medium text-gray-700">Total (AED)</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {req.finishedGoods.map((fg) => (
-            <tr key={fg.id}>
-              <td className="px-3 py-2">{fg.item.description}</td>
-              <td className="px-3 py-2 text-right">{fg.expectedQty.toLocaleString()}</td>
-              <td className="px-3 py-2 text-right">—</td>
-              <td className="px-3 py-2 text-right">—</td>
-            </tr>
-          ))}
+          {req.finishedGoods.map((fg) => {
+            const priced = req.finalPrice?.perFg.find(
+              (p) => p.requisitionItemId === fg.id,
+            );
+            return (
+              <tr key={fg.id}>
+                <td className="px-3 py-2">{fg.item.description}</td>
+                <td className="px-3 py-2 text-right">{fg.expectedQty.toLocaleString()}</td>
+                <td className="px-3 py-2 text-right">
+                  {priced ? priced.salePerKg.toFixed(2) : "—"}
+                </td>
+                <td className="px-3 py-2 text-right">
+                  {priced
+                    ? priced.totalAed.toLocaleString(undefined, {
+                        maximumFractionDigits: 2,
+                      })
+                    : "—"}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
+        {req.finalPrice ? (
+          <tfoot>
+            <tr className="border-t-2 border-gray-300">
+              <td colSpan={3} className="px-3 py-3 text-right text-sm font-bold text-gray-900">
+                GRAND TOTAL
+              </td>
+              <td className="px-3 py-3 text-right text-base font-bold text-blue-700">
+                AED{" "}
+                {req.finalPrice.totalAed.toLocaleString(undefined, {
+                  maximumFractionDigits: 2,
+                })}
+              </td>
+            </tr>
+          </tfoot>
+        ) : null}
       </table>
 
       <h2 className="mt-8 text-lg font-semibold text-gray-900">Customer feedback</h2>

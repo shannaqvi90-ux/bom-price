@@ -169,8 +169,9 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
       </p>
       <p className="mt-2 text-sm text-muted-foreground">
         Enter cost per KG for each raw material + per-FG cost components. RM costs may be in any
-        currency; FOH / Transport / Commission are AED. Save persists data; Submit also forwards to
-        MD for margin pricing.
+        currency (converted to quote currency at the active rate); FOH / Transport / Commission are
+        in the quote currency ({req.currencyCode}). Save persists data; Submit also forwards to MD
+        for margin pricing.
       </p>
 
       {state.map((fg, fgIdx) => {
@@ -314,7 +315,7 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
                 </>
               )}
               <label className="block">
-                <span className="text-xs text-muted-foreground">FOH/KG (AED)</span>
+                <span className="text-xs text-muted-foreground">FOH/KG ({req.currencyCode})</span>
                 <Input
                   type="number"
                   step="0.0001"
@@ -330,7 +331,7 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
                 />
               </label>
               <label className="block">
-                <span className="text-xs text-muted-foreground">Transport/KG (AED)</span>
+                <span className="text-xs text-muted-foreground">Transport/KG ({req.currencyCode})</span>
                 <Input
                   type="number"
                   step="0.0001"
@@ -346,7 +347,7 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
                 />
               </label>
               <label className="block">
-                <span className="text-xs text-muted-foreground">Commission/KG (AED)</span>
+                <span className="text-xs text-muted-foreground">Commission/KG ({req.currencyCode})</span>
                 <Input
                   type="number"
                   step="0.0001"

@@ -69,6 +69,12 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+@layer components {
+  .input {
+    @apply w-full px-3 py-2 border border-border rounded bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-600;
+  }
+}
+
 /* Defensive override: when Chrome autofills a field despite autoComplete="off",
    keep the visual style consistent with non-autofilled fields (no yellow/light
    background). Uses inset box-shadow trick because Chrome ignores background-color. */

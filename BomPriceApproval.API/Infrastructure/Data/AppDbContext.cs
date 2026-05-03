@@ -138,11 +138,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithOne(ai => ai.QuotationApproval)
             .HasForeignKey(ai => ai.QuotationApprovalId);
 
-        // ApprovalItem → RequisitionItem (1:1)
+        // ApprovalItem → RequisitionItem (many:1).
+        // V2.3 modeled this as 1:1 (one approval row per FG, ever). V3's
+        // re-margin loop (CustomerConfirm → MdPricing → SetMargin again)
+        // requires multiple ApprovalItem rows per RequisitionItem — one per
+        // pricing iteration, with prior rows attached to a superseded
+        // QuotationApproval. The composite unique index below enforces the
+        // actual invariant: at most one ApprovalItem per FG per approval.
         mb.Entity<ApprovalItem>()
             .HasOne(a => a.RequisitionItem)
-            .WithOne(ri => ri.ApprovalItem)
-            .HasForeignKey<ApprovalItem>(a => a.RequisitionItemId);
+            .WithMany(ri => ri.ApprovalItems)
+            .HasForeignKey(a => a.RequisitionItemId);
+
+        mb.Entity<ApprovalItem>()
+            .HasIndex(a => new { a.QuotationApprovalId, a.RequisitionItemId })
+            .IsUnique();
 
         mb.Entity<BomLine>()
             .HasOne(l => l.RawMaterial)

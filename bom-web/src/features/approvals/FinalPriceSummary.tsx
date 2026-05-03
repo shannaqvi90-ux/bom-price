@@ -2,13 +2,24 @@ import type { V3FinalPrice } from "@/types/api";
 
 interface Props {
   finalPrice: V3FinalPrice;
+  /** When true, shows a "preview — not yet finalized" caption.
+   *  Pass true for MdPricing/CustomerConfirm/MdFinalSign statuses;
+   *  false (default) for Signed. */
+  previewMode?: boolean;
 }
 
-export function FinalPriceSummary({ finalPrice }: Props) {
+export function FinalPriceSummary({ finalPrice, previewMode = false }: Props) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <div className="text-xs font-bold uppercase tracking-wider text-gray-500">
-        Quote Summary
+      <div className="flex items-baseline justify-between">
+        <div className="text-xs font-bold uppercase tracking-wider text-gray-500">
+          Quote Summary{previewMode ? " (preview)" : ""}
+        </div>
+        {previewMode ? (
+          <div className="text-[11px] text-amber-700">
+            Subject to MD final-sign — not yet locked
+          </div>
+        ) : null}
       </div>
       <table className="mt-3 w-full text-sm">
         <thead>

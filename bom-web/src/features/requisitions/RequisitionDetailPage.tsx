@@ -296,8 +296,11 @@ export default function RequisitionDetailPage() {
         </CardContent>
       </Card>
 
-      {status === "Signed" && req.finalPrice ? (
-        <FinalPriceSummary finalPrice={req.finalPrice} />
+      {req.finalPrice ? (
+        <FinalPriceSummary
+          finalPrice={req.finalPrice}
+          previewMode={status !== "Signed"}
+        />
       ) : null}
 
       {status === "Signed" ? (

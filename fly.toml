@@ -13,15 +13,24 @@ primary_region = 'sin'
   ASPNETCORE_ENVIRONMENT = 'Production'
   ASPNETCORE_URLS = 'http://+:8080'
   CorsAllowedOrigins = 'https://bom-fpf.pages.dev'
-  Npgsql__MaxPoolSize = '5'
-  Npgsql__MinPoolSize = '0'
+  # Pool was 5 — exhausted by SignalR + concurrent users + keepalive, causing
+  # login hangs. 20 gives headroom without stressing Neon's connection budget.
+  Npgsql__MaxPoolSize = '20'
+  # MinPoolSize 2 keeps two connections warm — DbKeepAliveService recycles them.
+  Npgsql__MinPoolSize = '2'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = 'stop'
+  # Was auto_stop='stop' + min_machines=0 → Fly was stopping the machine when
+  # idle, which caused the next request to time out before the .NET app could
+  # warm up. Combined with Neon serverless cold-wake this produced reliably
+  # broken sessions every ~30 minutes. Keeping the machine always-on costs
+  # roughly the same (every request was waking it anyway) and eliminates the
+  # cold-stop hang entirely.
+  auto_stop_machines = 'off'
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
   processes = ['app']
 
   [http_service.concurrency]

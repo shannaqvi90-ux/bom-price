@@ -89,23 +89,6 @@ function MdMarginPageBody({ req, reqId, setMargin, navigate }: BodyProps) {
         ))}
       </div>
 
-      {state.livePreview ? (
-        <div className="mt-4 rounded-lg bg-blue-700 px-5 py-4 text-white">
-          <div className="text-xs font-semibold uppercase tracking-wider opacity-90">
-            Grand Total (preview)
-          </div>
-          <div className="mt-1 text-3xl font-bold">
-            {req.currencyCode}{" "}
-            {state.livePreview.totalAed.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-          </div>
-          {req.currencyCode !== "AED" ? (
-            <div className="mt-1 text-xs opacity-80">
-              Backend re-snaps the FX rate at save time. Final AED total computed on the server.
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
       <label className="mt-6 block">
         <span className="text-sm font-medium text-gray-700">Notes (optional)</span>
         <Textarea

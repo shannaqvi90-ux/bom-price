@@ -54,11 +54,20 @@ export function MdFgPricingCard({
                 <th className="px-1 py-1 text-right font-medium">Qty/KG</th>
                 <th className="px-1 py-1 text-right font-medium">Wastage %</th>
                 <th className="px-1 py-1 text-right font-medium">Cost/KG</th>
+                <th className="px-1 py-1 text-right font-medium">Total/KG</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {fg.bomLines.map((line) => {
                 const lineCost = costs?.lines.find((l) => l.bomLineId === line.id);
+                const wastageMult =
+                  lineCost?.wastagePercent != null
+                    ? 1 + lineCost.wastagePercent / 100
+                    : 1;
+                const lineTotal =
+                  lineCost?.purchaseValuePerKg != null
+                    ? lineCost.purchaseValuePerKg * line.qtyPerKg * wastageMult
+                    : null;
                 return (
                   <tr key={line.id}>
                     <td className="px-1 py-1 text-gray-800">{line.item.description}</td>
@@ -73,6 +82,11 @@ export function MdFgPricingCard({
                     <td className="px-1 py-1 text-right text-gray-700">
                       {lineCost?.purchaseValuePerKg != null
                         ? `${lineCost.purchaseCurrency ?? ""} ${lineCost.purchaseValuePerKg.toFixed(2)}`
+                        : "—"}
+                    </td>
+                    <td className="px-1 py-1 text-right font-medium text-gray-900">
+                      {lineTotal != null
+                        ? `${lineCost?.purchaseCurrency ?? currencyCode} ${lineTotal.toFixed(2)}`
                         : "—"}
                     </td>
                   </tr>
@@ -118,13 +132,23 @@ export function MdFgPricingCard({
         <label className="flex-1 text-sm font-medium text-blue-900">
           Margin/KG ({currencyCode})
         </label>
+        {(() => {
+          const marginNum = parseFloat(marginInput);
+          const showPct = costPerKg > 0 && !isNaN(marginNum) && marginNum >= 0;
+          const pct = showPct ? (marginNum / costPerKg) * 100 : null;
+          return pct != null ? (
+            <span className="text-xs font-semibold text-blue-700">
+              {pct.toFixed(1)}%
+            </span>
+          ) : null;
+        })()}
         <input
           type="number"
           step="0.01"
           value={marginInput}
           onChange={(e) => onMarginChange(e.target.value)}
           placeholder="0.00"
-          className="w-32 rounded border-gray-300 px-2 py-1 text-right text-sm"
+          className="w-32 rounded border border-input bg-background px-2 py-1 text-right text-sm"
         />
       </div>
 

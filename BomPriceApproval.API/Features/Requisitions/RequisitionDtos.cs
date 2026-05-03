@@ -141,6 +141,7 @@ public record V3BomLineDto(
     DateTime? LastModifiedAt);
 
 public record V3BomCostDto(
+    decimal TotalCostPerKg,
     decimal? PrintingCostPerKg,
     string? PrintingCostCurrency,
     decimal FohPerKg,

@@ -15,10 +15,18 @@ function applyThemeClass(theme: Theme) {
   else root.classList.remove("dark");
 }
 
+function systemPrefersDark(): boolean {
+  if (typeof window === "undefined" || !window.matchMedia) return false;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
-      theme: "dark",
+      // First-visit default = OS preference. Previously hardcoded "dark"
+      // which dumped fresh users into a half-broken dark UI even when
+      // their system was light.
+      theme: systemPrefersDark() ? "dark" : "light",
       toggle: () => {
         const next: Theme = get().theme === "dark" ? "light" : "dark";
         applyThemeClass(next);

@@ -135,7 +135,8 @@ export function MdFgPricingCard({
         {(() => {
           const marginNum = parseFloat(marginInput);
           const showPct = costPerKg > 0 && !isNaN(marginNum) && marginNum >= 0;
-          const pct = showPct ? (marginNum / costPerKg) * 100 : null;
+          const salePerKg = costPerKg + marginNum;
+          const pct = showPct && salePerKg > 0 ? (marginNum / salePerKg) * 100 : null;
           return pct != null ? (
             <span className="text-xs font-semibold text-blue-700">
               {pct.toFixed(1)}%

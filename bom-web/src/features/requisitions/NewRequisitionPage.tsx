@@ -10,6 +10,7 @@ import {
   useCreateV3Requisition,
   useSubmitRequisition,
 } from "@/features/requisitions/requisitionsApi";
+import { useActiveCurrencies } from "@/features/exchange-rates/exchangeRatesApi";
 import { BomEditorTable, type BomLineRow } from "@/components/v3/BomEditorTable";
 import { CreateCustomerModal } from "@/components/v3/CreateCustomerModal";
 import { CreateFinishedGoodModal } from "@/components/v3/CreateFinishedGoodModal";
@@ -25,8 +26,6 @@ interface FgCardState {
   bomLines: BomLineRow[];
 }
 
-const CURRENCIES = ["AED", "USD", "EUR", "GBP", "JPY"];
-
 export function NewRequisitionPage() {
   const navigate = useNavigate();
   const [customerId, setCustomerId] = useState<number>(0);
@@ -34,6 +33,8 @@ export function NewRequisitionPage() {
   const [referenceNumber, setReferenceNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [fgs, setFgs] = useState<FgCardState[]>([]);
+
+  const CURRENCIES = useActiveCurrencies();
 
   const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
   const [createFgOpen, setCreateFgOpen] = useState(false);

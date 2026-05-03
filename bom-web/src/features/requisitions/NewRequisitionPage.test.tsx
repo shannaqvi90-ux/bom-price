@@ -81,6 +81,21 @@ describe("NewRequisitionPage (V3)", () => {
         return Promise.resolve({
           data: [{ id: 87, code: "FG-0087", description: "Test FG" }],
         });
+      // useActiveCurrencies() — currency dropdown is now derived from /exchange-rates
+      if (url === "/exchange-rates")
+        return Promise.resolve({
+          data: [
+            {
+              id: 1,
+              currencyCode: "USD",
+              currencyName: "US Dollar",
+              rateToAed: 3.6725,
+              effectiveDate: "2026-01-01T00:00:00Z",
+              isActive: true,
+              setByName: "Test",
+            },
+          ],
+        });
       // useItems({type:"FinishedGood"}) and useItems({type:"RawMaterial"}) — match by query string
       if (typeof url === "string" && url.startsWith("/items"))
         return Promise.resolve({

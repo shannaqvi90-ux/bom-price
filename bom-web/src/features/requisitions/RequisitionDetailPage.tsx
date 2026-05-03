@@ -16,7 +16,7 @@ import { AdminActionsCard } from "@/features/admin/AdminActionsCard";
 import { SignedQuotationViewer } from "./SignedQuotationViewer";
 import { FinalPriceSummary } from "@/features/approvals/FinalPriceSummary";
 import { api } from "@/api/axios";
-import type { V3RequisitionStatus } from "@/types/api";
+import type { V3FinishedGood, V3RequisitionStatus } from "@/types/api";
 
 function LabeledValue({ label, value }: { label: string; value: string | number | null | undefined }) {
   return (
@@ -263,6 +263,15 @@ export default function RequisitionDetailPage() {
                 const editedByAccountant = (fg.bomLines ?? []).some(
                   (bl) => bl.lastModifiedByUserId != null,
                 );
+                // Show cost-aware BOM only for accountant/MD/admin once costing
+                // has run. Salespeople intentionally see the lite (no-cost) view.
+                const showCostBom =
+                  (role === "Accountant" ||
+                    role === "ManagingDirector" ||
+                    role === "Admin") &&
+                  fg.costs != null &&
+                  fg.bomLines != null &&
+                  fg.bomLines.length > 0;
                 return (
                   <div key={fg.id} className="rounded-lg border border-gray-200 p-4">
                     <div className="flex items-baseline justify-between">
@@ -274,7 +283,16 @@ export default function RequisitionDetailPage() {
                         {fg.hasPrinting ? " · Printed" : ""}
                       </span>
                     </div>
-                    {fg.bomLines && fg.bomLines.length > 0 ? (
+                    {showCostBom ? (
+                      <div className="mt-3">
+                        <CostAwareBomTable fg={fg} currencyCode={req.currencyCode} />
+                        {editedByAccountant && (
+                          <p className="mt-2 text-xs text-amber-700">
+                            ⚠ Edited by accountant after sales submitted.
+                          </p>
+                        )}
+                      </div>
+                    ) : fg.bomLines && fg.bomLines.length > 0 ? (
                       <div className="mt-3">
                         <BomEditorTable lines={lines} readOnly />
                         {editedByAccountant && (
@@ -355,4 +373,104 @@ function StatusBanner({ status, req }: StatusBannerProps) {
     );
   }
   return null;
+}
+
+// Detailed BOM + cost breakdown shown to Accountant/MD/Admin once costing has
+// run. Mirrors the structure used in MdFgPricingCard's BOM details so the same
+// numbers the MD priced against are surfaced on the read-only detail page.
+function CostAwareBomTable({
+  fg,
+  currencyCode,
+}: {
+  fg: V3FinishedGood;
+  currencyCode: string;
+}) {
+  const costs = fg.costs!;
+  const lines = fg.bomLines ?? [];
+  return (
+    <div className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
+      <table className="w-full text-xs">
+        <thead className="text-gray-500">
+          <tr>
+            <th className="px-1 py-1 text-left font-medium">Raw Material</th>
+            <th className="px-1 py-1 text-right font-medium">Qty/KG</th>
+            <th className="px-1 py-1 text-right font-medium">Wastage %</th>
+            <th className="px-1 py-1 text-right font-medium">Cost/KG</th>
+            <th className="px-1 py-1 text-right font-medium">Total/KG</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {lines.map((line) => {
+            const lineCost = costs.lines.find((l) => l.bomLineId === line.id);
+            const wastageMult =
+              lineCost?.wastagePercent != null
+                ? 1 + lineCost.wastagePercent / 100
+                : 1;
+            const lineTotal =
+              lineCost?.purchaseValuePerKg != null
+                ? lineCost.purchaseValuePerKg * line.qtyPerKg * wastageMult
+                : null;
+            return (
+              <tr key={line.id}>
+                <td className="px-1 py-1 text-gray-800">{line.item.description}</td>
+                <td className="px-1 py-1 text-right text-gray-700">
+                  {line.qtyPerKg.toFixed(4)}
+                </td>
+                <td className="px-1 py-1 text-right text-gray-700">
+                  {lineCost?.wastagePercent != null
+                    ? `${lineCost.wastagePercent.toFixed(2)}%`
+                    : "—"}
+                </td>
+                <td className="px-1 py-1 text-right text-gray-700">
+                  {lineCost?.purchaseValuePerKg != null
+                    ? `${lineCost.purchaseCurrency ?? ""} ${lineCost.purchaseValuePerKg.toFixed(2)}`
+                    : "—"}
+                </td>
+                <td className="px-1 py-1 text-right font-medium text-gray-900">
+                  {lineTotal != null
+                    ? `${lineCost?.purchaseCurrency ?? currencyCode} ${lineTotal.toFixed(2)}`
+                    : "—"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-gray-200 pt-2 text-xs text-gray-600">
+        {costs.printingCostPerKg != null ? (
+          <div className="flex justify-between">
+            <span>Printing/KG</span>
+            <span className="font-medium">
+              {costs.printingCostCurrency ?? currencyCode}{" "}
+              {costs.printingCostPerKg.toFixed(2)}
+            </span>
+          </div>
+        ) : null}
+        <div className="flex justify-between">
+          <span>FOH/KG</span>
+          <span className="font-medium">
+            {currencyCode} {costs.fohPerKg.toFixed(2)}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span>Transport/KG</span>
+          <span className="font-medium">
+            {currencyCode} {costs.transportPerKg.toFixed(2)}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span>Commission/KG</span>
+          <span className="font-medium">
+            {currencyCode} {costs.commissionPerKg.toFixed(2)}
+          </span>
+        </div>
+      </div>
+      <div className="mt-2 flex justify-between border-t border-gray-300 pt-2 text-sm">
+        <span className="font-semibold text-gray-700">Total Cost/KG</span>
+        <span className="font-bold text-gray-900">
+          {currencyCode} {costs.totalCostPerKg.toFixed(2)}
+        </span>
+      </div>
+    </div>
+  );
 }

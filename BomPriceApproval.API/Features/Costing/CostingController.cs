@@ -414,6 +414,13 @@ public class CostingController(
                 {
                     return Validation.Detail(ex.Message).Field("CurrencyCode", ex.Message).Return();
                 }
+                // Persist accountant's wastage edit on the BomLine so it flows into
+                // the cost computation here AND into the read DTO for the MD page.
+                if (rc.WastagePercent < 0)
+                    return Validation.Detail("Wastage % cannot be negative.")
+                        .Field("WastagePercent", "Must be >= 0.").Return();
+                line.WastagePct = rc.WastagePercent;
+
                 var costInQuote = rc.CostPerKg * entryRate / quoteRateToAed;
                 rawMaterialTotal += costInQuote * line.QtyPerKg * (1 + line.WastagePct / 100);
                 newCostLines.Add(new BomCostLine

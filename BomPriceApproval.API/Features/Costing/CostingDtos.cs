@@ -73,7 +73,12 @@ public record UpdateBomRequest(int FinishedGoodId, List<BomLineUpdate> Lines);
 public record V3RawMaterialCostInput(
     int BomLineId,
     decimal CostPerKg,
-    [Required, RegularExpression("^[A-Z]{3}$", ErrorMessage = "Currency code must be 3 uppercase letters.")] string CurrencyCode);
+    [Required, RegularExpression("^[A-Z]{3}$", ErrorMessage = "Currency code must be 3 uppercase letters.")] string CurrencyCode,
+    // V3 Phase 2 — accountant edits production wastage % per RM line during costing.
+    // Stored on BomLine.WastagePct so the cost computation
+    // (cost × qty × (1 + wastage/100)) reflects realistic material loss.
+    // Per project policy: only ≥ 0 enforced; no upper bound (memory:wastagepct).
+    decimal WastagePercent = 0);
 
 public record V3FgCostInput(
     int RequisitionItemId,

@@ -30,6 +30,12 @@ export function useUploadSignature() {
 // URL the consumer can pass to <img src={url}>. Returns null if no signature
 // exists (404). Caller is responsible for revoking the URL when unmounting —
 // this hook handles revocation on data change + unmount.
+//
+// Cache policy: 1-minute stale window so a freshly-uploaded signature (esp.
+// from the mobile app) becomes visible on the web within a minute, AND on
+// every window-focus event. `staleTime: Infinity` was the prior policy — it
+// silently locked the web view to whatever it saw on first mount, so
+// signatures uploaded from another device never appeared.
 export function useOwnSignatureBlobUrl() {
   const query = useQuery({
     queryKey: profileKeys.ownSignature,
@@ -45,7 +51,8 @@ export function useOwnSignatureBlobUrl() {
       }
     },
     retry: false,
-    staleTime: Infinity,
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
   });
 
   useEffect(() => {

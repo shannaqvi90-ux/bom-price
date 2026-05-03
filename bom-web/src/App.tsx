@@ -25,6 +25,7 @@ import UsersPage from "@/features/users/UsersPage";
 import BranchesPage from "@/features/admin/branches/BranchesPage";
 import GroupsPage from "@/features/admin/groups/GroupsPage";
 import { AuditLogPage } from "@/features/admin/audit-log/AuditLogPage";
+import { CompanySettingsPage } from "@/features/admin/company-settings/CompanySettingsPage";
 import ChangePasswordPage from "@/features/auth/ChangePasswordPage";
 import { ForceChangePasswordGuard } from "@/features/auth/ForceChangePasswordGuard";
 import { InstallModal } from "@/components/pwa/InstallModal";
@@ -129,6 +130,14 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute allow={["Admin"]}>
             <AuditLogPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "admin/company-settings",
+        element: (
+          <ProtectedRoute allow={["Admin"]}>
+            <CompanySettingsPage />
           </ProtectedRoute>
         ),
       },

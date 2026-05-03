@@ -3,8 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Site is light-only by design (no theme switcher). Lock the color-scheme
+         so Chrome's "Auto Dark Mode for Web Contents" flag and similar browser
+         features don't force-darken the page and break the layout. -->
+    <meta name="color-scheme" content="light" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#1e40af" />
+    <!-- mobile-web-app-capable is the spec name; apple-mobile-web-app-capable
+         is the legacy alias (still respected by older iOS). Ship both for
+         compat — Chrome only complains about apple- when mobile- is missing. -->
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="FPF Quotations" />

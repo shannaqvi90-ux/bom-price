@@ -3,6 +3,10 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
+  /* Site is light-only by design — see meta in index.html. Locking
+     color-scheme here prevents browser auto-dark features from inverting
+     form controls / scrollbars / native UI to dark mode. */
+  color-scheme: light;
   --background: #ffffff;
   --foreground: #0f172a;
   --card: #ffffff;

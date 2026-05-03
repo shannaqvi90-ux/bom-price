@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Moon, Sun, LogOut } from "lucide-react";
+import { Moon, Sun, LogOut, PenLine } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useThemeStore } from "@/store/themeStore";
 import { useLogout } from "@/features/auth/authApi";
@@ -29,6 +29,17 @@ export function Topbar() {
         )}
       </div>
       <div className="flex items-center gap-2">
+        {user?.role === "ManagingDirector" && (
+          <Button
+            variant="ghost"
+            onClick={() => navigate("/profile/signature")}
+            aria-label="My signature"
+            title="Manage your signature"
+          >
+            <PenLine className="h-4 w-4" />
+            <span className="ml-1 text-sm">Signature</span>
+          </Button>
+        )}
         <Button
           variant="ghost"
           onClick={toggleTheme}

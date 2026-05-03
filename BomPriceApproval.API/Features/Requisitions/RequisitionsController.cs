@@ -232,13 +232,16 @@ public class RequisitionsController(
                 costs);
         }).ToList();
 
-        // V3 D-3 — populate finalPrice once the MD has applied a margin and the
-        // workflow is at MdFinalSign or Signed. Costing/MdPricing/CustomerConfirm
-        // statuses still expose a margin via QuotationApproval but the price isn't
-        // "final" until the customer has accepted; mobile MD screen renders only
-        // post-accept totals to avoid confusion.
+        // V3 D-3 — populate finalPrice once the MD has applied a margin. We
+        // surface it from MdPricing onwards (preview-quality through CustomerConfirm,
+        // final at MdFinalSign+Signed) so the SP can show the customer the price for
+        // the confirm-and-sign workflow, and so the MD sees their own price after
+        // submitting margin. Front-end labels non-Signed totals as preview.
         V3FinalPrice? finalPrice = null;
-        if (q.Status == RequisitionStatus.MdFinalSign || q.Status == RequisitionStatus.Signed)
+        if (q.Status == RequisitionStatus.MdPricing
+            || q.Status == RequisitionStatus.CustomerConfirm
+            || q.Status == RequisitionStatus.MdFinalSign
+            || q.Status == RequisitionStatus.Signed)
         {
             var approval = await db.QuotationApprovals
                 .Include(qa => qa.Items)

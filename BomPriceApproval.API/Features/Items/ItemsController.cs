@@ -111,12 +111,12 @@ public class ItemsController(AppDbContext db, ICodeGeneratorService codeGen) : C
     }
 
     [HttpPost]
-    [Authorize(Roles = "SalesPerson,Admin")]
+    [Authorize(Roles = "SalesPerson,Admin,Accountant")]
     public async Task<IActionResult> Create(CreateItemRequest req)
     {
         // Resolve target branch: payload BranchId (admin path) OR caller's
-        // branch from JWT (SP path). Admin has CurrentBranchId == null and
-        // must specify a branch in the payload.
+        // branch from JWT (SP path) OR — for Accountant — first assignment in
+        // the M:N UserBranches table (V23a — Accountant has no JWT branchId).
         int branchId;
         if (req.BranchId.HasValue)
         {
@@ -125,6 +125,19 @@ public class ItemsController(AppDbContext db, ICodeGeneratorService codeGen) : C
         else if (CurrentBranchId.HasValue)
         {
             branchId = CurrentBranchId.Value;
+        }
+        else if (CurrentRole == "Accountant")
+        {
+            var firstAssigned = await db.UserBranches
+                .Where(ub => ub.UserId == CurrentUserId)
+                .Select(ub => ub.BranchId)
+                .FirstOrDefaultAsync();
+            if (firstAssigned == 0)
+                return Validation
+                    .Detail("Accountant has no branch assignments.")
+                    .Field("BranchId", "Ask an admin to assign you to a branch.")
+                    .Return();
+            branchId = firstAssigned;
         }
         else
         {
@@ -141,6 +154,13 @@ public class ItemsController(AppDbContext db, ICodeGeneratorService codeGen) : C
                 .Detail("Branch not found or inactive.")
                 .Field("BranchId", "Invalid branch.")
                 .Return();
+
+        // V23a authorization for Accountant: even if a BranchId was supplied in
+        // the payload, the accountant must be assigned to it. SP/Admin paths
+        // are pre-authorized by the [Authorize] role gate + JWT branch logic.
+        if (CurrentRole == "Accountant" &&
+            !await AccountantAuthorizedForBranchAsync(branchId))
+            return Forbid();
 
         var item = new Item
         {

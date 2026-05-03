@@ -61,7 +61,7 @@ export function ProfileSignaturePage() {
           accept="image/png,image/jpeg"
           onChange={onFileChange}
           aria-label="upload signature"
-          className="mt-2 block w-full rounded-md border-gray-300 px-3 py-2 text-sm"
+          className="mt-2 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground file:mr-3 file:rounded file:border-0 file:bg-blue-50 file:px-3 file:py-1 file:text-sm file:text-blue-700 hover:file:bg-blue-100"
         />
 
         {previewUrl && (

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { useRejectRequisition } from "./approvalsApi";
+import { Textarea } from "@/components/ui/Textarea";
 
 interface Props {
   requisitionId: number;
@@ -63,12 +64,12 @@ export function RejectReqModal({ requisitionId, refNo, open, onClose, onRejected
           <span className="text-xs font-semibold uppercase tracking-wider text-gray-600">
             Reason
           </span>
-          <textarea
+          <Textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="e.g. Material cost looks wrong, please verify…"
             rows={4}
-            className="mt-1 w-full resize-none rounded-md border-gray-300 px-3 py-2 text-sm"
+            className="mt-1 resize-none"
             autoFocus
           />
         </label>

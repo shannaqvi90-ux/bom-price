@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { useV3Requisition } from "@/features/requisitions/requisitionsApi";
 import { useAcceptCustomer, useRejectCustomer } from "@/features/approvals/approvalsApi";
 import { V3StatusBadge } from "@/components/v3/V3StatusBadge";
+import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
 
 export function CustomerConfirmPage() {
   const { id } = useParams();
@@ -87,12 +89,12 @@ export function CustomerConfirmPage() {
       </table>
 
       <h2 className="mt-8 text-lg font-semibold text-gray-900">Customer feedback</h2>
-      <textarea
+      <Textarea
         value={feedback}
         onChange={(e) => setFeedback(e.target.value)}
         rows={3}
         placeholder="Optional — what did customer say?"
-        className="mt-2 w-full rounded-md border-gray-300 px-3 py-2 text-sm"
+        className="mt-2"
       />
 
       <div className="mt-6 flex flex-wrap gap-3">
@@ -117,10 +119,10 @@ export function CustomerConfirmPage() {
             <span className="text-sm font-medium text-amber-900">
               Reason for re-price (≥5 chars)
             </span>
-            <input
+            <Input
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
-              className="mt-1 w-full rounded-md border-amber-300 px-3 py-2 text-sm"
+              className="mt-1"
             />
           </label>
           <button

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useCreateItem } from "@/features/items/itemsApi";
 import type { Item } from "@/types/api";
+import { Input } from "@/components/ui/Input";
 
 interface Props {
   open: boolean;
@@ -47,8 +48,8 @@ export function CreateRawMaterialModal({ open, onClose, onCreated }: Props) {
         <form onSubmit={onSubmit} className="mt-4 space-y-3">
           <label className="block">
             <span className="text-sm font-medium text-gray-700">Description</span>
-            <input value={description} onChange={(e) => setDescription(e.target.value)} aria-label="description" autoFocus
-              className="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500" />
+            <Input value={description} onChange={(e) => setDescription(e.target.value)} aria-label="description" autoFocus
+              className="mt-1" />
           </label>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex justify-end gap-2 pt-2">

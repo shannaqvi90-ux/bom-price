@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useItems } from "@/api/lookups";
 import { CreateRawMaterialModal } from "./CreateRawMaterialModal";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 
 export interface BomLineRow {
   itemId: number;
@@ -59,10 +61,10 @@ export function BomEditorTable({ lines, onChange, readOnly = false }: Props) {
                   {readOnly ? (
                     <span>{item?.description ?? "—"}</span>
                   ) : (
-                    <select
+                    <Select
                       value={line.itemId}
                       onChange={(e) => updateLine(idx, { itemId: parseInt(e.target.value) })}
-                      className="w-full rounded border-gray-300 text-sm"
+                      className="h-8 w-full px-2 text-sm"
                       aria-label={`item-${idx}`}
                     >
                       <option value={0}>— select —</option>
@@ -71,19 +73,19 @@ export function BomEditorTable({ lines, onChange, readOnly = false }: Props) {
                           {i.code} · {i.description}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   )}
                 </td>
                 <td className="px-2 py-1">
                   {readOnly ? (
                     <span>{line.qtyPerKg}</span>
                   ) : (
-                    <input
+                    <Input
                       type="number"
                       step="0.001"
                       value={line.qtyPerKg}
                       onChange={(e) => updateLine(idx, { qtyPerKg: parseFloat(e.target.value) || 0 })}
-                      className="w-24 rounded border-gray-300 text-sm"
+                      className="h-8 w-24 px-2 text-sm"
                       aria-label={`qty-${idx}`}
                     />
                   )}
@@ -92,11 +94,11 @@ export function BomEditorTable({ lines, onChange, readOnly = false }: Props) {
                   {readOnly ? (
                     <span>{line.micron ?? "—"}</span>
                   ) : (
-                    <input
+                    <Input
                       type="text"
                       value={line.micron ?? ""}
                       onChange={(e) => updateLine(idx, { micron: e.target.value })}
-                      className="w-20 rounded border-gray-300 text-sm"
+                      className="h-8 w-20 px-2 text-sm"
                       aria-label={`micron-${idx}`}
                     />
                   )}

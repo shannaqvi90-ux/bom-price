@@ -7,6 +7,7 @@ import { V3StatusBadge } from "@/components/v3/V3StatusBadge";
 import { useMdPricingState } from "./useMdPricingState";
 import { MdFgPricingCard } from "./MdFgPricingCard";
 import { RejectReqModal } from "./RejectReqModal";
+import { Textarea } from "@/components/ui/Textarea";
 
 export function MdMarginPage() {
   const { id } = useParams();
@@ -107,11 +108,11 @@ function MdMarginPageBody({ req, reqId, setMargin, navigate }: BodyProps) {
 
       <label className="mt-6 block">
         <span className="text-sm font-medium text-gray-700">Notes (optional)</span>
-        <textarea
+        <Textarea
           value={state.notes}
           onChange={(e) => state.setNotes(e.target.value)}
           rows={3}
-          className="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm"
+          className="mt-1"
         />
       </label>
 

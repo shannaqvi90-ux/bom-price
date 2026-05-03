@@ -6,6 +6,8 @@ import { useFinalSign } from "@/features/approvals/approvalsApi";
 import { useOwnSignatureBlobUrl } from "@/features/profile/profileApi";
 import { V3StatusBadge } from "@/components/v3/V3StatusBadge";
 import { FinalPriceSummary } from "./FinalPriceSummary";
+import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
 
 export function MdFinalSignPage() {
   const { id } = useParams();
@@ -90,22 +92,22 @@ export function MdFinalSignPage() {
 
       <label className="mt-6 block">
         <span className="text-sm font-medium text-gray-700">Notes (optional)</span>
-        <textarea
+        <Textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
-          className="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm"
+          className="mt-1"
         />
       </label>
 
       <label className="mt-4 block">
         <span className="text-sm font-medium text-gray-700">Type SIGN to confirm</span>
-        <input
+        <Input
           value={token}
           onChange={(e) => setToken(e.target.value)}
           aria-label="type SIGN to confirm"
           placeholder="SIGN"
-          className="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm font-mono uppercase"
+          className="mt-1 font-mono uppercase"
         />
       </label>
 

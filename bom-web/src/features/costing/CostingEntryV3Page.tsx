@@ -9,6 +9,8 @@ import {
 } from "@/features/costing/costingApi";
 import { V3StatusBadge } from "@/components/v3/V3StatusBadge";
 import type { V3Requisition } from "@/types/api";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 
 const CURRENCIES = ["AED", "USD", "EUR", "GBP", "PKR", "INR", "CNY"];
 
@@ -201,7 +203,7 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
                       <td className="px-3 py-1.5 text-right">{bl.qtyPerKg}</td>
                       <td className="px-3 py-1.5">{bl.micron ?? "—"}</td>
                       <td className="px-3 py-1.5 text-right">
-                        <input
+                        <Input
                           type="number"
                           step="0.0001"
                           value={rc.costPerKg}
@@ -214,11 +216,11 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
                               return next;
                             })
                           }
-                          className="w-28 rounded border-gray-300 px-2 py-1 text-right text-sm"
+                          className="h-8 w-28 px-2 py-1 text-right text-sm"
                         />
                       </td>
                       <td className="px-3 py-1.5">
-                        <select
+                        <Select
                           value={rc.currencyCode}
                           onChange={(e) =>
                             setState((s) => {
@@ -229,14 +231,14 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
                               return next;
                             })
                           }
-                          className="rounded border-gray-300 px-2 py-1 text-sm"
+                          className="h-8 w-auto px-2 py-1 text-sm"
                         >
                           {CURRENCIES.map((c) => (
                             <option key={c} value={c}>
                               {c}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                       </td>
                     </tr>
                   );
@@ -249,7 +251,7 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
                 <>
                   <label className="block">
                     <span className="text-xs text-gray-600">Printing cost/KG</span>
-                    <input
+                    <Input
                       type="number"
                       step="0.0001"
                       value={fg.printingCostPerKg}
@@ -260,12 +262,12 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
                           return next;
                         })
                       }
-                      className="mt-1 w-full rounded border-gray-300 px-2 py-1 text-right text-sm"
+                      className="mt-1 h-9 px-2 py-1 text-right text-sm"
                     />
                   </label>
                   <label className="block">
                     <span className="text-xs text-gray-600">Printing currency</span>
-                    <select
+                    <Select
                       value={fg.printingCostCurrency}
                       onChange={(e) =>
                         setState((s) => {
@@ -274,20 +276,20 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
                           return next;
                         })
                       }
-                      className="mt-1 w-full rounded border-gray-300 px-2 py-1 text-sm"
+                      className="mt-1 h-9 px-2 py-1 text-sm"
                     >
                       {CURRENCIES.map((c) => (
                         <option key={c} value={c}>
                           {c}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </label>
                 </>
               )}
               <label className="block">
                 <span className="text-xs text-gray-600">FOH/KG (AED)</span>
-                <input
+                <Input
                   type="number"
                   step="0.0001"
                   value={fg.fohPerKg}
@@ -298,12 +300,12 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
                       return next;
                     })
                   }
-                  className="mt-1 w-full rounded border-gray-300 px-2 py-1 text-right text-sm"
+                  className="mt-1 h-9 px-2 py-1 text-right text-sm"
                 />
               </label>
               <label className="block">
                 <span className="text-xs text-gray-600">Transport/KG (AED)</span>
-                <input
+                <Input
                   type="number"
                   step="0.0001"
                   value={fg.transportPerKg}
@@ -314,12 +316,12 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
                       return next;
                     })
                   }
-                  className="mt-1 w-full rounded border-gray-300 px-2 py-1 text-right text-sm"
+                  className="mt-1 h-9 px-2 py-1 text-right text-sm"
                 />
               </label>
               <label className="block">
                 <span className="text-xs text-gray-600">Commission/KG (AED)</span>
-                <input
+                <Input
                   type="number"
                   step="0.0001"
                   value={fg.commissionPerKg}
@@ -330,7 +332,7 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
                       return next;
                     })
                   }
-                  className="mt-1 w-full rounded border-gray-300 px-2 py-1 text-right text-sm"
+                  className="mt-1 h-9 px-2 py-1 text-right text-sm"
                 />
               </label>
             </div>

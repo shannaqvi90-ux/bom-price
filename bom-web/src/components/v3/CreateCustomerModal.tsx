@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useCreateCustomer } from "@/features/customers/customersApi";
 import type { Customer } from "@/types/api";
+import { Input } from "@/components/ui/Input";
 
 interface Props {
   open: boolean;
@@ -54,27 +55,23 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
         <form onSubmit={onSubmit} className="mt-4 space-y-3">
           <label className="block">
             <span className="text-sm font-medium text-gray-700">Name</span>
-            <input value={name} onChange={(e) => setName(e.target.value)}
-              className="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
-              aria-label="name" autoFocus />
+            <Input value={name} onChange={(e) => setName(e.target.value)}
+              className="mt-1" aria-label="name" autoFocus />
           </label>
           <label className="block">
             <span className="text-sm font-medium text-gray-700">Email</span>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
-              aria-label="email" />
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+              className="mt-1" aria-label="email" />
           </label>
           <label className="block">
             <span className="text-sm font-medium text-gray-700">Phone</span>
-            <input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)}
-              className="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
-              aria-label="phone" />
+            <Input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)}
+              className="mt-1" aria-label="phone" />
           </label>
           <label className="block">
             <span className="text-sm font-medium text-gray-700">Address</span>
-            <input value={address} onChange={(e) => setAddress(e.target.value)}
-              className="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
-              aria-label="address" />
+            <Input value={address} onChange={(e) => setAddress(e.target.value)}
+              className="mt-1" aria-label="address" />
           </label>
 
           {error && <p className="text-sm text-red-600">{error}</p>}

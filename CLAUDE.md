@@ -379,6 +379,16 @@ Draft(0) → Costing(8) → MdPricing(9) → CustomerConfirm(10) → MdFinalSign
 
 V2.3 sections below remain for historical context — V2.3 controllers + tests still drive `Approved` legacy data reads but no longer produce new reqs.
 
+### Company Settings (post-2026-05-03)
+
+Singleton `CompanySettings` table (id=1) drives the quotation PDF letterhead + validity + T&C. Admin-only UI at `/admin/company-settings` (web) — no mobile UI.
+
+- **Fields:** `CompanyName`, `Address`, `Telephone`, `Trn`, `Email`, `Website`, `QuotationValidityDays` (1-365), `TermsAndConditions` (multi-line; each non-empty line becomes one numbered point in PDF), `UpdatedAt`, `UpdatedByUserId`.
+- **Endpoints:** `GET /api/admin/company-settings` + `PUT /api/admin/company-settings` (audited via `AdminAuditLogger`, new `AdminActionType.UpdateCompanySettings`).
+- **PDF:** `PdfService.GenerateQuotationAsync` reads `CompanySettings` at the top of every render. Falls back to a static `DefaultSettings()` if the seeded row is missing (defensive only — should never happen post-migration).
+- **PDF style:** Letterhead Classic — Times-serif, centered company name + address + Tel/TRN/Email/Web contact strip, brand-blue rule, 2-column Bill To / Sales Representative block (sales person email next to customer), thin-rule items table with dotted row separators, double-rule total in brand blue, numbered T&C, single MD signature block bottom-right. **No footer. No Notes section.**
+- **Validity:** "Valid Until" = `approval.ApprovedAt + CompanySettings.QuotationValidityDays`. Admin can change anytime; takes effect on next quote.
+
 ### V2.3 Workflow State Machine (LEGACY — pre-2026-04-30 cutover)
 
 ```

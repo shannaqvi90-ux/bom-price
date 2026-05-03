@@ -8,23 +8,17 @@ using QuestPDF.Infrastructure;
 namespace BomPriceApproval.API.Infrastructure.Services;
 
 /// <summary>
-/// Unified quotation PDF generator. Single entry point — handles both V2.3
-/// (legacy SalesPricePerKgAed prices) and V3 (MarginPerKg + cost computation)
-/// approvals, optionally embeds the MD's signature image when a signer User
-/// is provided. Re-queries the DB for cost lines + FX rates so callers don't
-/// have to remember which Includes are needed.
+/// Letterhead Classic quotation PDF generator. Reads admin-editable
+/// CompanySettings (singleton row id=1) for letterhead text + validity + T&amp;C.
+/// Salesperson email shown next to Bill-To. Single MD signature only — no
+/// salesperson signature, no footer, no Notes section.
 /// </summary>
 public class PdfService(AppDbContext db)
 {
-    // Brand palette — aligned with web/mobile (#1e40af blue family).
-    private const string Brand     = "#1e40af";   // primary brand blue
-    private const string BrandDark = "#1e3a8a";   // navy for accents/titles
-    private const string BrandSoft = "#eff6ff";   // soft tint for cards
-    private const string White     = "#FFFFFF";
-    private const string Text      = "#0f172a";   // primary text (slate-900)
-    private const string Muted     = "#64748b";   // muted text (slate-500)
-    private const string Border    = "#e2e8f0";   // subtle dividers (slate-200)
-    private const string RowAlt    = "#f8fafc";   // alternating row tint
+    private const string BrandDark = "#1e3a8a";
+    private const string Text      = "#0f172a";
+    private const string Muted     = "#475569";
+    private const string Faint     = "#94a3b8";
 
     public async Task<byte[]> GenerateQuotationAsync(
         QuotationRequest req,
@@ -33,7 +27,6 @@ public class PdfService(AppDbContext db)
     {
         QuestPDF.Settings.License = LicenseType.Community;
 
-        // Defensive reload — callers may not Include everything we need.
         var fullReq = await db.QuotationRequests
             .AsNoTracking()
             .Include(r => r.Customer)
@@ -49,7 +42,6 @@ public class PdfService(AppDbContext db)
                     .ThenInclude(b => b.Lines)
             .FirstOrDefaultAsync(r => r.Id == req.Id) ?? req;
 
-        // V3 cost lines (separate query — not on BomHeader nav).
         var bomHeaderIds = fullReq.Items
             .Where(ri => ri.BomHeader != null)
             .Select(ri => ri.BomHeader!.Id)
@@ -62,7 +54,6 @@ public class PdfService(AppDbContext db)
                 .GroupBy(cl => cl.BomHeaderId)
                 .ToDictionaryAsync(g => g.Key, g => g.ToList());
 
-        // FX rates for any non-AED printing currency we encounter.
         var fxByCurrency = await db.ExchangeRates
             .AsNoTracking()
             .Where(r => r.IsActive)
@@ -70,183 +61,153 @@ public class PdfService(AppDbContext db)
             .Select(g => g.OrderByDescending(r => r.EffectiveDate).First())
             .ToDictionaryAsync(r => r.CurrencyCode, r => r.RateToAed);
 
+        var settings = await db.CompanySettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == 1) ?? DefaultSettings();
+
         var approvalItemMap = approval.Items.ToDictionary(ai => ai.RequisitionItemId);
-        // V3 reqs have at least one ApprovalItem.MarginPerKg set; V2.3 use
-        // SalesPricePerKgAed only. Branch the price computation accordingly.
         var isV3 = approval.Items.Any(ai => ai.MarginPerKg.HasValue);
+
+        var validUntil = approval.ApprovedAt.AddDays(settings.QuotationValidityDays);
+        var termsList = (settings.TermsAndConditions ?? "")
+            .Split('\n')
+            .Select(l => l.Trim())
+            .Where(l => l.Length > 0)
+            .ToList();
 
         return Document.Create(container =>
         {
             container.Page(page =>
             {
                 page.Size(PageSizes.A4);
-                page.MarginHorizontal(40);
-                page.MarginVertical(36);
-                page.DefaultTextStyle(t => t.FontSize(10).FontFamily("Arial").FontColor(Text));
+                page.MarginHorizontal(36);
+                page.MarginVertical(32);
+                page.DefaultTextStyle(t => t.FontSize(10).FontFamily("Times New Roman").FontColor(Text));
 
-                // ── HEADER ────────────────────────────────────────────────────
-                page.Header().Column(col =>
+                page.Content().Column(col =>
                 {
-                    col.Item().Height(4).Background(Brand);
+                    // ── LETTERHEAD ────────────────────────────────────────
+                    col.Item().AlignCenter().Text(settings.CompanyName)
+                        .Bold().FontSize(22).FontColor(BrandDark).LetterSpacing(0.04f);
 
-                    col.Item().PaddingTop(14).Row(row =>
+                    if (!string.IsNullOrWhiteSpace(settings.Address))
+                        col.Item().PaddingTop(4).AlignCenter().Text(settings.Address)
+                            .FontSize(10).FontColor(Muted);
+
+                    var contactParts = new List<string>();
+                    if (!string.IsNullOrWhiteSpace(settings.Telephone)) contactParts.Add($"Tel: {settings.Telephone}");
+                    if (!string.IsNullOrWhiteSpace(settings.Trn))       contactParts.Add($"TRN: {settings.Trn}");
+                    if (!string.IsNullOrWhiteSpace(settings.Email))     contactParts.Add(settings.Email);
+                    if (!string.IsNullOrWhiteSpace(settings.Website))   contactParts.Add(settings.Website);
+                    if (contactParts.Count > 0)
+                        col.Item().PaddingTop(2).AlignCenter()
+                            .Text(string.Join("  ·  ", contactParts))
+                            .FontSize(9.5f).FontColor(Muted);
+
+                    col.Item().PaddingTop(10).LineHorizontal(2f).LineColor(BrandDark);
+
+                    // ── TITLE ─────────────────────────────────────────────
+                    col.Item().PaddingTop(14).AlignCenter().Text("SALES QUOTATION")
+                        .Bold().FontSize(14).FontColor(Text).LetterSpacing(0.18f);
+                    col.Item().PaddingTop(2).AlignCenter().Container().Width(160).LineHorizontal(0.5f).LineColor(Text);
+
+                    // ── META STRIP ────────────────────────────────────────
+                    col.Item().PaddingTop(10).PaddingBottom(6).BorderBottom(0.5f).BorderColor(Faint).Row(row =>
+                    {
+                        MetaPair(row.RelativeItem(), "Ref:", fullReq.RefNo);
+                        MetaPair(row.RelativeItem(), "Date:", approval.ApprovedAt.ToString("dd MMM yyyy"));
+                        MetaPair(row.RelativeItem(), "Valid Until:", validUntil.ToString("dd MMM yyyy"));
+                        MetaPair(row.RelativeItem(), "Currency:", fullReq.CurrencyCode);
+                    });
+
+                    // ── BILL TO + SALES REP ───────────────────────────────
+                    col.Item().PaddingTop(10).Row(row =>
                     {
                         row.RelativeItem().Column(c =>
                         {
-                            c.Item().Text("FUJAIRAH PLASTIC FACTORY")
-                                .Bold().FontSize(18).FontColor(BrandDark).LetterSpacing(0.02f);
-                            c.Item().PaddingTop(2).Text(fullReq.Branch?.Name ?? "")
-                                .FontSize(9.5f).FontColor(Brand);
-                            c.Item().PaddingTop(1).Text("Fujairah, United Arab Emirates")
-                                .FontSize(8.5f).FontColor(Muted);
+                            PartyHeader(c, "Bill To");
+                            c.Item().PaddingTop(2).Text(fullReq.Customer.Name)
+                                .Bold().FontSize(12).FontColor(Text);
+                            c.Item().PaddingTop(1).Text(fullReq.Customer.Code).FontSize(9.5f).FontColor(Muted);
+                            if (!string.IsNullOrWhiteSpace(fullReq.Customer.Address))
+                                c.Item().PaddingTop(1).Text(fullReq.Customer.Address).FontSize(9.5f).FontColor(Muted);
+                            if (!string.IsNullOrWhiteSpace(fullReq.Customer.PhoneNumber))
+                                c.Item().PaddingTop(1).Text($"Tel: {fullReq.Customer.PhoneNumber}").FontSize(9.5f).FontColor(Muted);
+                            if (!string.IsNullOrWhiteSpace(fullReq.Customer.Email))
+                                c.Item().PaddingTop(1).Text(fullReq.Customer.Email).FontSize(9.5f).FontColor(Muted);
                         });
-
-                        row.ConstantItem(190)
-                            .Border(1).BorderColor(Brand)
-                            .Background(BrandSoft)
-                            .Padding(12)
-                            .Column(c =>
-                            {
-                                c.Item().AlignCenter().Text("SALES QUOTATION")
-                                    .Bold().FontSize(13).FontColor(BrandDark).LetterSpacing(0.05f);
-                                c.Item().PaddingTop(8).Table(t =>
-                                {
-                                    t.ColumnsDefinition(cd =>
-                                    {
-                                        cd.RelativeColumn();
-                                        cd.RelativeColumn();
-                                    });
-                                    QuoteDetailRow(t, "Ref No:", fullReq.RefNo, bold: true, valueColor: Brand);
-                                    QuoteDetailRow(t, "Date:", approval.ApprovedAt.ToString("dd MMM yyyy"));
-                                    QuoteDetailRow(t, "Valid Until:", approval.ApprovedAt.AddDays(30).ToString("dd MMM yyyy"));
-                                    QuoteDetailRow(t, "Currency:", fullReq.CurrencyCode);
-                                });
-                            });
-                    });
-
-                    col.Item().PaddingTop(12).LineHorizontal(0.75f).LineColor(Border);
-                });
-
-                // ── CONTENT ───────────────────────────────────────────────────
-                page.Content().PaddingTop(16).Column(col =>
-                {
-                    // BILL TO / PREPARED BY
-                    col.Item().Row(row =>
-                    {
+                        row.ConstantItem(22);
                         row.RelativeItem().Column(c =>
                         {
-                            SectionHeader(c, "BILL TO");
-                            c.Item().Border(0.75f).BorderColor(Border).Padding(11).Column(inner =>
-                            {
-                                inner.Item().Text(fullReq.Customer.Name)
-                                    .Bold().FontSize(12).FontColor(BrandDark);
-                                inner.Item().PaddingTop(2).Text(fullReq.Customer.Code)
-                                    .FontSize(8.5f).FontColor(Muted);
-                                if (!string.IsNullOrWhiteSpace(fullReq.Customer.Address))
-                                    inner.Item().PaddingTop(5).Text(fullReq.Customer.Address)
-                                        .FontSize(9).FontColor(Muted);
-                                if (!string.IsNullOrWhiteSpace(fullReq.Customer.PhoneNumber))
-                                    inner.Item().PaddingTop(2)
-                                        .Text($"Tel: {fullReq.Customer.PhoneNumber}").FontSize(9).FontColor(Muted);
-                                if (!string.IsNullOrWhiteSpace(fullReq.Customer.Email))
-                                    inner.Item().PaddingTop(2)
-                                        .Text($"Email: {fullReq.Customer.Email}").FontSize(9).FontColor(Muted);
-                            });
-                        });
-
-                        row.ConstantItem(20);
-
-                        row.RelativeItem().Column(c =>
-                        {
-                            SectionHeader(c, "PREPARED BY", accent: true);
-                            c.Item().Border(0.75f).BorderColor(Border).Padding(11).Column(inner =>
-                            {
-                                inner.Item().Text(fullReq.SalesPerson?.Name ?? "—")
-                                    .Bold().FontSize(11).FontColor(BrandDark);
-                                inner.Item().PaddingTop(2).Text("Sales Representative")
-                                    .FontSize(8.5f).FontColor(Muted);
-                                if (signer is not null)
-                                {
-                                    inner.Item().PaddingTop(8).Text("Approved by").FontSize(8).FontColor(Muted);
-                                    inner.Item().PaddingTop(1).Text(signer.Name)
-                                        .FontSize(10).Bold().FontColor(Text);
-                                    inner.Item().PaddingTop(1).Text("Managing Director")
-                                        .FontSize(8.5f).FontColor(Muted);
-                                }
-                            });
+                            PartyHeader(c, "Sales Representative");
+                            c.Item().PaddingTop(2).Text(fullReq.SalesPerson?.Name ?? "—")
+                                .Bold().FontSize(12).FontColor(Text);
+                            c.Item().PaddingTop(1).Text("Sales Department").FontSize(9.5f).FontColor(Muted);
+                            if (!string.IsNullOrWhiteSpace(fullReq.SalesPerson?.Email))
+                                c.Item().PaddingTop(1).Text(fullReq.SalesPerson!.Email).FontSize(9.5f).FontColor(Muted);
                         });
                     });
 
-                    // Items table
+                    // ── SALUTATION ────────────────────────────────────────
+                    col.Item().PaddingTop(12).Text(
+                        "Dear Sir/Madam, with reference to your enquiry, we are pleased to submit our quotation as below:")
+                        .FontSize(10).FontColor(Text);
+
+                    // ── ITEMS TABLE ───────────────────────────────────────
                     decimal grandTotal = 0;
-                    col.Item().PaddingTop(20).Column(c =>
-                    {
-                        SectionHeader(c, "QUOTATION DETAILS");
-
-                        c.Item().Table(t =>
-                        {
-                            t.ColumnsDefinition(cd =>
-                            {
-                                cd.ConstantColumn(28);   // #
-                                cd.RelativeColumn(4);    // Description
-                                cd.RelativeColumn(1.5f); // Qty
-                                cd.RelativeColumn(0.8f); // Unit
-                                cd.RelativeColumn(2);    // Unit Price
-                                cd.RelativeColumn(2);    // Total
-                            });
-
-                            TableHeader(t, "#");
-                            TableHeader(t, "Item Description");
-                            TableHeader(t, "Quantity", alignRight: true);
-                            TableHeader(t, "Unit");
-                            TableHeader(t, $"Unit Price ({fullReq.CurrencyCode})", alignRight: true);
-                            TableHeader(t, $"Total ({fullReq.CurrencyCode})", alignRight: true);
-
-                            var rowNum = 0;
-                            foreach (var ri in fullReq.Items.OrderBy(i => i.SortOrder))
-                            {
-                                if (!approvalItemMap.TryGetValue(ri.Id, out var ai)) continue;
-                                rowNum++;
-
-                                var unitPrice = isV3
-                                    ? ComputeV3PricePerKg(ri, ai, approval, fullReq.CurrencyCode, fullReq.ExchangeRateSnapshot,
-                                        costLinesByHeader, fxByCurrency)
-                                    : (fullReq.CurrencyCode == "AED"
-                                        ? ai.SalesPricePerKgAed
-                                        : ai.SalesPricePerKgForeign ?? ai.SalesPricePerKgAed);
-
-                                var lineTotal = unitPrice * ri.ExpectedQty;
-                                grandTotal += lineTotal;
-
-                                var bg = rowNum % 2 == 0 ? RowAlt : White;
-                                TableCell(t, rowNum.ToString(), bg);
-                                TableCell(t, ri.Item.Description, bg);
-                                TableCell(t, ri.ExpectedQty.ToString("N0"), bg, alignRight: true);
-                                TableCell(t, "kg", bg);
-                                TableCell(t, unitPrice.ToString("N4"), bg, alignRight: true);
-                                TableCell(t, lineTotal.ToString("N2"), bg, alignRight: true, bold: true);
-                            }
-                        });
-                    });
-
-                    // Total summary
-                    col.Item().PaddingTop(8).AlignRight().Table(t =>
+                    col.Item().PaddingTop(10).Table(t =>
                     {
                         t.ColumnsDefinition(cd =>
                         {
-                            cd.ConstantColumn(170);
-                            cd.ConstantColumn(140);
+                            cd.ConstantColumn(34);
+                            cd.RelativeColumn(4);
+                            cd.RelativeColumn(1.5f);
+                            cd.RelativeColumn(1.7f);
+                            cd.RelativeColumn(2);
                         });
 
-                        t.Cell().Background(Brand).Padding(11)
-                            .Text($"TOTAL AMOUNT ({fullReq.CurrencyCode})")
-                            .Bold().FontSize(10).FontColor(White).LetterSpacing(0.04f);
-                        t.Cell().Background(Brand).Padding(11).AlignRight()
-                            .Text(grandTotal.ToString("N2"))
-                            .Bold().FontSize(14).FontColor(White);
+                        ItemsTableHeader(t, "S.No");
+                        ItemsTableHeader(t, "Description");
+                        ItemsTableHeader(t, "Qty (kg)", alignRight: true);
+                        ItemsTableHeader(t, $"Rate ({fullReq.CurrencyCode})", alignRight: true);
+                        ItemsTableHeader(t, $"Amount ({fullReq.CurrencyCode})", alignRight: true);
+
+                        var rowNum = 0;
+                        foreach (var ri in fullReq.Items.OrderBy(i => i.SortOrder))
+                        {
+                            if (!approvalItemMap.TryGetValue(ri.Id, out var ai)) continue;
+                            rowNum++;
+
+                            var unitPrice = isV3
+                                ? ComputeV3PricePerKg(ri, ai, approval, fullReq.CurrencyCode,
+                                    fullReq.ExchangeRateSnapshot, costLinesByHeader, fxByCurrency)
+                                : (fullReq.CurrencyCode == "AED"
+                                    ? ai.SalesPricePerKgAed
+                                    : ai.SalesPricePerKgForeign ?? ai.SalesPricePerKgAed);
+
+                            var lineTotal = unitPrice * ri.ExpectedQty;
+                            grandTotal += lineTotal;
+
+                            ItemsTableCell(t, rowNum.ToString());
+                            ItemsTableCell(t, ri.Item.Description);
+                            ItemsTableCell(t, ri.ExpectedQty.ToString("N0"), alignRight: true);
+                            ItemsTableCell(t, unitPrice.ToString("N4"), alignRight: true);
+                            ItemsTableCell(t, lineTotal.ToString("N2"), alignRight: true);
+                        }
                     });
 
-                    // Exchange rate disclosure (non-AED only)
+                    // ── TOTAL ─────────────────────────────────────────────
+                    col.Item().PaddingTop(2)
+                        .BorderTop(1.5f).BorderBottom(1.5f).BorderColor(BrandDark)
+                        .PaddingVertical(8).PaddingHorizontal(6).Row(row =>
+                    {
+                        row.RelativeItem().Text("TOTAL AMOUNT")
+                            .Bold().FontSize(12).FontColor(BrandDark);
+                        row.ConstantItem(160).AlignRight()
+                            .Text($"{fullReq.CurrencyCode}  {grandTotal:N2}")
+                            .Bold().FontSize(12).FontColor(BrandDark);
+                    });
+
+                    // Exchange rate disclosure (non-AED)
                     if (fullReq.CurrencyCode != "AED")
                     {
                         var rate = approval.RateSnapshot ?? fullReq.ExchangeRateSnapshot;
@@ -254,107 +215,60 @@ public class PdfService(AppDbContext db)
                         {
                             col.Item().PaddingTop(4).AlignRight()
                                 .Text($"Exchange Rate: 1 {fullReq.CurrencyCode} = {r:N4} AED  (as of {approval.ApprovedAt:dd MMM yyyy})")
-                                .FontSize(8).FontColor(Muted).Italic();
+                                .FontSize(9).FontColor(Muted).Italic();
                         }
                     }
 
-                    // Notes
-                    if (!string.IsNullOrWhiteSpace(approval.Notes))
+                    // ── TERMS & CONDITIONS ────────────────────────────────
+                    if (termsList.Count > 0)
                     {
-                        col.Item().PaddingTop(18).Column(c =>
+                        col.Item().PaddingTop(16).Text("Terms & Conditions:")
+                            .Bold().FontSize(10).FontColor(Text).Underline();
+                        col.Item().PaddingTop(4).Column(tc =>
                         {
-                            SectionHeader(c, "NOTES");
-                            c.Item().Border(0.75f).BorderColor(Border).Padding(10)
-                                .Text(approval.Notes).FontSize(9).FontColor(Muted);
+                            for (int i = 0; i < termsList.Count; i++)
+                            {
+                                tc.Item().PaddingBottom(2).Text($"{i + 1}. {termsList[i]}")
+                                    .FontSize(9.5f).FontColor("#334155");
+                            }
                         });
                     }
 
-                    // Terms & Conditions
-                    col.Item().PaddingTop(18).Column(c =>
-                    {
-                        SectionHeader(c, "TERMS & CONDITIONS");
-                        c.Item().Border(0.75f).BorderColor(Border).Padding(11).Column(inner =>
-                        {
-                            var terms = new[]
-                            {
-                                "1. This quotation is valid for 30 days from the date of issue.",
-                                "2. Prices are subject to change without prior notice after the validity period.",
-                                "3. Payment terms as per mutually agreed contract.",
-                                "4. Delivery: Ex-Works Fujairah unless otherwise agreed in writing.",
-                                "5. All disputes are subject to the jurisdiction of UAE courts.",
-                            };
-                            foreach (var term in terms)
-                                inner.Item().PaddingBottom(3).Text(term)
-                                    .FontSize(8.5f).FontColor(Muted);
-                        });
-                    });
-
-                    // Signature block (anchored to the bottom-right of content area)
+                    // ── SIGNATURE (MD only, right-aligned) ────────────────
                     col.Item().PaddingTop(28).AlignRight().Width(220).Column(sig =>
                     {
-                        sig.Item().Text("AUTHORIZED SIGNATORY")
-                            .Bold().FontSize(8.5f).FontColor(Muted).LetterSpacing(0.06f);
-
-                        sig.Item().PaddingTop(8).Height(48).AlignCenter().Element(box =>
+                        sig.Item().Height(48).AlignCenter().Element(box =>
                         {
                             if (signer?.SignatureImage is { Length: > 0 })
-                            {
                                 box.Image(signer.SignatureImage).FitArea();
-                            }
                             else
-                            {
                                 box.AlignBottom().AlignCenter().Text("(signature pending)")
-                                    .FontSize(8).FontColor(Muted).Italic();
-                            }
+                                    .FontSize(9).FontColor(Faint).Italic();
                         });
-
-                        sig.Item().PaddingTop(2).LineHorizontal(0.5f).LineColor(BrandDark);
-                        sig.Item().PaddingTop(4).AlignCenter().Text(signer?.Name ?? "—")
-                            .Bold().FontSize(10).FontColor(Text);
+                        sig.Item().PaddingTop(2).LineHorizontal(0.5f).LineColor(Text);
+                        sig.Item().PaddingTop(4).AlignCenter()
+                            .Text($"For {settings.CompanyName}").Bold().FontSize(11).FontColor(Text);
                         sig.Item().PaddingTop(1).AlignCenter()
-                            .Text("Managing Director").FontSize(8.5f).FontColor(Muted);
-                        sig.Item().PaddingTop(0).AlignCenter()
-                            .Text("Fujairah Plastic Factory").FontSize(8).FontColor(Muted);
+                            .Text("Authorized Signatory · Managing Director").FontSize(9).FontColor(Muted).Italic();
                     });
-                });
-
-                // ── FOOTER ────────────────────────────────────────────────────
-                page.Footer().Column(col =>
-                {
-                    col.Item().PaddingTop(10).LineHorizontal(0.5f).LineColor(Border);
-
-                    col.Item().PaddingTop(6).Row(row =>
-                    {
-                        row.RelativeItem().Column(c =>
-                        {
-                            c.Item().Text("Fujairah Plastic Factory  ·  Fujairah, UAE")
-                                .FontSize(8).FontColor(Muted);
-                            c.Item().Text("info@fujairahplastic.com")
-                                .FontSize(8).FontColor(Muted);
-                        });
-
-                        row.RelativeItem().AlignRight().AlignBottom().Text(text =>
-                        {
-                            text.Span("Page ").FontSize(8).FontColor(Muted);
-                            text.CurrentPageNumber().FontSize(8).FontColor(Muted);
-                            text.Span(" of ").FontSize(8).FontColor(Muted);
-                            text.TotalPages().FontSize(8).FontColor(Muted);
-                        });
-                    });
-
-                    col.Item().PaddingTop(8).Height(2).Background(Brand);
                 });
             });
         }).GeneratePdf();
     }
 
-    /// <summary>
-    /// V3 per-KG price computation. Cost is summed in AED (BomCostLine.CostPerKgInAed
-    /// is precomputed at costing-submit; printing cost is converted via active
-    /// ExchangeRate when its currency differs from AED). For non-AED quotes the
-    /// AED total is divided by approval.RateSnapshot (or ExchangeRateSnapshot
-    /// fallback) before the margin is added.
-    /// </summary>
+    private static CompanySettings DefaultSettings() => new()
+    {
+        Id = 1,
+        CompanyName = "FUJAIRAH PLASTIC FACTORY",
+        Address = "Fujairah, United Arab Emirates",
+        Telephone = "",
+        Trn = "",
+        Email = "info@fujairahplastic.com",
+        Website = "",
+        QuotationValidityDays = 30,
+        TermsAndConditions = "",
+    };
+
     private static decimal ComputeV3PricePerKg(
         RequisitionItem ri,
         ApprovalItem ai,
@@ -390,9 +304,7 @@ public class PdfService(AppDbContext db)
 
         decimal totalCostInQuoteCcy;
         if (quoteCurrency == "AED")
-        {
             totalCostInQuoteCcy = totalCostAed;
-        }
         else
         {
             var saleRate = approval.RateSnapshot ?? requisitionRateSnapshot ?? 1m;
@@ -402,44 +314,37 @@ public class PdfService(AppDbContext db)
         return totalCostInQuoteCcy + (ai.MarginPerKg ?? 0m);
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
-
-    private static void SectionHeader(QuestPDF.Fluent.ColumnDescriptor col, string title, bool accent = false)
+    private static void MetaPair(QuestPDF.Infrastructure.IContainer box, string label, string value)
     {
-        col.Item()
-            .Background(accent ? Brand : BrandDark)
-            .PaddingHorizontal(8).PaddingVertical(5)
-            .Text(title).Bold().FontSize(8.5f).FontColor(White).LetterSpacing(0.05f);
+        box.Text(text =>
+        {
+            text.Span($"{label} ").FontSize(10).FontColor(Muted);
+            text.Span(value).FontSize(10).Bold().FontColor(Text);
+        });
     }
 
-    private static void TableHeader(QuestPDF.Fluent.TableDescriptor t, string text, bool alignRight = false)
+    private static void PartyHeader(QuestPDF.Fluent.ColumnDescriptor col, string title)
+    {
+        col.Item().BorderBottom(0.5f).BorderColor("#cbd5e1").PaddingBottom(3)
+            .Text(title.ToUpperInvariant())
+            .Bold().FontSize(9).FontColor(Muted).LetterSpacing(0.18f);
+    }
+
+    private static void ItemsTableHeader(QuestPDF.Fluent.TableDescriptor t, string text, bool alignRight = false)
     {
         var cell = t.Cell()
-            .Background(Brand)
-            .PaddingHorizontal(8).PaddingVertical(7);
+            .BorderTop(1).BorderBottom(1).BorderColor(BrandDark)
+            .PaddingHorizontal(6).PaddingVertical(6);
         var container = alignRight ? cell.AlignRight() : cell;
-        container.Text(text).Bold().FontSize(8.5f).FontColor(White).LetterSpacing(0.04f);
+        container.Text(text).Bold().FontSize(9.5f).FontColor(Text);
     }
 
-    private static void TableCell(QuestPDF.Fluent.TableDescriptor t, string text, string background,
-        bool alignRight = false, bool bold = false)
+    private static void ItemsTableCell(QuestPDF.Fluent.TableDescriptor t, string text, bool alignRight = false)
     {
         var cell = t.Cell()
-            .Background(background)
-            .BorderBottom(0.4f).BorderColor(Border)
-            .PaddingHorizontal(8).PaddingVertical(7);
-
+            .BorderBottom(0.5f).BorderColor(Faint)
+            .PaddingHorizontal(6).PaddingVertical(6);
         var container = alignRight ? cell.AlignRight() : cell;
-        var textEl = container.Text(text).FontSize(9.5f);
-        if (bold) textEl.Bold();
-    }
-
-    private static void QuoteDetailRow(QuestPDF.Fluent.TableDescriptor t, string label, string value,
-        bool bold = false, string? valueColor = null)
-    {
-        t.Cell().PaddingVertical(2).Text(label).FontSize(9).FontColor(Muted);
-        var textEl = t.Cell().PaddingVertical(2).Text(value).FontSize(9);
-        if (bold) textEl.Bold();
-        if (valueColor != null) textEl.FontColor(valueColor);
+        container.Text(text).FontSize(10).FontColor(Text);
     }
 }

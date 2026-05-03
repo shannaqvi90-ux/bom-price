@@ -56,9 +56,13 @@ public class ItemsController(AppDbContext db, ICodeGeneratorService codeGen) : C
             query = query.Where(i => i.Type == ItemType.FinishedGood);
         }
 
-        // Branch scoping: an explicit ?branchId= param takes precedence (SP cross-branch picker).
-        // Without it, JWT-bound users fall back to their own branch — except Accountants,
-        // whose visibility is the M:N UserBranches table, NOT the JWT branchId hint (V2.3-A).
+        // Branch scoping: V3 is effectively single-branch (Alain only post-cutover),
+        // and the branch picker has been removed from the items UI. SP/MD/Admin all
+        // see items cross-branch — restricting SP to "their" branch would silently
+        // hide items whose BranchId doesn't match the SP's stale JWT branchId hint
+        // (e.g. legacy items still pointing at the deactivated Fujairah branch).
+        // Explicit ?branchId= still wins (e.g. admin tooling), and Accountant
+        // visibility remains scoped via the M:N UserBranches table per V2.3-A.
         if (branchId.HasValue)
         {
             query = query.Where(i => i.BranchId == branchId.Value);
@@ -70,10 +74,6 @@ public class ItemsController(AppDbContext db, ICodeGeneratorService codeGen) : C
                 .Select(ub => ub.BranchId)
                 .ToListAsync();
             query = query.Where(i => allowedBranchIds.Contains(i.BranchId));
-        }
-        else if (CurrentBranchId.HasValue)
-        {
-            query = query.Where(i => i.BranchId == CurrentBranchId);
         }
 
         if (!includeInactive)

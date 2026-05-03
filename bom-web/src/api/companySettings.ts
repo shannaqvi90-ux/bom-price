@@ -32,7 +32,7 @@ export function useCompanySettings() {
   return useQuery({
     queryKey: QUERY_KEY,
     queryFn: async () => {
-      const { data } = await api.get<CompanySettings>("/api/admin/company-settings");
+      const { data } = await api.get<CompanySettings>("/admin/company-settings");
       return data;
     },
   });
@@ -42,7 +42,7 @@ export function useUpdateCompanySettings() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (body: UpdateCompanySettingsRequest) => {
-      const { data } = await api.put<CompanySettings>("/api/admin/company-settings", body);
+      const { data } = await api.put<CompanySettings>("/admin/company-settings", body);
       return data;
     },
     onSuccess: (data) => {

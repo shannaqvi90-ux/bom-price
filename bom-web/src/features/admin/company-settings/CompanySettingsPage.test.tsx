@@ -73,7 +73,7 @@ describe("CompanySettingsPage", () => {
 
     await waitFor(() => {
       expect(api.put).toHaveBeenCalledWith(
-        "/api/admin/company-settings",
+        "/admin/company-settings",
         expect.objectContaining({
           companyName: "FPF UPDATED",
           reason: "Test save reason",

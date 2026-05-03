@@ -48,7 +48,12 @@ primary_region = 'sin'
 
 [[vm]]
   size = 'shared-cpu-1x'
-  memory = '256mb'
+  # Bumped 256→512 after OOM-kill on 2026-05-03 02:07Z. .NET app working set
+  # routinely ran near 256MB ceiling once SignalR + EF Core + keepalive were
+  # all loaded; kernel killed dotnet, machine rebooted, users saw "Signing in"
+  # hangs for ~7 minutes. 512MB gives generous headroom (~50% spare typical).
+  # Cost delta: ~$2/month.
+  memory = '512mb'
   cpu_kind = 'shared'
   cpus = 1
-  memory_mb = 256
+  memory_mb = 512

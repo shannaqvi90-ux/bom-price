@@ -105,7 +105,7 @@ export function CustomerConfirmPage() {
               <td colSpan={3} className="px-3 py-3 text-right text-sm font-bold text-foreground">
                 GRAND TOTAL
               </td>
-              <td className="px-3 py-3 text-right text-base font-bold text-blue-700">
+              <td className="px-3 py-3 text-right text-base font-bold text-blue-700 dark:text-blue-300">
                 AED{" "}
                 {req.finalPrice.totalAed.toLocaleString(undefined, {
                   maximumFractionDigits: 2,
@@ -142,9 +142,9 @@ export function CustomerConfirmPage() {
       </div>
 
       {showRejectInput && (
-        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/60 dark:bg-amber-900/30">
           <label className="block">
-            <span className="text-sm font-medium text-amber-900">
+            <span className="text-sm font-medium text-amber-900 dark:text-amber-300">
               Reason for re-price (≥5 chars)
             </span>
             <Input

@@ -287,7 +287,7 @@ export default function RequisitionDetailPage() {
                       <div className="mt-3">
                         <CostAwareBomTable fg={fg} currencyCode={req.currencyCode} />
                         {editedByAccountant && (
-                          <p className="mt-2 text-xs text-amber-700">
+                          <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
                             ⚠ Edited by accountant after sales submitted.
                           </p>
                         )}
@@ -296,7 +296,7 @@ export default function RequisitionDetailPage() {
                       <div className="mt-3">
                         <BomEditorTable lines={lines} readOnly />
                         {editedByAccountant && (
-                          <p className="mt-2 text-xs text-amber-700">
+                          <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
                             ⚠ Edited by accountant after sales submitted.
                           </p>
                         )}
@@ -340,23 +340,23 @@ interface StatusBannerProps {
 function StatusBanner({ status, req }: StatusBannerProps) {
   if (status === "Costing" || status === "Draft") {
     return (
-      <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+      <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800/60 dark:bg-blue-900/30 dark:text-blue-300">
         Waiting on accountant costing.
       </div>
     );
   }
   if (status === "CustomerConfirm") {
     return (
-      <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+      <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800/60 dark:bg-blue-900/30 dark:text-blue-300">
         Waiting on sales person to confirm with customer.
       </div>
     );
   }
   if (status === "Rejected") {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-        <div className="text-sm font-semibold text-red-900">Rejected</div>
-        <div className="mt-1 text-sm text-red-900">
+      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-800/60 dark:bg-red-900/30">
+        <div className="text-sm font-semibold text-red-900 dark:text-red-300">Rejected</div>
+        <div className="mt-1 text-sm text-red-900 dark:text-red-300">
           Reason: {req.cancelReason ?? "(no reason recorded)"}
         </div>
       </div>

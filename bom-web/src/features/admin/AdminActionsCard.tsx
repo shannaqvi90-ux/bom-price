@@ -48,9 +48,9 @@ export function AdminActionsCard({ requisition }: Props) {
 
   return (
     <>
-      <Card className="border-amber-200 bg-amber-50">
+      <Card className="border-amber-200 bg-amber-50 dark:border-amber-800/60 dark:bg-amber-900/30">
         <CardHeader className="pb-2">
-          <CardTitle className="flex items-center justify-between text-base text-amber-800">
+          <CardTitle className="flex items-center justify-between text-base text-amber-800 dark:text-amber-300">
             <button
               type="button"
               onClick={() => setExpanded((v) => !v)}
@@ -58,7 +58,7 @@ export function AdminActionsCard({ requisition }: Props) {
               aria-label="Admin actions"
             >
               Admin actions
-              <span className="text-xs font-normal text-amber-600">
+              <span className="text-xs font-normal text-amber-600 dark:text-amber-300">
                 {expanded ? "▲" : "▼"}
               </span>
             </button>

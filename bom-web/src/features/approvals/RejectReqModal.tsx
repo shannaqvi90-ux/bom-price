@@ -75,7 +75,7 @@ export function RejectReqModal({ requisitionId, refNo, open, onClose, onRejected
         </label>
 
         {error ? (
-          <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800/60 dark:bg-red-900/30 dark:text-red-300">
             {error}
           </div>
         ) : null}

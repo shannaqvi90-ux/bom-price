@@ -99,7 +99,7 @@ export function AccountantListPage() {
               onClick={() => setTab(t)}
               className={`relative px-4 py-2 text-sm font-medium transition ${
                 active
-                  ? "text-blue-700"
+                  ? "text-blue-700 dark:text-blue-300"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -107,7 +107,7 @@ export function AccountantListPage() {
               <span
                 className={`ml-2 rounded-full px-2 py-0.5 text-xs font-semibold ${
                   active
-                    ? "bg-blue-100 text-blue-800"
+                    ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
                     : "bg-muted text-foreground"
                 }`}
               >

@@ -153,7 +153,7 @@ export function NewRequisitionPage() {
             <button
               type="button"
               onClick={() => setCreateCustomerOpen(true)}
-              className="rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"
+              className="rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-800/60 dark:bg-blue-900/30 dark:text-blue-300"
             >
               + New
             </button>
@@ -232,7 +232,7 @@ export function NewRequisitionPage() {
                       setCreatingFgForIdx(idx);
                       setCreateFgOpen(true);
                     }}
-                    className="rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                    className="rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-800/60 dark:bg-blue-900/30 dark:text-blue-300"
                   >
                     + New FG
                   </button>
@@ -278,7 +278,7 @@ export function NewRequisitionPage() {
         <button
           type="button"
           onClick={addFg}
-          className="rounded-md border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+          className="rounded-md border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-800/60 dark:bg-blue-900/30 dark:text-blue-300"
         >
           + Add Finished Good
         </button>

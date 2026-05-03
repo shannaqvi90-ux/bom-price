@@ -69,7 +69,7 @@ export function ResetPasswordModal({ user, onClose }: Props) {
 
   return (
     <Dialog open onClose={handleClose} title="Temporary password">
-      <p className="text-sm text-amber-700 mb-4">
+      <p className="text-sm text-amber-700 mb-4 dark:text-amber-300">
         This password is shown <strong>once</strong>. Copy it now and hand it to the user. They
         will be required to change it on next login.
       </p>

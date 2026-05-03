@@ -60,9 +60,9 @@ export default function MdDashboard() {
 
       {/* Signature missing — surface ASAP so MD doesn't hit it at sign-time */}
       {!sigLoading && !signatureUrl ? (
-        <div className="rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3">
-          <div className="font-semibold text-yellow-900">⚠️ No signature uploaded</div>
-          <div className="mt-1 text-sm text-yellow-900">
+        <div className="rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 dark:border-amber-800/60 dark:bg-amber-900/30">
+          <div className="font-semibold text-yellow-900 dark:text-amber-300">⚠️ No signature uploaded</div>
+          <div className="mt-1 text-sm text-yellow-900 dark:text-amber-300">
             Final-sign will be blocked until you upload your signature.{" "}
             <Link to="/profile/signature" className="font-semibold underline">
               Upload now →
@@ -176,10 +176,10 @@ interface KpiProps {
 }
 
 const accentMap = {
-  blue: "bg-blue-50 border-blue-200 text-blue-900",
-  orange: "bg-orange-50 border-orange-200 text-orange-900",
+  blue: "bg-blue-50 border-blue-200 text-blue-900 dark:bg-blue-900/30 dark:border-blue-800/60 dark:text-blue-300",
+  orange: "bg-orange-50 border-orange-200 text-orange-900 dark:bg-orange-900/30 dark:border-orange-800/60 dark:text-orange-300",
   slate: "bg-muted border-border text-foreground",
-  green: "bg-emerald-50 border-emerald-200 text-emerald-900",
+  green: "bg-emerald-50 border-emerald-200 text-emerald-900 dark:bg-emerald-900/30 dark:border-emerald-800/60 dark:text-emerald-300",
 } as const;
 
 function Kpi({ label, value, loading, onClick, accent }: KpiProps) {

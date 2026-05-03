@@ -128,8 +128,8 @@ export function MdFgPricingCard({
         </details>
       ) : null}
 
-      <div className="mt-3 flex items-center gap-3 rounded-md bg-blue-50 px-3 py-2">
-        <label className="flex-1 text-sm font-medium text-blue-900">
+      <div className="mt-3 flex items-center gap-3 rounded-md bg-blue-50 px-3 py-2 dark:bg-blue-900/30">
+        <label className="flex-1 text-sm font-medium text-blue-900 dark:text-blue-300">
           Margin/KG ({currencyCode})
         </label>
         {(() => {
@@ -138,7 +138,7 @@ export function MdFgPricingCard({
           const salePerKg = costPerKg + marginNum;
           const pct = showPct && salePerKg > 0 ? (marginNum / salePerKg) * 100 : null;
           return pct != null ? (
-            <span className="text-xs font-semibold text-blue-700">
+            <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">
               {pct.toFixed(1)}%
             </span>
           ) : null;
@@ -154,7 +154,7 @@ export function MdFgPricingCard({
       </div>
 
       {livePerFg ? (
-        <div className="mt-2 flex items-center justify-between rounded-md bg-emerald-50 px-3 py-2 text-sm">
+        <div className="mt-2 flex items-center justify-between rounded-md bg-emerald-50 px-3 py-2 text-sm dark:bg-emerald-900/30">
           <div>
             <span className="text-foreground">Sale/KG</span>{" "}
             <span className="font-semibold text-foreground">

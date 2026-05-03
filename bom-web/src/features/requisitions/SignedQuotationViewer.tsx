@@ -51,7 +51,7 @@ export function SignedQuotationViewer({ requisitionId, refNo }: Props) {
             Loading PDF…
           </div>
         ) : pdf.isError ? (
-          <div className="flex h-[60vh] items-center justify-center text-sm text-red-700">
+          <div className="flex h-[60vh] items-center justify-center text-sm text-red-700 dark:text-red-300">
             Failed to load PDF.
           </div>
         ) : pdf.data ? (

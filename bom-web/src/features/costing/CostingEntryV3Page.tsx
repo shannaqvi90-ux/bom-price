@@ -376,7 +376,7 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
         <button
           onClick={onSave}
           disabled={saveCost.isPending}
-          className="rounded-md border border-blue-600 bg-card px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+          className="rounded-md border border-blue-600 bg-card px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-900/30"
         >
           Save
         </button>

@@ -16,7 +16,7 @@ export function FinalPriceSummary({ finalPrice, previewMode = false }: Props) {
           Quote Summary{previewMode ? " (preview)" : ""}
         </div>
         {previewMode ? (
-          <div className="text-[11px] text-amber-700">
+          <div className="text-[11px] text-amber-700 dark:text-amber-300">
             Subject to MD final-sign — not yet locked
           </div>
         ) : null}
@@ -52,7 +52,7 @@ export function FinalPriceSummary({ finalPrice, previewMode = false }: Props) {
             <td colSpan={3} className="px-1 py-3 text-right text-sm font-bold text-foreground">
               GRAND TOTAL
             </td>
-            <td className="px-1 py-3 text-right text-lg font-bold text-blue-700">
+            <td className="px-1 py-3 text-right text-lg font-bold text-blue-700 dark:text-blue-300">
               AED{" "}
               {finalPrice.totalAed.toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </td>

@@ -108,7 +108,7 @@ export function BomEditorTable({ lines, onChange, readOnly = false }: Props) {
                     <button
                       type="button"
                       onClick={() => removeLine(idx)}
-                      className="text-xs text-red-600 hover:text-red-700"
+                      className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                     >
                       Remove
                     </button>
@@ -132,7 +132,7 @@ export function BomEditorTable({ lines, onChange, readOnly = false }: Props) {
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+            className="rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-800/60 dark:bg-blue-900/30 dark:text-blue-300"
           >
             + Create new RM
           </button>

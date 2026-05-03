@@ -51,7 +51,7 @@ export function MdFinalSignPage() {
           <FinalPriceSummary finalPrice={req.finalPrice} />
         </div>
       ) : (
-        <div className="mt-6 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+        <div className="mt-6 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-amber-800/60 dark:bg-amber-900/30 dark:text-amber-300">
           Final price not available — margin must be set first.
         </div>
       )}
@@ -71,7 +71,7 @@ export function MdFinalSignPage() {
             />
           </div>
         ) : (
-          <div className="mt-3 rounded-md border border-yellow-300 bg-yellow-50 px-3 py-3 text-sm text-yellow-900">
+          <div className="mt-3 rounded-md border border-yellow-300 bg-yellow-50 px-3 py-3 text-sm text-yellow-900 dark:border-amber-800/60 dark:bg-amber-900/30 dark:text-amber-300">
             ⚠️ No signature uploaded. Final-sign will fail until you upload one.{" "}
             <Link to="/profile/signature" className="font-semibold underline">
               Upload now →
@@ -80,11 +80,11 @@ export function MdFinalSignPage() {
         )}
       </div>
 
-      <div className="mt-4 rounded-lg border border-orange-200 bg-orange-50 p-4">
-        <h2 className="text-base font-semibold text-orange-900">
+      <div className="mt-4 rounded-lg border border-orange-200 bg-orange-50 p-4 dark:border-orange-800/60 dark:bg-orange-900/30">
+        <h2 className="text-base font-semibold text-orange-900 dark:text-orange-300">
           Final sign locks this quotation
         </h2>
-        <p className="mt-1 text-sm text-orange-800">
+        <p className="mt-1 text-sm text-orange-800 dark:text-orange-300">
           After signing, no changes can be made. The PDF will be generated immediately
           and can be downloaded by the salesperson to share with the customer manually.
         </p>

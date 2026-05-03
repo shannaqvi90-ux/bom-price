@@ -146,7 +146,7 @@ export function OverridePricesModal({ requisition, onClose }: Props) {
       onClose={onClose}
       className="max-w-5xl"
     >
-      <p className="mb-3 text-sm text-amber-800">
+      <p className="mb-3 text-sm text-amber-800 dark:text-amber-300">
         This will mark the current approval as superseded and create a new approval with your
         prices. Status remains <strong>Approved</strong>. A new PDF will be generated and emailed
         to the SP (not the customer) for forwarding. Exchange rate will be re-snapped server-side
@@ -160,7 +160,7 @@ export function OverridePricesModal({ requisition, onClose }: Props) {
       )}
 
       {fetchErrText && !isLoading && (
-        <div className="mb-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+        <div className="mb-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800/60 dark:bg-red-900/30 dark:text-red-300">
           {fetchErrText}
         </div>
       )}
@@ -270,7 +270,7 @@ function Row({
 
   return (
     <>
-      <tr className={err ? "border-t border-red-200 bg-red-50/50" : "border-t border-border"}>
+      <tr className={err ? "border-t border-red-200 bg-red-50/50 dark:border-red-800/60 dark:bg-red-900/30" : "border-t border-border"}>
         <td className="px-2 py-1 text-muted-foreground">{idx + 1}</td>
         <td className="px-2 py-1">{row.itemDescription || `#${row.requisitionItemId}`}</td>
         <td className="px-2 py-1 text-right text-muted-foreground">{row.expectedQty}</td>
@@ -285,8 +285,8 @@ function Row({
         {numCell(row.otherCostPct, (v) => onChange({ otherCostPct: v }))}
       </tr>
       {err && (
-        <tr className="bg-red-50/50">
-          <td colSpan={8} className="px-2 py-1 text-xs text-red-700">
+        <tr className="bg-red-50/50 dark:bg-red-900/30">
+          <td colSpan={8} className="px-2 py-1 text-xs text-red-700 dark:text-red-300">
             {err.message}
           </td>
         </tr>

@@ -17,6 +17,7 @@ import { CustomerConfirmPage } from "@/features/requisitions/CustomerConfirmPage
 import { MdMarginPage } from "@/features/approvals/MdMarginPage";
 import { MdFinalSignPage } from "@/features/approvals/MdFinalSignPage";
 import { MdListPage } from "@/features/md/MdListPage";
+import { AccountantListPage } from "@/features/accountant/AccountantListPage";
 import { ProfileSignaturePage } from "@/features/profile/ProfileSignaturePage";
 import NotificationsPage from "@/features/notifications/NotificationsPage";
 import ExchangeRatesPage from "@/features/exchange-rates/ExchangeRatesPage";
@@ -204,6 +205,14 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute allow={["ManagingDirector", "Admin"]}>
             <MdListPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "accountant/queue",
+        element: (
+          <ProtectedRoute allow={["Accountant", "Admin"]}>
+            <AccountantListPage />
           </ProtectedRoute>
         ),
       },

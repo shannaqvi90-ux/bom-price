@@ -37,6 +37,12 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["ManagingDirector"],
   },
   {
+    to: "/accountant/queue",
+    label: "My Queue",
+    icon: Inbox,
+    roles: ["Accountant"],
+  },
+  {
     to: "/requisitions",
     label: "Requisitions",
     icon: FileText,

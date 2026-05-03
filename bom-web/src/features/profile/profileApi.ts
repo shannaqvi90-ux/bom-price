@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/axios";
 import type { SignatureUploadResponse } from "@/types/api";
@@ -28,21 +28,24 @@ export function useUploadSignature() {
 // <img src=...> can't authenticate (browsers don't send Authorization on img
 // requests). Fetch the bytes via axios (which adds the JWT) and expose a blob
 // URL the consumer can pass to <img src={url}>. Returns null if no signature
-// exists (404). Caller is responsible for revoking the URL when unmounting —
-// this hook handles revocation on data change + unmount.
+// exists (404).
 //
-// Cache policy: 1-minute stale window so a freshly-uploaded signature (esp.
-// from the mobile app) becomes visible on the web within a minute, AND on
-// every window-focus event. `staleTime: Infinity` was the prior policy — it
-// silently locked the web view to whatever it saw on first mount, so
-// signatures uploaded from another device never appeared.
+// Cache stores the immutable Blob; URL is created per-mount and revoked on
+// unmount. Prior implementation cached the URL itself and revoked it on
+// unmount, which poisoned the React Query cache: revisiting the page within
+// the staleTime window pulled the stale (revoked) URL → <img> silently
+// failed → user saw "no signature" until manual refresh.
+//
+// Cache policy: 1-minute stale window + refetchOnWindowFocus so a
+// freshly-uploaded signature (esp. from the mobile app) becomes visible on
+// the web within a minute or on the next tab focus.
 export function useOwnSignatureBlobUrl() {
   const query = useQuery({
     queryKey: profileKeys.ownSignature,
-    queryFn: async (): Promise<string | null> => {
+    queryFn: async (): Promise<Blob | null> => {
       try {
         const r = await api.get<Blob>("/profile/signature", { responseType: "blob" });
-        return URL.createObjectURL(r.data);
+        return r.data;
       } catch (e: unknown) {
         // 404 = no signature uploaded yet; treat as null (not error).
         const status = (e as { response?: { status?: number } } | null)?.response?.status;
@@ -55,12 +58,20 @@ export function useOwnSignatureBlobUrl() {
     refetchOnWindowFocus: true,
   });
 
+  const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
-    const url = query.data;
-    return () => {
-      if (url) URL.revokeObjectURL(url);
-    };
+    const blob = query.data;
+    if (!blob) {
+      setUrl(null);
+      return;
+    }
+    const newUrl = URL.createObjectURL(blob);
+    setUrl(newUrl);
+    return () => URL.revokeObjectURL(newUrl);
   }, [query.data]);
 
-  return query;
+  return {
+    ...query,
+    data: url,
+  };
 }

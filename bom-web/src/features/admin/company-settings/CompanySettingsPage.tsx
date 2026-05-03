@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import {
   useCompanySettings,
   useUpdateCompanySettings,
+  type CompanySettings,
   type UpdateCompanySettingsRequest,
 } from "@/api/companySettings";
 
@@ -20,32 +21,31 @@ interface FormState {
   reason: string;
 }
 
-const EMPTY_REASON: Pick<FormState, "reason"> = { reason: "" };
-
-function toForm(s: ReturnType<typeof useCompanySettings>["data"] | undefined): FormState {
+function toForm(s: CompanySettings): FormState {
   return {
-    companyName: s?.companyName ?? "",
-    address: s?.address ?? "",
-    telephone: s?.telephone ?? "",
-    trn: s?.trn ?? "",
-    email: s?.email ?? "",
-    website: s?.website ?? "",
-    quotationValidityDays: s?.quotationValidityDays ?? 30,
-    termsAndConditions: s?.termsAndConditions ?? "",
-    ...EMPTY_REASON,
+    companyName: s.companyName,
+    address: s.address,
+    telephone: s.telephone,
+    trn: s.trn,
+    email: s.email,
+    website: s.website,
+    quotationValidityDays: s.quotationValidityDays,
+    termsAndConditions: s.termsAndConditions,
+    reason: "",
   };
 }
 
 export function CompanySettingsPage() {
   const { data, isLoading, error } = useCompanySettings();
+  if (isLoading) return <div className="p-6 text-muted-foreground">Loading…</div>;
+  if (error || !data) return <div className="p-6 text-red-600">Failed to load company settings.</div>;
+  return <CompanySettingsForm settings={data} key={data.updatedAt} />;
+}
+
+function CompanySettingsForm({ settings: data }: { settings: CompanySettings }) {
   const update = useUpdateCompanySettings();
-
-  const [form, setForm] = useState<FormState>(() => toForm(undefined));
+  const [form, setForm] = useState<FormState>(() => toForm(data));
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    if (data) setForm(toForm(data));
-  }, [data]);
 
   const handleSave = async () => {
     setErrors({});
@@ -82,9 +82,6 @@ export function CompanySettingsPage() {
     setForm(toForm(data));
     setErrors({});
   };
-
-  if (isLoading) return <div className="p-6 text-muted-foreground">Loading…</div>;
-  if (error || !data) return <div className="p-6 text-red-600">Failed to load company settings.</div>;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">

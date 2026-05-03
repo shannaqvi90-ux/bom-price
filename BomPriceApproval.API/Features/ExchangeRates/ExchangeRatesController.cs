@@ -31,10 +31,14 @@ public class ExchangeRatesController(AppDbContext db) : ControllerBase
     [Authorize(Roles = "Accountant")]
     public async Task<IActionResult> Create(CreateExchangeRateRequest req)
     {
+        // EffectiveDate column is timestamp with time zone (timestamptz) — Npgsql 6+
+        // requires DateTime.Kind == Utc. The frontend sends "YYYY-MM-DD" which
+        // ASP.NET parses with Kind=Unspecified; coerce to Utc before save.
         var rate = new ExchangeRate
         {
             CurrencyCode = req.CurrencyCode.ToUpper(), CurrencyName = req.CurrencyName,
-            RateToAed = req.RateToAed, EffectiveDate = req.EffectiveDate,
+            RateToAed = req.RateToAed,
+            EffectiveDate = DateTime.SpecifyKind(req.EffectiveDate, DateTimeKind.Utc),
             SetByUserId = CurrentUserId
         };
         db.ExchangeRates.Add(rate);
@@ -49,7 +53,10 @@ public class ExchangeRatesController(AppDbContext db) : ControllerBase
     {
         var rate = await db.ExchangeRates.FindAsync(id);
         if (rate is null) return NotFound();
-        rate.RateToAed = req.RateToAed; rate.EffectiveDate = req.EffectiveDate; rate.IsActive = req.IsActive;
+        rate.RateToAed = req.RateToAed;
+        // Same Utc coercion as Create — see comment there.
+        rate.EffectiveDate = DateTime.SpecifyKind(req.EffectiveDate, DateTimeKind.Utc);
+        rate.IsActive = req.IsActive;
         await db.SaveChangesAsync();
         return NoContent();
     }

@@ -17,9 +17,13 @@ public class BomCost
     // V3 cost components (per-KG breakdown for quotation PDF)
     public decimal? PrintingCostPerKg { get; set; }      // null when FG not printed
     public string? PrintingCostCurrency { get; set; }    // ISO-3 (AED, USD, EUR), null when no printing
-    public decimal FohPerKg { get; set; }                // factory overhead per KG (always AED for V3)
-    public decimal TransportPerKg { get; set; }          // always AED
-    public decimal CommissionPerKg { get; set; }         // always AED
+    // FOH / Transport / Commission are stored as entered (no conversion). The
+    // accountant enters them in the requisition's quote currency — they are
+    // added directly to RawMaterialCostTotal (which is also already in quote
+    // currency) when computing TotalCostPerKg. See CostingController line ~439.
+    public decimal FohPerKg { get; set; }                // factory overhead per KG, in quote currency
+    public decimal TransportPerKg { get; set; }          // in quote currency
+    public decimal CommissionPerKg { get; set; }         // in quote currency
 
     public BomHeader BomHeader { get; set; } = null!;
     public User SubmittedBy { get; set; } = null!;

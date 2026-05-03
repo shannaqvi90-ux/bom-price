@@ -13,7 +13,8 @@ export type AdminActionType =
   | "HardDeleteCustomer"
   // V3 additions:
   | "RollbackToCosting"
-  | "V3CutoverMigration";
+  | "V3CutoverMigration"
+  | "UpdateCompanySettings";
 
 export type AuditEntityType = "Requisition" | "User" | "Customer";
 

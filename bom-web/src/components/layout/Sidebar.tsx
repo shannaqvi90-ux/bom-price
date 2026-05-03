@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Inbox,
+  Settings,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { notificationsStore } from "@/store/notificationsStore";
@@ -78,6 +79,12 @@ const NAV_ITEMS: NavItem[] = [
     to: "/admin/audit-log",
     label: "Audit Log",
     icon: ScrollText,
+    roles: ["Admin"],
+  },
+  {
+    to: "/admin/company-settings",
+    label: "Company Settings",
+    icon: Settings,
     roles: ["Admin"],
   },
   { to: "/exchange-rates", label: "Exchange Rates", icon: Coins },

@@ -13,5 +13,7 @@ public enum AdminActionType
 
     // V3 NEW values
     RollbackToCosting,          // C5 renamed (was UnlockCosting)
-    V3CutoverMigration          // logged once during Phase C cutover SQL
+    V3CutoverMigration,         // logged once during Phase C cutover SQL
+
+    UpdateCompanySettings       // post-V3 PDF-redesign feature (admin company settings)
 }

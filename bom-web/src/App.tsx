@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate, RouterProvider, useNavigate } from "reac
 import { useEffect } from "react";
 import { Toaster } from "sonner";
 import { setAppNavigate } from "@/lib/navigator";
+import { useThemeStore } from "@/store/themeStore";
 import LoginPage from "@/features/auth/LoginPage";
 import { AppShell } from "@/components/layout/AppShell";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
@@ -212,6 +213,8 @@ const router = createBrowserRouter([
 ]);
 
 export default function App() {
+  // Sonner reads `theme` once; subscribe so toasts re-theme when user toggles.
+  const theme = useThemeStore((s) => s.theme);
   return (
     <>
       <OfflineBanner />
@@ -220,7 +223,7 @@ export default function App() {
       <InstallModal />
       <UpdateToast />
       <NotificationPermissionPrompt />
-      <Toaster position="top-right" richColors closeButton />
+      <Toaster position="top-right" richColors closeButton theme={theme} />
     </>
   );
 }

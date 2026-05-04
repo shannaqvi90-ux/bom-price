@@ -71,6 +71,7 @@ describe("CostingEntryV3Page", () => {
     renderPage();
     await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
     expect(screen.getByRole("button", { name: /save/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /submit to md/i })).toBeInTheDocument();
   });
 
   it("shows a status-mismatch message when status is not Costing or MdPricing", async () => {
@@ -97,5 +98,9 @@ describe("CostingEntryV3Page", () => {
     // Save button should be enabled (not disabled by status gate)
     const saveBtn = screen.getByRole("button", { name: /save/i });
     expect(saveBtn).toBeEnabled();
+
+    // Submit button must be HIDDEN at MdPricing — req has already been submitted;
+    // calling /submit again would 400 with "Cannot submit costing from MdPricing".
+    expect(screen.queryByRole("button", { name: /submit to md/i })).not.toBeInTheDocument();
   });
 });

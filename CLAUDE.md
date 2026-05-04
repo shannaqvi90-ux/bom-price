@@ -363,6 +363,8 @@ Draft(0) → Costing(8) → MdPricing(9) → CustomerConfirm(10) → MdFinalSign
 | **Signed** | Terminal. Email + PDF dispatched to SP/customer. |
 | **Cancelled** | Terminal. Set by admin C1 hard-delete or V3 cutover migration (Status=13 with `[V3 cutover 2026-04-30] ...` reason). |
 
+**Accountant edit window (post-2026-05-04, PR #TBD):** the costing-edit endpoints `PUT /api/costing/{id}/bom` and `PUT /api/costing/{id}/cost-data` accept BOTH `Costing` and `MdPricing` statuses. Accountant can self-correct after submit, until MD approves margin (status flips to `CustomerConfirm`). Each save while in `MdPricing` writes an `AdminAuditLog` row with `ActionType=AccountantEditAfterSubmit`; the FIRST save per MdPricing window notifies all active MDs once via `NotificationService` (subsequent saves audit silently). Tracked by `QuotationRequest.MdPricingNotifiedAfterEdit` flag, reset on every status transition that touches MdPricing. Web: `CostingEntryV3Page` shows an amber banner at MdPricing; `RequisitionDetailPage` "Edit costing" button visible to Accountant at both `Costing` and `MdPricing`.
+
 **V3 endpoints:**
 
 - `GET /api/requisitions/{id}` — V3 nested shape: `finishedGoods[].bomLines/costs`, `customer`, `salesPerson`, plus `cancelReason` / `cancelledAt` / `cancelledByUserId` when Status=Cancelled (PR #36).

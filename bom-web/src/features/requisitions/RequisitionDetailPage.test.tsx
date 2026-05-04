@@ -139,12 +139,12 @@ describe("RequisitionDetailPage", () => {
     expect(screen.queryByRole("button", { name: /^submit$/i })).not.toBeInTheDocument();
   });
 
-  it("renders Edit BOM & Costing button when status=Costing and role=Accountant", async () => {
+  it("renders Edit costing button when status=Costing and role=Accountant", async () => {
     setUser("Accountant", 11);
     mockReqGet(makeReq({ status: "Costing" }));
     render(wrap(<RequisitionDetailPage />));
     await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
-    const btn = screen.getByRole("button", { name: /edit bom & costing/i });
+    const btn = screen.getByRole("button", { name: /edit costing/i });
     expect(btn).toBeInTheDocument();
     await userEvent.click(btn);
     await waitFor(() =>
@@ -245,12 +245,12 @@ describe("RequisitionDetailPage", () => {
     expect(screen.getByText(/edited by accountant/i)).toBeInTheDocument();
   });
 
-  it("renders Admin can see action buttons regardless of ownership (Costing -> Edit BOM)", async () => {
+  it("renders Admin can see action buttons regardless of ownership (Costing -> Edit costing)", async () => {
     setUser("Admin", 999);
     mockReqGet(makeReq({ status: "Costing" }));
     render(wrap(<RequisitionDetailPage />));
     await waitFor(() => expect(screen.getByText("REQ-0001")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /edit bom & costing/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /edit costing/i })).toBeInTheDocument();
   });
 
   it("Cancel input rejects reason shorter than 5 chars", async () => {

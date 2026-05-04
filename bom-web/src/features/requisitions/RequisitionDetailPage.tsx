@@ -170,9 +170,9 @@ export default function RequisitionDetailPage() {
               </Button>
             </>
           )}
-          {status === "Costing" && (role === "Accountant" || isAdmin) && (
+          {(status === "Costing" || status === "MdPricing") && (role === "Accountant" || isAdmin) && (
             <Button onClick={() => navigate(`/requisitions/${numericId}/costing`)}>
-              Edit BOM &amp; Costing
+              Edit costing
             </Button>
           )}
           {status === "MdPricing" && (role === "ManagingDirector" || isAdmin) && (

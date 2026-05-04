@@ -74,7 +74,7 @@ export default function CostingEntryV3Page() {
 
   if (isLoading || !req) return <div className="p-6">Loading…</div>;
 
-  if (req.status !== "Costing") {
+  if (req.status !== "Costing" && req.status !== "MdPricing") {
     return (
       <div className="mx-auto max-w-3xl p-6">
         <p className="text-sm">
@@ -173,6 +173,12 @@ function CostingForm({ req, reqId, navigate }: CostingFormProps) {
         in the quote currency ({req.currencyCode}). Save persists data; Submit also forwards to MD
         for margin pricing.
       </p>
+
+      {req.status === "MdPricing" && (
+        <div className="mb-4 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
+          MD pricing pending. Saving here will refresh the data MDs see; the first edit notifies all MDs.
+        </div>
+      )}
 
       {state.map((fg, fgIdx) => {
         const ref = fgById[fg.requisitionItemId];

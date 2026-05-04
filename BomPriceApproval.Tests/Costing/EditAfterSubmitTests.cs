@@ -442,6 +442,14 @@ public class EditAfterSubmitTests(WebApplicationFactory<Program> factory)
             var subResp = await _client.PostAsync($"/api/costing/{reqId}/submit", null);
             subResp.StatusCode.Should().Be(HttpStatusCode.OK);
 
+            // Capture active MD count to compute the expected notif increment.
+            int mdCount;
+            using (var scope = factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                mdCount = await db.Users.CountAsync(u => u.Role == UserRole.ManagingDirector && u.IsActive);
+            }
+
             // Second edit in the new MdPricing window — must fire a fresh notification batch
             (await _client.PutAsJsonAsync($"/api/costing/{reqId}/bom", new
             {
@@ -457,8 +465,9 @@ public class EditAfterSubmitTests(WebApplicationFactory<Program> factory)
             var totalNotifs = await db2.Notifications
                 .CountAsync(n => n.ReferenceType == "QuotationRequest" && n.ReferenceId == reqId);
 
-            totalNotifs.Should().BeGreaterThan(notifCountAfterFirstEdit,
-                "second MdPricing session must trigger a fresh notification batch after rollback");
+            // After rollback: re-submit fires mdCount notifs + second BOM edit fires mdCount notifs
+            totalNotifs.Should().BeGreaterThanOrEqualTo(notifCountAfterFirstEdit + 2 * mdCount,
+                "re-submit fires one MD notif batch and second BOM edit fires another batch");
         }
         finally
         {

@@ -238,6 +238,7 @@ public class ApprovalsController(
         };
         db.QuotationApprovals.Add(approval);
         req.Status = RequisitionStatus.Rejected;
+        req.MdPricingNotifiedAfterEdit = false;  // leaving MdPricing
         // Populate CancelReason on reject too — the field name is V3-Cancelled-flow
         // historical, but the V3RequisitionDetail surfaces it as the terminal-reason
         // for both Cancelled and Rejected so web/mobile can render the reason without
@@ -408,6 +409,7 @@ public class ApprovalsController(
         db.QuotationApprovals.Add(approval);
 
         req.Status = RequisitionStatus.CustomerConfirm;
+        req.MdPricingNotifiedAfterEdit = false;  // leaving MdPricing
         req.UpdatedAt = nowUtc;
         await db.SaveChangesAsync();
 
@@ -535,6 +537,7 @@ public class ApprovalsController(
         }
 
         req.Status = RequisitionStatus.MdPricing;
+        req.MdPricingNotifiedAfterEdit = false;  // fresh edit-notification window after customer reject bounce-back
         req.Notes = (req.Notes ?? "") +
             $"\n[CustomerRejected {nowUtc:yyyy-MM-dd}] {body.Reason.Trim()}";
         req.UpdatedAt = nowUtc;

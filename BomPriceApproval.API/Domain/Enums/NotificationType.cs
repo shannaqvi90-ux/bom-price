@@ -16,5 +16,7 @@ public enum NotificationType
     CustomerAccepted,           // sent to MD + accountant
     CustomerRejected,           // sent to MD + accountant
     SignedNotif,                // sent to sales + accountant (Signed name suffix to avoid clash with status enum)
-    RequisitionCancelled        // sent to sales
+    RequisitionCancelled,       // sent to sales
+
+    CostingEditedAfterSubmit    // sent to MDs once when accountant edits in MdPricing
 }

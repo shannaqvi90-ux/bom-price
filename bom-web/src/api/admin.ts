@@ -14,7 +14,8 @@ export type AdminActionType =
   // V3 additions:
   | "RollbackToCosting"
   | "V3CutoverMigration"
-  | "UpdateCompanySettings";
+  | "UpdateCompanySettings"
+  | "AccountantEditAfterSubmit";
 
 export type AuditEntityType = "Requisition" | "User" | "Customer";
 

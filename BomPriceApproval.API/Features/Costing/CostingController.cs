@@ -18,6 +18,7 @@ namespace BomPriceApproval.API.Features.Costing;
 public class CostingController(
     AppDbContext db,
     NotificationService notificationService,
+    AdminAuditLogger audit,
     ILogger<CostingController> logger) : ControllerBase
 {
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -143,8 +144,8 @@ public class CostingController(
         if (req is null) return NotFound();
         if (!await AccountantAuthorizedForBranchAsync(req.BranchId)) return Forbid();
 
-        if (req.Status != RequisitionStatus.Costing)
-            return BadRequest(new { error = $"BOM editable only in Costing status (current: {req.Status})" });
+        if (req.Status != RequisitionStatus.Costing && req.Status != RequisitionStatus.MdPricing)
+            return BadRequest(new { error = $"BOM editable only in Costing or MdPricing status (current: {req.Status})" });
 
         var fg = req.Items.FirstOrDefault(ri => ri.Id == body.FinishedGoodId);
         if (fg is null)
@@ -153,6 +154,15 @@ public class CostingController(
         var bom = fg.BomHeader;
         if (bom is null)
             return BadRequest(new { error = "FG has no BOM yet" });
+
+        // Snapshot pre-edit BOM lines for audit (used only when status==MdPricing).
+        var beforeAuditSnapshot = req.Status == RequisitionStatus.MdPricing
+            ? bom.Lines.Select(l => new
+            {
+                l.Id, l.QtyPerKg, l.Micron, l.WastagePct,
+                ItemId = l.RawMaterialItemId
+            }).ToList()
+            : null;
 
         // Validate target ItemIds for update operations: must exist, be active, RawMaterial type,
         // and belong to the requisition's branch. New-line creation is gated below (Phase A gap),
@@ -225,6 +235,44 @@ public class CostingController(
         if (mutated)
         {
             req.UpdatedAt = now;
+
+            // Edit-after-submit: audit + notify-once when status is MdPricing.
+            if (req.Status == RequisitionStatus.MdPricing)
+            {
+                var afterAuditSnapshot = bom.Lines.Select(l => new
+                {
+                    l.Id, l.QtyPerKg, l.Micron, l.WastagePct,
+                    ItemId = l.RawMaterialItemId
+                }).ToList();
+
+                audit.Log(
+                    CurrentUserId,
+                    AdminActionType.AccountantEditAfterSubmit,
+                    "QuotationRequest",
+                    req.Id,
+                    "Accountant edit during MdPricing window",
+                    beforeAuditSnapshot!,
+                    afterAuditSnapshot);
+
+                if (!req.MdPricingNotifiedAfterEdit)
+                {
+                    var mdIds = await db.Users
+                        .Where(u => u.Role == UserRole.ManagingDirector && u.IsActive)
+                        .Select(u => u.Id)
+                        .ToListAsync();
+                    // Flip the flag BEFORE SendToUsersAsync so its internal
+                    // SaveChangesAsync atomically commits audit row + flag + notif rows
+                    // together (otherwise a partial failure between SendToUsersAsync
+                    // and the bottom SaveChangesAsync could re-notify on next edit).
+                    req.MdPricingNotifiedAfterEdit = true;
+                    await notificationService.SendToUsersAsync(
+                        mdIds,
+                        $"{req.RefNo} — costing edited, please refresh before approving",
+                        req.Id,
+                        "QuotationRequest");
+                }
+            }
+
             await db.SaveChangesAsync();
         }
 
@@ -249,11 +297,42 @@ public class CostingController(
             .FirstOrDefaultAsync();
         if (req is null) return NotFound();
         if (!await AccountantAuthorizedForBranchAsync(req.BranchId)) return Forbid();
-        if (req.Status != RequisitionStatus.Costing)
+        if (req.Status != RequisitionStatus.Costing && req.Status != RequisitionStatus.MdPricing)
             return Validation
-                .Detail($"Cost data can only be saved when status is Costing (current: {req.Status})")
-                .Field("Status", "Must be Costing.")
+                .Detail($"Cost data can only be saved when status is Costing or MdPricing (current: {req.Status})")
+                .Field("Status", "Must be Costing or MdPricing.")
                 .Return();
+
+        // Snapshot pre-edit cost data for audit (used only when status==MdPricing).
+        List<object>? beforeAuditSnapshot = null;
+        if (req.Status == RequisitionStatus.MdPricing)
+        {
+            var preFgIds = await db.RequisitionItems
+                .Where(ri => ri.QuotationRequestId == requisitionId)
+                .Select(ri => ri.Id)
+                .ToListAsync();
+            var preBomHeaderIds = await db.BomHeaders
+                .Where(b => preFgIds.Contains(b.RequisitionItemId))
+                .Select(b => b.Id)
+                .ToListAsync();
+            var preCosts = await db.BomCosts
+                .Where(c => preBomHeaderIds.Contains(c.BomHeaderId))
+                .Select(c => new
+                {
+                    c.BomHeaderId, c.PrintingCostPerKg, c.PrintingCostCurrency,
+                    c.FohPerKg, c.TransportPerKg, c.CommissionPerKg
+                })
+                .ToListAsync();
+            var preLines = await db.BomCostLines
+                .Where(cl => preBomHeaderIds.Contains(cl.BomHeaderId))
+                .Select(cl => new { cl.BomHeaderId, cl.BomLineId, cl.CostPerKg, cl.CurrencyCode })
+                .ToListAsync();
+            beforeAuditSnapshot = new List<object>
+            {
+                new { type = "BomCost", values = preCosts },
+                new { type = "BomCostLine", values = preLines }
+            };
+        }
 
         // Load all FGs with their BOMs + lines so we can validate + upsert.
         var fgs = await db.RequisitionItems
@@ -495,6 +574,69 @@ public class CostingController(
 
         req.UpdatedAt = now;
         await db.SaveChangesAsync();
+
+        // Edit-after-submit: audit + notify-once when status is MdPricing.
+        if (req.Status == RequisitionStatus.MdPricing)
+        {
+            var postFgIds = await db.RequisitionItems
+                .Where(ri => ri.QuotationRequestId == requisitionId)
+                .Select(ri => ri.Id)
+                .ToListAsync();
+            var postBomHeaderIds = await db.BomHeaders
+                .Where(b => postFgIds.Contains(b.RequisitionItemId))
+                .Select(b => b.Id)
+                .ToListAsync();
+            var postCosts = await db.BomCosts
+                .Where(c => postBomHeaderIds.Contains(c.BomHeaderId))
+                .Select(c => new
+                {
+                    c.BomHeaderId, c.PrintingCostPerKg, c.PrintingCostCurrency,
+                    c.FohPerKg, c.TransportPerKg, c.CommissionPerKg
+                })
+                .ToListAsync();
+            var postLines = await db.BomCostLines
+                .Where(cl => postBomHeaderIds.Contains(cl.BomHeaderId))
+                .Select(cl => new { cl.BomHeaderId, cl.BomLineId, cl.CostPerKg, cl.CurrencyCode })
+                .ToListAsync();
+            var afterAuditSnapshot = new List<object>
+            {
+                new { type = "BomCost", values = postCosts },
+                new { type = "BomCostLine", values = postLines }
+            };
+
+            audit.Log(
+                CurrentUserId,
+                AdminActionType.AccountantEditAfterSubmit,
+                "QuotationRequest",
+                req.Id,
+                "Accountant edit during MdPricing window",
+                beforeAuditSnapshot!,
+                afterAuditSnapshot);
+
+            if (!req.MdPricingNotifiedAfterEdit)
+            {
+                var mdIds = await db.Users
+                    .Where(u => u.Role == UserRole.ManagingDirector && u.IsActive)
+                    .Select(u => u.Id)
+                    .ToListAsync();
+                // Flip the flag BEFORE SendToUsersAsync so its internal
+                // SaveChangesAsync atomically commits audit row + flag + notif rows
+                // together (otherwise a partial failure could re-notify on next edit).
+                req.MdPricingNotifiedAfterEdit = true;
+                await notificationService.SendToUsersAsync(
+                    mdIds,
+                    $"{req.RefNo} — costing edited, please refresh before approving",
+                    req.Id,
+                    "QuotationRequest");
+            }
+            else
+            {
+                // Audit row enqueued by audit.Log but no save call inside this branch.
+                // Persist it before tx.CommitAsync via an explicit SaveChangesAsync.
+                await db.SaveChangesAsync();
+            }
+        }
+
         await tx.CommitAsync();
 
         return Ok(new { id = req.Id, status = req.Status.ToString(), fgCount = body.FinishedGoods.Count });
@@ -522,6 +664,7 @@ public class CostingController(
         }
 
         req.Status = RequisitionStatus.MdPricing;
+        req.MdPricingNotifiedAfterEdit = false;  // fresh edit-notification window
         req.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 

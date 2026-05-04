@@ -17,6 +17,7 @@ public class QuotationRequest
     public RequisitionStatus Status { get; set; } = RequisitionStatus.Draft;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public bool MdPricingNotifiedAfterEdit { get; set; } = false;
     public Branch Branch { get; set; } = null!;
     public User SalesPerson { get; set; } = null!;
     public Customer Customer { get; set; } = null!;

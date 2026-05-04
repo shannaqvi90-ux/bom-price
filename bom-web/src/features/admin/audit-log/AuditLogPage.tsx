@@ -19,6 +19,7 @@ const ACTION_TYPE_LABELS: Record<AdminActionType, string> = {
   RollbackToCosting: "Rollback to Costing",
   V3CutoverMigration: "V3 Cutover Migration",
   UpdateCompanySettings: "Update Company Settings",
+  AccountantEditAfterSubmit: "Accountant Edit After Submit",
 };
 
 const ACTION_TYPES: AdminActionType[] = [
@@ -34,6 +35,7 @@ const ACTION_TYPES: AdminActionType[] = [
   "RollbackToCosting",
   "V3CutoverMigration",
   "UpdateCompanySettings",
+  "AccountantEditAfterSubmit",
 ];
 
 const ENTITY_TYPES: AuditEntityType[] = ["Requisition", "User", "Customer"];

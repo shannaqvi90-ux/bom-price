@@ -522,6 +522,7 @@ public class CostingController(
         }
 
         req.Status = RequisitionStatus.MdPricing;
+        req.MdPricingNotifiedAfterEdit = false;  // fresh edit-notification window
         req.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 

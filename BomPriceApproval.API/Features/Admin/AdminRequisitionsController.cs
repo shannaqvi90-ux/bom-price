@@ -458,6 +458,7 @@ public class AdminRequisitionsController(
 
         var before = new { req.Id, req.Status };
         req.Status = RequisitionStatus.Costing;
+        req.MdPricingNotifiedAfterEdit = false;  // leaving MdPricing
         req.UpdatedAt = DateTime.UtcNow;
         var after = new { req.Id, req.Status };
 

@@ -260,12 +260,16 @@ public class CostingController(
                         .Where(u => u.Role == UserRole.ManagingDirector && u.IsActive)
                         .Select(u => u.Id)
                         .ToListAsync();
+                    // Flip the flag BEFORE SendToUsersAsync so its internal
+                    // SaveChangesAsync atomically commits audit row + flag + notif rows
+                    // together (otherwise a partial failure between SendToUsersAsync
+                    // and the bottom SaveChangesAsync could re-notify on next edit).
+                    req.MdPricingNotifiedAfterEdit = true;
                     await notificationService.SendToUsersAsync(
                         mdIds,
                         $"{req.RefNo} — costing edited, please refresh before approving",
                         req.Id,
                         "QuotationRequest");
-                    req.MdPricingNotifiedAfterEdit = true;
                 }
             }
 

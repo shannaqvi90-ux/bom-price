@@ -18,6 +18,7 @@ namespace BomPriceApproval.API.Features.Costing;
 public class CostingController(
     AppDbContext db,
     NotificationService notificationService,
+    AdminAuditLogger audit,
     ILogger<CostingController> logger) : ControllerBase
 {
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -143,8 +144,8 @@ public class CostingController(
         if (req is null) return NotFound();
         if (!await AccountantAuthorizedForBranchAsync(req.BranchId)) return Forbid();
 
-        if (req.Status != RequisitionStatus.Costing)
-            return BadRequest(new { error = $"BOM editable only in Costing status (current: {req.Status})" });
+        if (req.Status != RequisitionStatus.Costing && req.Status != RequisitionStatus.MdPricing)
+            return BadRequest(new { error = $"BOM editable only in Costing or MdPricing status (current: {req.Status})" });
 
         var fg = req.Items.FirstOrDefault(ri => ri.Id == body.FinishedGoodId);
         if (fg is null)
@@ -153,6 +154,15 @@ public class CostingController(
         var bom = fg.BomHeader;
         if (bom is null)
             return BadRequest(new { error = "FG has no BOM yet" });
+
+        // Snapshot pre-edit BOM lines for audit (used only when status==MdPricing).
+        var beforeAuditSnapshot = req.Status == RequisitionStatus.MdPricing
+            ? bom.Lines.Select(l => new
+            {
+                l.Id, l.QtyPerKg, l.Micron, l.WastagePct,
+                ItemId = l.RawMaterialItemId
+            }).ToList()
+            : null;
 
         // Validate target ItemIds for update operations: must exist, be active, RawMaterial type,
         // and belong to the requisition's branch. New-line creation is gated below (Phase A gap),
@@ -225,6 +235,40 @@ public class CostingController(
         if (mutated)
         {
             req.UpdatedAt = now;
+
+            // Edit-after-submit: audit + notify-once when status is MdPricing.
+            if (req.Status == RequisitionStatus.MdPricing)
+            {
+                var afterAuditSnapshot = bom.Lines.Select(l => new
+                {
+                    l.Id, l.QtyPerKg, l.Micron, l.WastagePct,
+                    ItemId = l.RawMaterialItemId
+                }).ToList();
+
+                audit.Log(
+                    CurrentUserId,
+                    AdminActionType.AccountantEditAfterSubmit,
+                    "QuotationRequest",
+                    req.Id,
+                    "Accountant edit during MdPricing window",
+                    beforeAuditSnapshot!,
+                    afterAuditSnapshot);
+
+                if (!req.MdPricingNotifiedAfterEdit)
+                {
+                    var mdIds = await db.Users
+                        .Where(u => u.Role == UserRole.ManagingDirector && u.IsActive)
+                        .Select(u => u.Id)
+                        .ToListAsync();
+                    await notificationService.SendToUsersAsync(
+                        mdIds,
+                        $"{req.RefNo} — costing edited, please refresh before approving",
+                        req.Id,
+                        "QuotationRequest");
+                    req.MdPricingNotifiedAfterEdit = true;
+                }
+            }
+
             await db.SaveChangesAsync();
         }
 

@@ -15,6 +15,7 @@ public sealed class ValidationProblemBuilder
 {
     private readonly string _detail;
     private readonly ModelStateDictionary _errors = new();
+    private readonly Dictionary<string, object?> _extensions = new();
     private int _status = StatusCodes.Status400BadRequest;
 
     internal ValidationProblemBuilder(string detail)
@@ -29,6 +30,16 @@ public sealed class ValidationProblemBuilder
     public ValidationProblemBuilder Field(string field, string message)
     {
         _errors.AddModelError(field, message);
+        return this;
+    }
+
+    /// <summary>
+    /// Attach an RFC 7807 extension member that will be serialised as a top-level
+    /// JSON property on the response body (e.g. "lockoutSecondsRemaining").
+    /// </summary>
+    public ValidationProblemBuilder Extension(string key, object? value)
+    {
+        _extensions[key] = value;
         return this;
     }
 
@@ -52,6 +63,8 @@ public sealed class ValidationProblemBuilder
             Detail = _detail,
             Status = _status,
         };
+        foreach (var (k, v) in _extensions)
+            problem.Extensions[k] = v;
         return new ObjectResult(problem)
         {
             StatusCode = _status,

@@ -48,10 +48,7 @@ public class AuthController(
         {
             logger.LogWarning("[Audit] Login rejected: account locked {UserId} {Email} LockedUntil={LockedUntil}",
                 user.Id, user.Email, user.LockedUntil);
-            return Validation
-                .Detail("Account temporarily locked due to too many failed login attempts. Try again later.")
-                .Field("Email", "Account locked.")
-                .Return();
+            return LockoutResponse(user.LockedUntil.Value);
         }
 
         if (!BCrypt.Net.BCrypt.Verify(req.Password, user.PasswordHash))
@@ -67,12 +64,7 @@ public class AuthController(
             {
                 // This attempt just triggered the lock — emit lockout response inline
                 // (otherwise the user wouldn't see the lockout until their next attempt).
-                var secondsLeft = Math.Max(1, (int)Math.Ceiling((user.LockedUntil.Value - DateTime.UtcNow).TotalSeconds));
-                return Validation
-                    .Detail(LockoutDetail)
-                    .Field("Email", "Account locked.")
-                    .Extension("lockoutSecondsRemaining", secondsLeft)
-                    .Return();
+                return LockoutResponse(user.LockedUntil.Value);
             }
 
             int remaining = Math.Max(0, MaxAttempts - user.FailedLoginAttempts);
@@ -210,5 +202,15 @@ public class AuthController(
         logger.LogInformation("[Audit] ChangePassword success UserId={UserId}", userId);
 
         return Ok(new { mustChangePassword = false });
+    }
+
+    private ActionResult LockoutResponse(DateTime lockedUntil)
+    {
+        var secondsLeft = Math.Max(1, (int)Math.Ceiling((lockedUntil - DateTime.UtcNow).TotalSeconds));
+        return Validation
+            .Detail(LockoutDetail)
+            .Field("Email", "Account locked.")
+            .Extension("lockoutSecondsRemaining", secondsLeft)
+            .Return();
     }
 }

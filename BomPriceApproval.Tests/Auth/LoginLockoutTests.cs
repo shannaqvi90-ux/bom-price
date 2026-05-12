@@ -203,6 +203,34 @@ public class LoginLockoutTests(WebApplicationFactory<Program> factory)
             "15-minute lockout window minus a few seconds of test latency");
     }
 
+    [Fact]
+    public async Task LoginDuringActiveLockout_Returns400WithSecondsRemaining()
+    {
+        var email = $"lck-act-{Guid.NewGuid():N}"[..24] + "@t.com";
+        await CreateUserViaApiAsync(email);
+
+        // Pre-seed the lockout state directly: locked for 10 more minutes
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var user = db.Users.First(u => u.Email == email);
+            user.FailedLoginAttempts = 5;
+            user.LockedUntil = DateTime.UtcNow.AddMinutes(10);
+            db.SaveChanges();
+        }
+
+        // Attempt login with correct password — should still be blocked
+        var resp = await _client.PostAsJsonAsync("/api/auth/login",
+            new { Email = email, Password = "Test@1234" });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        resp.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
+        var body = await resp.Content.ReadFromJsonAsync<LockoutErrorBody>();
+        body!.Detail.Should().Contain("locked");
+        body.LockoutSecondsRemaining.Should().BeInRange(595, 600,
+            "10-minute pre-seeded lockout window minus a few seconds of test latency");
+    }
+
     // ── private DTOs ──────────────────────────────────────────────────────
 
     private record CredentialsErrorBody(string Message, int? AttemptsRemaining);

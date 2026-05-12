@@ -63,6 +63,18 @@ public class AuthController(
             logger.LogWarning("[Audit] Login failed: wrong password {UserId} {Email} Attempts={Attempts} Locked={Locked}",
                 user.Id, user.Email, user.FailedLoginAttempts, user.LockedUntil is not null);
 
+            if (user.LockedUntil is not null)
+            {
+                // This attempt just triggered the lock — emit lockout response inline
+                // (otherwise the user wouldn't see the lockout until their next attempt).
+                var secondsLeft = Math.Max(1, (int)Math.Ceiling((user.LockedUntil.Value - DateTime.UtcNow).TotalSeconds));
+                return Validation
+                    .Detail(LockoutDetail)
+                    .Field("Email", "Account locked.")
+                    .Extension("lockoutSecondsRemaining", secondsLeft)
+                    .Return();
+            }
+
             int remaining = Math.Max(0, MaxAttempts - user.FailedLoginAttempts);
             return Unauthorized(new { message = "Invalid credentials", attemptsRemaining = remaining });
         }

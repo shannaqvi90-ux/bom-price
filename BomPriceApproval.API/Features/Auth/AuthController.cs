@@ -41,6 +41,10 @@ public class AuthController(
             BCrypt.Net.BCrypt.Verify(req.Password, DummyHash); // constant-time; result discarded
             logger.LogInformation("[Audit] Login failed: unknown email {Email}",
                 normalizedEmail);
+            // Deliberate asymmetry with the known-wrong-password branch below: no
+            // `attemptsRemaining` field. Including it here would let an attacker
+            // distinguish "known email" from "unknown email" by the response shape.
+            // See spec Q1 + UnknownEmail_Returns401WithoutAttemptsRemainingField test.
             return Unauthorized(new { message = "Invalid credentials" });
         }
 

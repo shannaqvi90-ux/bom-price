@@ -179,6 +179,7 @@ export function CostInputDrawer({
             fohPerKg={draft.fohPerKg}
             transportPerKg={draft.transportPerKg}
             commissionPerKg={draft.commissionPerKg}
+            currencyCode={req.currencyCode}
             onChange={(p) => onChangeFg(p)}
           />
         </ScrollView>

@@ -4,6 +4,7 @@ interface Props {
   fohPerKg: string;
   transportPerKg: string;
   commissionPerKg: string;
+  currencyCode: string;
   onChange: (partial: {
     fohPerKg?: string;
     transportPerKg?: string;
@@ -15,12 +16,12 @@ function NumField({
   label,
   value,
   onChange,
-  suffix = "AED/KG",
+  suffix,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
-  suffix?: string;
+  suffix: string;
 }) {
   return (
     <View style={{ flex: 1 }}>
@@ -51,8 +52,12 @@ export function OtherCostsSection({
   fohPerKg,
   transportPerKg,
   commissionPerKg,
+  currencyCode,
   onChange,
 }: Props) {
+  // FOH / Transport / Commission are entered in the quote currency (matches
+  // backend BomCost storage; mirrors web's CostingEntryV3Page).
+  const suffix = `${currencyCode}/KG`;
   return (
     <View style={{ padding: 12, marginTop: 8 }}>
       <Text style={{ fontSize: 13, fontWeight: "700", color: "#0f172a", marginBottom: 8 }}>
@@ -63,16 +68,19 @@ export function OtherCostsSection({
           label="FOH"
           value={fohPerKg}
           onChange={(v) => onChange({ fohPerKg: v })}
+          suffix={suffix}
         />
         <NumField
           label="Transport"
           value={transportPerKg}
           onChange={(v) => onChange({ transportPerKg: v })}
+          suffix={suffix}
         />
         <NumField
           label="Commission"
           value={commissionPerKg}
           onChange={(v) => onChange({ commissionPerKg: v })}
+          suffix={suffix}
         />
       </View>
     </View>

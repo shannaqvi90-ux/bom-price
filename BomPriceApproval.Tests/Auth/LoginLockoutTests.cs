@@ -231,6 +231,28 @@ public class LoginLockoutTests(WebApplicationFactory<Program> factory)
             "10-minute pre-seeded lockout window minus a few seconds of test latency");
     }
 
+    [Fact]
+    public async Task UnknownEmail_Returns401WithoutAttemptsRemainingField()
+    {
+        var unknown = $"nobody-{Guid.NewGuid():N}"[..28] + "@t.com";
+
+        var resp = await _client.PostAsJsonAsync("/api/auth/login",
+            new { Email = unknown, Password = "Wrong@999" });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        // Anti-enumeration tradeoff documented in the design spec:
+        // unknown-email responses must NOT include attemptsRemaining (no user
+        // record to count against). The asymmetry IS the accepted leak.
+        var raw = await resp.Content.ReadAsStringAsync();
+        raw.Should().NotContain("attemptsRemaining",
+            "unknown-email responses must not carry the counter field");
+
+        var body = await resp.Content.ReadFromJsonAsync<CredentialsErrorBody>();
+        body!.Message.Should().Be("Invalid credentials");
+        body.AttemptsRemaining.Should().BeNull();
+    }
+
     // ── private DTOs ──────────────────────────────────────────────────────
 
     private record CredentialsErrorBody(string Message, int? AttemptsRemaining);

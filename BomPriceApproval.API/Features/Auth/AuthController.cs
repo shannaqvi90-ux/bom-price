@@ -19,6 +19,10 @@ public class AuthController(
     IConfiguration config,
     ILogger<AuthController> logger) : ControllerBase
 {
+    private const int MaxAttempts = 5;
+    private const int LockoutMinutes = 15;
+    private const string LockoutDetail = "Account temporarily locked due to too many failed login attempts. If you forgot your password, contact your administrator.";
+
     // Computed once at class load; used to absorb timing when the email is not found,
     // preventing user enumeration via response-time difference (~3 ms vs ~93 ms).
     private static readonly string DummyHash = BCrypt.Net.BCrypt.HashPassword("never-matches-anything");
@@ -37,6 +41,10 @@ public class AuthController(
             BCrypt.Net.BCrypt.Verify(req.Password, DummyHash); // constant-time; result discarded
             logger.LogInformation("[Audit] Login failed: unknown email {Email}",
                 normalizedEmail);
+            // Deliberate asymmetry with the known-wrong-password branch below: no
+            // `attemptsRemaining` field. Including it here would let an attacker
+            // distinguish "known email" from "unknown email" by the response shape.
+            // See spec Q1 + UnknownEmail_Returns401WithoutAttemptsRemainingField test.
             return Unauthorized(new { message = "Invalid credentials" });
         }
 
@@ -44,21 +52,27 @@ public class AuthController(
         {
             logger.LogWarning("[Audit] Login rejected: account locked {UserId} {Email} LockedUntil={LockedUntil}",
                 user.Id, user.Email, user.LockedUntil);
-            return Validation
-                .Detail("Account temporarily locked due to too many failed login attempts. Try again later.")
-                .Field("Email", "Account locked.")
-                .Return();
+            return LockoutResponse(user.LockedUntil.Value);
         }
 
         if (!BCrypt.Net.BCrypt.Verify(req.Password, user.PasswordHash))
         {
             user.FailedLoginAttempts++;
-            if (user.FailedLoginAttempts >= 5)
-                user.LockedUntil = DateTime.UtcNow.AddMinutes(15);
+            if (user.FailedLoginAttempts >= MaxAttempts)
+                user.LockedUntil = DateTime.UtcNow.AddMinutes(LockoutMinutes);
             await db.SaveChangesAsync();
             logger.LogWarning("[Audit] Login failed: wrong password {UserId} {Email} Attempts={Attempts} Locked={Locked}",
                 user.Id, user.Email, user.FailedLoginAttempts, user.LockedUntil is not null);
-            return Unauthorized(new { message = "Invalid credentials" });
+
+            if (user.LockedUntil is not null)
+            {
+                // This attempt just triggered the lock — emit lockout response inline
+                // (otherwise the user wouldn't see the lockout until their next attempt).
+                return LockoutResponse(user.LockedUntil.Value);
+            }
+
+            int remaining = Math.Max(0, MaxAttempts - user.FailedLoginAttempts);
+            return Unauthorized(new { message = "Invalid credentials", attemptsRemaining = remaining });
         }
 
         user.FailedLoginAttempts = 0;
@@ -192,5 +206,15 @@ public class AuthController(
         logger.LogInformation("[Audit] ChangePassword success UserId={UserId}", userId);
 
         return Ok(new { mustChangePassword = false });
+    }
+
+    private ActionResult LockoutResponse(DateTime lockedUntil)
+    {
+        var secondsLeft = Math.Max(1, (int)Math.Ceiling((lockedUntil - DateTime.UtcNow).TotalSeconds));
+        return Validation
+            .Detail(LockoutDetail)
+            .Field("Email", "Account locked.")
+            .Extension("lockoutSecondsRemaining", secondsLeft)
+            .Return();
     }
 }

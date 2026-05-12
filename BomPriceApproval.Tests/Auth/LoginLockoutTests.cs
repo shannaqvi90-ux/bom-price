@@ -72,18 +72,24 @@ public class LoginLockoutTests(WebApplicationFactory<Program> factory)
         var email = $"lck-{Guid.NewGuid():N}"[..28] + "@t.com";
         await CreateUserViaApiAsync(email);
 
-        // 5 wrong attempts
-        for (int i = 0; i < 5; i++)
+        // 4 wrong attempts -> 401
+        for (int i = 0; i < 4; i++)
         {
             var r = await _client.PostAsJsonAsync("/api/auth/login",
                 new { Email = email, Password = "Wrong@999" });
-            r.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+            r.StatusCode.Should().Be(HttpStatusCode.Unauthorized,
+                $"attempt {i + 1} should still be 401 (under threshold)");
         }
 
-        // 6th attempt with correct password should return 400 locked, not 200
+        // 5th wrong attempt -> lockout response (400)
+        var fifth = await _client.PostAsJsonAsync("/api/auth/login",
+            new { Email = email, Password = "Wrong@999" });
+        fifth.StatusCode.Should().Be(HttpStatusCode.BadRequest,
+            "5th wrong attempt should emit lockout response inline");
+
+        // 6th attempt with correct password should also be 400 locked
         var locked = await _client.PostAsJsonAsync("/api/auth/login",
             new { Email = email, Password = "Test@1234" });
-
         locked.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var body = await locked.Content.ReadFromJsonAsync<ValidationProblemResult>();
         body!.Detail.Should().Contain("locked");
@@ -136,8 +142,121 @@ public class LoginLockoutTests(WebApplicationFactory<Program> factory)
         user.LockedUntil.Should().BeNull();
     }
 
+    [Fact]
+    public async Task WrongPassword_FirstAttempt_Returns401WithAttemptsRemaining4()
+    {
+        var email = $"lck-r4-{Guid.NewGuid():N}"[..24] + "@t.com";
+        await CreateUserViaApiAsync(email);
+
+        var resp = await _client.PostAsJsonAsync("/api/auth/login",
+            new { Email = email, Password = "Wrong@999" });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var body = await resp.Content.ReadFromJsonAsync<CredentialsErrorBody>();
+        body!.Message.Should().Be("Invalid credentials");
+        body.AttemptsRemaining.Should().Be(4);
+    }
+
+    [Fact]
+    public async Task WrongPassword_FourthAttempt_Returns401WithAttemptsRemaining1()
+    {
+        var email = $"lck-r1-{Guid.NewGuid():N}"[..24] + "@t.com";
+        await CreateUserViaApiAsync(email);
+
+        // 3 prior wrong attempts
+        for (int i = 0; i < 3; i++)
+            await _client.PostAsJsonAsync("/api/auth/login",
+                new { Email = email, Password = "Wrong@999" });
+
+        // 4th wrong attempt
+        var resp = await _client.PostAsJsonAsync("/api/auth/login",
+            new { Email = email, Password = "Wrong@999" });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var body = await resp.Content.ReadFromJsonAsync<CredentialsErrorBody>();
+        body!.Message.Should().Be("Invalid credentials");
+        body.AttemptsRemaining.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task WrongPassword_FifthAttempt_Returns400LockoutResponse()
+    {
+        var email = $"lck-r0-{Guid.NewGuid():N}"[..24] + "@t.com";
+        await CreateUserViaApiAsync(email);
+
+        // 4 prior wrong attempts
+        for (int i = 0; i < 4; i++)
+            await _client.PostAsJsonAsync("/api/auth/login",
+                new { Email = email, Password = "Wrong@999" });
+
+        // 5th wrong attempt -> lockout response inline (NOT generic 401)
+        var resp = await _client.PostAsJsonAsync("/api/auth/login",
+            new { Email = email, Password = "Wrong@999" });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        resp.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
+        var body = await resp.Content.ReadFromJsonAsync<LockoutErrorBody>();
+        body!.Detail.Should().Contain("locked");
+        body.Detail.Should().Contain("administrator");
+        body.Errors.Should().ContainKey("Email");
+        body.LockoutSecondsRemaining.Should().BeInRange(895, 900,
+            "15-minute lockout window minus a few seconds of test latency");
+    }
+
+    [Fact]
+    public async Task LoginDuringActiveLockout_Returns400WithSecondsRemaining()
+    {
+        var email = $"lck-act-{Guid.NewGuid():N}"[..24] + "@t.com";
+        await CreateUserViaApiAsync(email);
+
+        // Pre-seed the lockout state directly: locked for 10 more minutes
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var user = db.Users.First(u => u.Email == email);
+            user.FailedLoginAttempts = 5;
+            user.LockedUntil = DateTime.UtcNow.AddMinutes(10);
+            db.SaveChanges();
+        }
+
+        // Attempt login with correct password — should still be blocked
+        var resp = await _client.PostAsJsonAsync("/api/auth/login",
+            new { Email = email, Password = "Test@1234" });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        resp.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
+        var body = await resp.Content.ReadFromJsonAsync<LockoutErrorBody>();
+        body!.Detail.Should().Contain("locked");
+        body.LockoutSecondsRemaining.Should().BeInRange(595, 600,
+            "10-minute pre-seeded lockout window minus a few seconds of test latency");
+    }
+
+    [Fact]
+    public async Task UnknownEmail_Returns401WithoutAttemptsRemainingField()
+    {
+        var unknown = $"nobody-{Guid.NewGuid():N}"[..28] + "@t.com";
+
+        var resp = await _client.PostAsJsonAsync("/api/auth/login",
+            new { Email = unknown, Password = "Wrong@999" });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        // Anti-enumeration tradeoff documented in the design spec:
+        // unknown-email responses must NOT include attemptsRemaining (no user
+        // record to count against). The asymmetry IS the accepted leak.
+        var raw = await resp.Content.ReadAsStringAsync();
+        raw.Should().NotContain("attemptsRemaining",
+            "unknown-email responses must not carry the counter field");
+
+        var body = await resp.Content.ReadFromJsonAsync<CredentialsErrorBody>();
+        body!.Message.Should().Be("Invalid credentials");
+        body.AttemptsRemaining.Should().BeNull();
+    }
+
     // ── private DTOs ──────────────────────────────────────────────────────
 
+    private record CredentialsErrorBody(string Message, int? AttemptsRemaining);
+    private record LockoutErrorBody(string Detail, Dictionary<string, string[]> Errors, int LockoutSecondsRemaining);
     private record LoginResult(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId);
     private record ValidationProblemResult(string Detail, Dictionary<string, string[]> Errors);
 }

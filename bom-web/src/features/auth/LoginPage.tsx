@@ -84,14 +84,15 @@ export default function LoginPage() {
   const lockoutSeconds = error?.kind === "locked" ? error.secondsRemaining : null;
   const countdown = useLockoutCountdown(lockoutSeconds);
   const isLocked = error?.kind === "locked" && !countdown.isExpired;
+  const { reset: resetLogin } = login;
 
   // Drop the stale lockout error once the countdown reaches 0 so the banner
   // unmounts and the Sign In button re-enables.
   useEffect(() => {
-    if (error?.kind === "locked" && countdown.isExpired) {
-      login.reset();
+    if (lockoutSeconds !== null && countdown.isExpired) {
+      resetLogin();
     }
-  }, [error?.kind, countdown.isExpired, login]);
+  }, [lockoutSeconds, countdown.isExpired, resetLogin]);
 
   if (isAuthed) return <Navigate to="/dashboard" replace />;
 

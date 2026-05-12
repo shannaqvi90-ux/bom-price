@@ -100,3 +100,33 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  mobile:
+    name: Mobile (bom-mobile tsc)
+    runs-on: ubuntu-latest
+    # bom-mobile has no test/lint scripts (RN + Expo), but a tsc check is
+    # cheap and catches type drift before it reaches the next APK rebuild.
+    # Pre-existing CustomerLite/Customer drift went undetected for weeks
+    # because there was no mobile job here. See PR #93.
+    defaults:
+      run:
+        working-directory: bom-mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: bom-mobile/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Audit npm packages
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+      - name: Type check
+        run: npx tsc -b

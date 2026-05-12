@@ -136,8 +136,45 @@ public class LoginLockoutTests(WebApplicationFactory<Program> factory)
         user.LockedUntil.Should().BeNull();
     }
 
+    [Fact]
+    public async Task WrongPassword_FirstAttempt_Returns401WithAttemptsRemaining4()
+    {
+        var email = $"lck-r4-{Guid.NewGuid():N}"[..24] + "@t.com";
+        await CreateUserViaApiAsync(email);
+
+        var resp = await _client.PostAsJsonAsync("/api/auth/login",
+            new { Email = email, Password = "Wrong@999" });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var body = await resp.Content.ReadFromJsonAsync<CredentialsErrorBody>();
+        body!.Message.Should().Be("Invalid credentials");
+        body.AttemptsRemaining.Should().Be(4);
+    }
+
+    [Fact]
+    public async Task WrongPassword_FourthAttempt_Returns401WithAttemptsRemaining1()
+    {
+        var email = $"lck-r1-{Guid.NewGuid():N}"[..24] + "@t.com";
+        await CreateUserViaApiAsync(email);
+
+        // 3 prior wrong attempts
+        for (int i = 0; i < 3; i++)
+            await _client.PostAsJsonAsync("/api/auth/login",
+                new { Email = email, Password = "Wrong@999" });
+
+        // 4th wrong attempt
+        var resp = await _client.PostAsJsonAsync("/api/auth/login",
+            new { Email = email, Password = "Wrong@999" });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var body = await resp.Content.ReadFromJsonAsync<CredentialsErrorBody>();
+        body!.Message.Should().Be("Invalid credentials");
+        body.AttemptsRemaining.Should().Be(1);
+    }
+
     // ── private DTOs ──────────────────────────────────────────────────────
 
+    private record CredentialsErrorBody(string Message, int? AttemptsRemaining);
     private record LoginResult(string AccessToken, string RefreshToken, string Role, int UserId, string Name, int? BranchId);
     private record ValidationProblemResult(string Detail, Dictionary<string, string[]> Errors);
 }

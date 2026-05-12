@@ -19,6 +19,10 @@ public class AuthController(
     IConfiguration config,
     ILogger<AuthController> logger) : ControllerBase
 {
+    private const int MaxAttempts = 5;
+    private const int LockoutMinutes = 15;
+    private const string LockoutDetail = "Account temporarily locked due to too many failed login attempts. If you forgot your password, contact your administrator.";
+
     // Computed once at class load; used to absorb timing when the email is not found,
     // preventing user enumeration via response-time difference (~3 ms vs ~93 ms).
     private static readonly string DummyHash = BCrypt.Net.BCrypt.HashPassword("never-matches-anything");
@@ -53,12 +57,14 @@ public class AuthController(
         if (!BCrypt.Net.BCrypt.Verify(req.Password, user.PasswordHash))
         {
             user.FailedLoginAttempts++;
-            if (user.FailedLoginAttempts >= 5)
-                user.LockedUntil = DateTime.UtcNow.AddMinutes(15);
+            if (user.FailedLoginAttempts >= MaxAttempts)
+                user.LockedUntil = DateTime.UtcNow.AddMinutes(LockoutMinutes);
             await db.SaveChangesAsync();
             logger.LogWarning("[Audit] Login failed: wrong password {UserId} {Email} Attempts={Attempts} Locked={Locked}",
                 user.Id, user.Email, user.FailedLoginAttempts, user.LockedUntil is not null);
-            return Unauthorized(new { message = "Invalid credentials" });
+
+            int remaining = Math.Max(0, MaxAttempts - user.FailedLoginAttempts);
+            return Unauthorized(new { message = "Invalid credentials", attemptsRemaining = remaining });
         }
 
         user.FailedLoginAttempts = 0;

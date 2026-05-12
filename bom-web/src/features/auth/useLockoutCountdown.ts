@@ -24,13 +24,22 @@ function formatMmSs(totalSeconds: number): string {
  */
 export function useLockoutCountdown(initialSeconds: number | null): LockoutCountdown {
   const [remaining, setRemaining] = useState<number>(initialSeconds ?? 0);
+  const [prevInitial, setPrevInitial] = useState(initialSeconds);
 
-  // Re-initialise when initialSeconds changes (covers null -> N and N -> M).
-  useEffect(() => {
+  // React-docs "Storing information from previous renders" pattern
+  // (https://react.dev/reference/react/useState#storing-information-from-previous-renders).
+  // Calling setState during render triggers a render restart — React discards
+  // the current render and immediately re-renders with the new state before
+  // painting. This is NOT subject to react-hooks/set-state-in-effect (which
+  // only targets effect bodies) and does NOT access refs during render.
+  if (initialSeconds !== prevInitial) {
+    setPrevInitial(initialSeconds);
     setRemaining(initialSeconds ?? 0);
-  }, [initialSeconds]);
+  }
 
-  // Tick down every second while remaining > 0.
+  // Tick down every second while remaining > 0. The functional updater inside
+  // setInterval is not subject to the set-state-in-effect lint (callback, not
+  // effect body).
   useEffect(() => {
     if (remaining <= 0) return;
     const id = window.setInterval(() => {

@@ -146,7 +146,7 @@ Examples:
 The repository contains:
 - **ASP.NET Core 8 backend** (`BomPriceApproval.API/`) — production at `https://bom-fpf-api.fly.dev` (Fly Singapore region).
 - **React 19 + Vite web frontend** (`bom-web/`) — production at `https://bom-fpf.pages.dev` (Cloudflare Pages, auto-deploys from `master`). Installable PWA.
-- **React Native (Expo) mobile app** (`bom-mobile/`) — V1 shipped 2026-04-27 via EAS preview-channel APK (`mobile-shipped-vc1` on V2.3 backend behavior; V3 mobile rebuild deferred). Deploy runbook at `bom-mobile/docs/DEPLOY.md`.
+- **React Native (Expo) mobile app** (`bom-mobile/`) — V3 mobile shipped 2026-05-12 via EAS preview-channel APK (`mobile-shipped-vc2` — all three role surfaces D-1 SP / D-2 Accountant / D-3 MD with signature upload). Deploy runbook at `bom-mobile/docs/DEPLOY.md`. Original V1 (`mobile-shipped-vc1`, 2026-04-27, V2.3-era) is superseded.
 
 > **Production status:** No live external users yet. Only Shan testing. Cutovers, breaking changes, and downtime can happen anytime — no broadcast emails or maintenance-window rituals needed until real team onboarded.
 
@@ -557,8 +557,11 @@ The Android APK is built via EAS (`eas-cli build --profile preview --platform an
 
 ### Current shipped tag
 
-`mobile-shipped-vc1` → commit `1886940` (versionCode=1, 2026-04-28)
-APK URL: `https://expo.dev/artifacts/eas/cCAdUxAqQ15qWv9oD7CJka.apk`
+`mobile-shipped-vc2` → commit `c5ca39b` (versionCode=2, 2026-05-12)
+APK URL: `https://expo.dev/artifacts/eas/pGdVgAxVNhjA8tStPZLVKj.apk` (expires 2026-05-26)
+Contains: V3 mobile complete (D-1 SP + D-2 Accountant + D-3 MD with signature upload) + currency suffix fix + dead-code cleanup.
+
+Previous: `mobile-shipped-vc1` → commit `1886940` (versionCode=1, 2026-04-28, V2.3-era).
 
 ### Drift check (run before deciding rebuild vs OTA)
 
